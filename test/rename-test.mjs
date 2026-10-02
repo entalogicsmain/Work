@@ -128,16 +128,21 @@ const webKeys = pg => pg.evaluate(() => Object.fromEntries(Object.keys(localStor
   const texts = [];
   const grab = async () => texts.push(await pg.evaluate(() => document.documentElement.innerText + ' ' + [...document.querySelectorAll('[aria-label],[title],[placeholder]')].map(e => e.getAttribute('aria-label') + ' ' + e.title + ' ' + (e.placeholder || '')).join(' ')));
   await pg.waitForSelector('.onb'); await grab();
-  await pg.evaluate(() => { document.querySelector('.onb').remove(); });
+  // walk every onboarding page: welcome, targets, reminder, permissions, brand help, height
+  await pg.click('#onbNext'); await grab(); await pg.click('#onbNext'); await grab(); await pg.click('#onbNext'); await grab();
+  await pg.click('#onbAllow'); await pg.waitForSelector('#onbBrandNext, #onbStart'); await grab();
+  if (await pg.$('#onbBrandNext')) { await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbStart'); await grab(); }
+  await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'));
+  await pg.waitForTimeout(400);
   for (const t of ['today', 'progress', 'setup']) { await tab(pg, t); await grab(); }
-  // the step sheets and the brand-by-brand battery tips
-  await pg.click('#stSource'); await actionChoose(pg, 'Automatic (phone sensor)').catch(() => {});
-  await pg.waitForTimeout(500); await grab();
+  // the Steps sheet and the battery help sheet
+  await tab(pg, 'today'); await pg.click('#habitList .hcard[data-id="steps"]'); await pg.waitForSelector('.sheet'); await pg.waitForTimeout(500); await grab();
+  await pg.click('.sheet .txtbtn.strong'); await pg.waitForFunction(() => !document.querySelector('.sheet-wrap'));
   const html = await pg.content();
   const all = texts.join('\n') + html;
   ok(!/reset\s*-?\s*log/i.test(all), 'no "Reset Log" text on any screen or in the page', (all.match(/.{20}reset\s*-?\s*log.{20}/i) || [])[0]);
   ok(!/liver|cholesterol|triglycerid|\bALT\b|\bHDL\b|\bLFTs?\b|lipid|fatty/i.test(all), 'no medical wording anywhere in the app');
-  ok(/Welcome to Comeback/.test(texts[0]) && /About Comeback/.test(texts[3]), 'the app name shows as Comeback (intro and Plan)');
+  ok(/Welcome to Comeback/.test(texts[0]) && texts.some(t => /About Comeback/.test(t)), 'the app name shows as Comeback (intro and Plan)');
   const title = await pg.title();
   ok(title === 'Comeback', 'page title is Comeback', title);
   await ctx.close();

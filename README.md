@@ -40,12 +40,17 @@ Responsive layouts (light and dark):
 | ![All done, light](docs/screenshots/34-today-all-done-360x800-light.webp) | ![Calendar, light](docs/screenshots/15-progress-calendar-360x800-light.webp) | ![Day sheet, light](docs/screenshots/20-sheet-day-360x800-light.webp) | ![Intro, light](docs/screenshots/01-onboarding-1-welcome-360x800-light.webp) |
 | ![All done, dark](docs/screenshots/34-today-all-done-360x800-dark.webp) | ![Calendar, dark](docs/screenshots/15-progress-calendar-360x800-dark.webp) | ![Day sheet, dark](docs/screenshots/20-sheet-day-360x800-dark.webp) | ![Intro, dark](docs/screenshots/01-onboarding-1-welcome-360x800-dark.webp) |
 
-**Automatic steps**
+**Phone-only steps, permissions and pull-to-refresh**
 
-| Setup | Battery help | Steps card | Step tracking | Progress |
+| Permissions | Brand help | Steps card | Steps sheet | Pull to refresh |
 | --- | --- | --- | --- | --- |
-| ![Explanation, light](docs/screenshots/42-sheet-steps-explain-360x800-light.webp) | ![Battery help, light](docs/screenshots/44-sheet-steps-battery-xiaomi-360x800-light.webp) | ![Counted by phone, light](docs/screenshots/47-today-steps-counted-by-phone-360x800-light.webp) | ![Step tracking, light](docs/screenshots/46-plan-step-tracking-automatic-360x800-light.webp) | ![Steps by hour, light](docs/screenshots/53-progress-steps-by-hour-360x800-light.webp) |
-| ![Explanation, dark](docs/screenshots/42-sheet-steps-explain-360x800-dark.webp) | ![Battery help, dark](docs/screenshots/44-sheet-steps-battery-xiaomi-360x800-dark.webp) | ![Counted by phone, dark](docs/screenshots/47-today-steps-counted-by-phone-360x800-dark.webp) | ![Step tracking, dark](docs/screenshots/46-plan-step-tracking-automatic-360x800-dark.webp) | ![Steps by hour, dark](docs/screenshots/53-progress-steps-by-hour-360x800-dark.webp) |
+| ![Permissions, light](docs/screenshots/41-onboarding-5-permissions-360x800-light.webp) | ![Brand help, light](docs/screenshots/42-onboarding-6-brand-help-xiaomi-360x800-light.webp) | ![Steps card, light](docs/screenshots/47-today-steps-card-counted-360x800-light.webp) | ![Steps sheet, light](docs/screenshots/48-sheet-steps-detail-read-only-360x800-light.webp) | ![Pull to refresh, light](docs/screenshots/55-today-pull-to-refresh-nudge-360x800-light.webp) |
+| ![Permissions, dark](docs/screenshots/41-onboarding-5-permissions-360x800-dark.webp) | ![Brand help, dark](docs/screenshots/42-onboarding-6-brand-help-xiaomi-360x800-dark.webp) | ![Steps card, dark](docs/screenshots/47-today-steps-card-counted-360x800-dark.webp) | ![Steps sheet, dark](docs/screenshots/48-sheet-steps-detail-read-only-360x800-dark.webp) | ![Pull to refresh, dark](docs/screenshots/55-today-pull-to-refresh-nudge-360x800-dark.webp) |
+
+| Turn on counting | Plan: step tracking | Old manual day | General line |
+| --- | --- | --- | --- |
+| ![Turn on, light](docs/screenshots/45-today-steps-turn-on-360x800-light.webp) | ![Plan, light](docs/screenshots/50-plan-step-tracking-360x800-light.webp) | ![Old manual day, light](docs/screenshots/49-today-old-manual-steps-360x800-light.webp) | ![General line, light](docs/screenshots/57-today-pull-to-refresh-general-line-360x800-light.webp) |
+| ![Turn on, dark](docs/screenshots/45-today-steps-turn-on-360x800-dark.webp) | ![Plan, dark](docs/screenshots/50-plan-step-tracking-360x800-dark.webp) | ![Old manual day, dark](docs/screenshots/49-today-old-manual-steps-360x800-dark.webp) | ![General line, dark](docs/screenshots/57-today-pull-to-refresh-general-line-360x800-dark.webp) |
 
 All screenshots (every screen, sheet, the step-tracking flow and the intro, at 360x800 and 412x915, light and dark, plus 130% text) are in [`docs/screenshots`](docs/screenshots). Regenerate them with `node scripts/screenshots.mjs`.
 
@@ -68,19 +73,33 @@ Comeback has a new application ID (`com.entalogics.comeback`), so Android treats
 
 Inside Comeback, anything saved under the earlier storage names (`resetlog`, `resetlog_meta`, `resetlog_sync`, `resetlog_onboarded`, the native step file `resetlog_steps`) moves to the new `comeback` names the first time the app opens, and the old names are removed. It is safe to run more than once, and if both an old and a new value exist and differ, nothing is deleted. `npm run test:rename` and the Kotlin `LegacyMigrationTest` cover this.
 
-## Automatic steps (phone sensor)
+## Steps (phone sensor only)
 
-Comeback can count your steps by itself using the phone's own motion sensors. It does **not** use Health Connect, Google Fit, Samsung Health or any other health app, and nothing is shared with other apps. Everything is counted and stored on the phone. (This is Android-app only; in a browser, steps stay manual.)
+Comeback counts your steps by itself using the phone's own motion sensors. It does **not** use Health Connect, Google Fit, Samsung Health or any other health app, and nothing is shared with other apps. Everything is counted and stored on the phone. Steps **cannot be typed in**: there is no stepper, no number pad and no manual override. (The Android app only; in a browser the Steps card says steps are counted in the Android app.) Your other targets (brisk walk, pushups, pull-ups, squats, plank, water, sleep) are logged by hand as before.
 
-**Turn it on:** Plan > Step tracking > **Source** > Automatic (phone sensor). The app explains what it does, asks for the "Physical activity" permission (and notifications on Android 13+), helps you keep it running in the background (see the battery section), and asks your height once (default 180 cm). Counting starts from that moment: earlier days stay as they are. If you deny the permission, Steps stays on **Manual** and the Source row keeps a "try again" hint.
+**First launch:** after the welcome, targets and reminder screens there is one screen, **"Let Comeback track for you"**, that explains in a line each why Comeback needs *Physical activity* (to count steps and pause counting in vehicles), *Notifications* (for the daily reminder and the step counter notification) and *Battery* (so counting keeps running in the background). One **Allow and continue** button asks for them one after another: Physical activity, then Notifications (Android 13+), then Android's "run in the background" dialog. On Xiaomi, Oppo, Realme, Vivo, Samsung, Infinix, Tecno, itel, Huawei and Honor phones a brand screen follows, with a button that opens the right settings page (you can skip it). Then your height (for the distance estimate, default 180 cm) and the step service starts straight away. **Location is never asked for during onboarding**; the optional "Use location to improve accuracy in vehicles" switch in Plan stays off until you turn it on.
 
-**Manual** works exactly as before: you type the number.
+**If you say No:** onboarding carries on and the app works fully for habits. The Steps card on Today says **Turn on step counting** instead of a number (tap it to try again), and Plan > Step tracking > **Step tracking health** shows what is wrong (*Permission missing*, *Paused by battery settings*) with a one-tap fix.
 
-**On the Steps card (Today):** a small label says **Counted by phone** or **Edited manually**, plus the estimated distance (stride = 0.415 x height). Tap the card to change a day by hand (for example if you walked without your phone). That day is then "Edited manually" and automatic updates never overwrite it. The sheet has **Use counted steps (n)** to switch it back. A number you typed *before* switching on is kept the same way.
+**Updating from an older version:** if Physical activity is already allowed, counting simply switches on. If not, the same permission screen shows once on the next launch.
 
-**Progress:** average steps and average distance for the chosen range (Week / Month / 3 Months), the Steps chart tells you for each day whether it was counted or manual, and an hourly bar chart shows when you were active today.
+**On the Steps card (Today):** the live count from the sensor, the target, a progress bar and the estimated distance (stride = 0.415 x height), with the label **Counted by phone**. Tap it for a read-only sheet: today's hourly chart, the distance, the source, **steps filtered out** by the vehicle filtering, and the tracking health. The daily Steps **target** is still editable in Plan.
 
-**What is stored (per day, inside the normal day record):** `vals.steps` plus `steps_meta`: `source` (`auto` or `manual`), `counted`, `distance_km`, `filtered`, and `hourly` (24 buckets). It is part of the JSON backup, the CSV export (columns *Steps source*, *Distance (km)*, *Filtered steps*) and cloud sync. Automatic updates reach the cloud at most once every 15 minutes. Your step settings (source, height, strictness, location check) belong to this phone and are not synced or backed up.
+**Days entered by hand in earlier versions** keep their numbers. They are marked **Entered manually (old)** on the Steps card, in the history list, in the day sheet and in chart tooltips, and the phone never overwrites them (only today is taken over by the phone's count). In the CSV export old rows keep the source `manual`; new days are `counted`.
+
+**Progress:** average steps and average distance for the chosen range (Week / Month / 3 Months), the Steps chart tells you for each day whether it was counted or entered manually (old), and an hourly bar chart shows when you were active today.
+
+**What is stored (per day, inside the normal day record):** `vals.steps` plus `steps_meta`: `source` (`auto`, or `manual` on old days), `counted`, `distance_km`, `filtered`, and `hourly` (24 buckets). It is part of the JSON backup, the CSV export (columns *Steps source*, *Distance (km)*, *Filtered steps*) and cloud sync. Step updates reach the cloud at most once every 15 minutes, and never overwrite an old manual day. Device settings (height, detection, speed check, pull-to-refresh history) stay on this phone.
+
+## Pull to refresh (Today)
+
+Pull down on Today (when it is scrolled to the top). A small glass panel opens with one short line, a light tap tells you when you have pulled far enough, and when you let go:
+
+- the phone's step count is read **once** and the Steps card, distance, ring and hourly chart are updated;
+- the cloud sync runs only if the last sync was more than **5 minutes** ago;
+- the panel stays open for about 1 second (so the line is readable) and at most 2.5 seconds, then closes smoothly.
+
+The line is a nudge from your own data when one applies ("1,240 steps to today's goal", "Pushups not logged yet today", "3-day streak. Keep it going.", "Strong day. Your comeback is on track."), otherwise one of 61 general lines in [`www/data/nudges.json`](www/data/nudges.json). A line is never repeated within the last 20 pulls. With Reduce motion on, the panel simply fades in instead of following your finger. The animation is plain CSS (no library), and the gesture only works on Today.
 
 ### How steps are counted
 
@@ -104,7 +123,7 @@ Plan > Step tracking shows **Step tracking health** (Working / Paused by battery
 
 ### Keep it running (battery settings)
 
-Many phones stop background apps. Switching on Automatic opens a setup sheet that asks Android to exclude Comeback from battery optimisation and shows steps for your brand, with a button that opens the right settings screen where possible. If counting pauses later, Plan shows "Paused by battery settings" with the same help.
+Many phones stop background apps. The first-launch permission screen asks Android to exclude Comeback from battery optimisation and, for brands that close background apps, shows steps for your brand with a button that opens the right settings screen where possible. If counting pauses later, Plan shows "Paused by battery settings" with the same help.
 
 | Brand | What to set |
 | --- | --- |
@@ -117,6 +136,26 @@ Many phones stop background apps. Switching on Automatic opens a setup sheet tha
 | Other | Settings > Apps > Comeback > Battery > Unrestricted ("Don't optimize"), and allow it in any Autostart / Background apps list. |
 
 The app restarts counting after the phone reboots or the app is updated. A 15-minute WorkManager check brings the service back if the system killed it, and the hardware counter keeps counting while the service is down, so steps are caught up later (without the rhythm checks, but still honouring vehicle periods). While counting, a quiet notification reads "Counting steps · 4,320 today"; tapping it opens the app.
+
+### Battery and background behaviour (audited)
+
+Read from the code (not measured on a device; there is no phone in the build environment). Constants are in `StepService.kt`, `StepTracker.kt` and `js/steps.js`.
+
+| What | Behaviour |
+| --- | --- |
+| Step sensors | The hardware step counter and detector are registered with a **20 second batching window**, so while you walk the service wakes at most about every 20 seconds, and **not at all while you stand still** (the counter only reports changes). |
+| Service tick | A 15 second tick on the main thread (uptime clock, so it never wakes a sleeping CPU; it only runs when the CPU is already awake). Each tick is a few microseconds of arithmetic. |
+| Saving | Native storage is written at most once every **20 seconds**, and only if something changed (`apply()`, off the main thread). |
+| Notification | Updated at most once every 20 seconds and only when the number changed. |
+| Page updates | The service tells the page about new totals at most once every 5 seconds, and only while the app is on screen (the plugin stops sending when the app is stopped). |
+| Watchdog | One WorkManager job every **15 minutes** (Android's minimum). It restarts the service only if it has gone quiet for over 4 minutes. At most 96 very small runs a day. |
+| Midnight | One alarm per day to split the day cleanly. |
+| Vehicle detection | Google's Activity Recognition pushes transitions to us (no polling). Location is **off** unless you switch on the speed check. |
+| Wake locks | **None** on phones with the step counter chip. The accelerometer fallback (phones without that chip) holds a partial wake lock with a 60 second timeout that the tick renews, and releases it when the service stops. That mode uses much more battery. |
+| The page (WebView) | Two seconds after the app leaves the screen the WebView is paused (`onPause` + `pauseTimers`): no JavaScript timers, layout or painting. The page also stops its own 1-minute refresh and queued sync timers when it is hidden, and a "network is back" sync only runs while the app is visible. Everything resumes when you come back, and the page reads what was counted meanwhile in one call. |
+| Cloud sync | Only while the app is open: step updates at most once every **15 minutes**, pull-to-refresh only if the last sync is over **5 minutes** old, ordinary edits as before (immediately), and the usual check when you open the app (at most one full sync per 30 seconds). Nothing syncs in the background. |
+
+In short, with the step counter chip the app wakes roughly every 20 seconds only while you are walking, once every 15 minutes for the watchdog and once a day at midnight, and does no cloud work at all while it is closed.
 
 ### Accuracy notes
 
@@ -131,12 +170,14 @@ The app restarts counting after the phone reboots or the app is updated. A 15-mi
 ### What is tested where
 
 - `npm run test:android` runs 35 JVM unit tests with **simulated sensors** (no phone needed): walking with the phone in a pocket and in hand, running pace, batched counter reports, reboot reset, midnight split, missed samples (service down while walking, and while in a car), a smooth car ride, a motorbike on a bumpy road, a bicycle ride, short shuffles of 3 to 5 steps, vehicle-to-walking transitions, the speed check, phone shaking, strictness levels and state saving.
-- `npm run test:steps` runs 85 browser tests of the web side against a fake plugin (setup flow, permission denied, override and "Use counted steps", protection of manual days, settings, health states, sync throttling, CSV, backup and Progress).
+- `npm run test:steps` runs 96 browser tests of the web side against a fake plugin (existing users, the read-only Steps card and sheet, no manual entry anywhere, old manual days, permission missing, settings, health states, sync throttling, CSV, backup, Progress, and no page work while hidden).
+- `npm run test:permissions` (51 checks) walks the first-launch permission flow with everything allowed, everything denied and partial answers, every brand, "Show intro again" and a plain browser.
+- `npm run test:refresh` (53 checks) sends real touch gestures to pull-to-refresh: the panel and haptic, one plugin read per pull, 1 to 2.5 s timing, the 5-minute sync rule, contextual nudges, the 20-pull no-repeat rule, reduce motion, and the lines file.
 - **Needs a real phone:** the actual sensors, Activity Recognition, background survival on your brand, the notification, and the numbers below.
 
 **Check it on your phone**
 
-1. *500-step walk:* switch to Automatic, note the Steps value, walk 500 steps counting by hand at a normal pace (phone in a pocket, then another run in your hand), and compare. Expect within about 3 to 5%.
+1. *500-step walk:* note the Steps value (or pull down on Today to refresh it), walk 500 steps counting by hand at a normal pace (phone in a pocket, then another run in your hand), and compare. Expect within about 3 to 5%.
 2. *10-minute ride:* start the app counting, then ride 10 minutes in a car or on a motorbike with the phone on you. The Steps value should rise by close to 0 (a handful at most). Check Plan > "Steps filtered out today". Repeat on a bumpy road if you can.
 3. Leave it running for a day with the screen off and see that the notification is still there and the total is sensible.
 

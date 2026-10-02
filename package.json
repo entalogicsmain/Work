@@ -17,7 +17,9 @@
     "lint:android": "cd android && ./gradlew :app:lintDebug",
     "brand": "node scripts/build-brand.mjs",
     "test:rename": "node test/rename-test.mjs",
-    "test:responsive": "node test/responsive-test.mjs"
+    "test:responsive": "node test/responsive-test.mjs",
+    "test:permissions": "node test/permissions-test.mjs",
+    "test:refresh": "node test/refresh-test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

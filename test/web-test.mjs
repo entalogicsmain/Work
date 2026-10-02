@@ -52,12 +52,12 @@ console.log('Part A: web build');
   await pg.evaluate(() => window.scrollTo(0, 0));
 
   // log a day through the sheets, auto-saved
-  await setHabit(pg, 1, 8500);
-  ok((await pg.textContent('#habitList .hcard:nth-child(1) .hval')) === '8,500', 'habit card shows the new value');
+  await setHabit(pg, 3, 25);
+  ok((await pg.textContent('#habitList .hcard:nth-child(3) .hval')) === '25', 'habit card shows the new value');
   ok(await pg.$eval('#savedInd', e => e.classList.contains('on')) || true, '"Saved" indicator element exists');
   await settle(pg);
   d = await stored(pg);
-  ok(d.days[tk] && d.days[tk].vals.steps === 8500, 'value auto-saved (no Save tap)', d.days[tk]);
+  ok(d.days[tk] && d.days[tk].vals.pushups === 25, 'value auto-saved (no Save tap)', d.days[tk]);
   ok((await pg.textContent('#headScore')) !== '0%', 'ring score updated');
   await toggleRule(pg, 1);
   await setBody(pg, 'weight', '87.2');
@@ -90,16 +90,18 @@ console.log('Part A: web build');
   await pg.click('.sheet .txtbtn:has-text("Cancel")'); await sheetGone(pg);
 
   // long press -> preset action sheet
-  await pg.dispatchEvent('#habitList .hcard:nth-child(1)', 'pointerdown');
+  await pg.dispatchEvent('#habitList .hcard:nth-child(3)', 'pointerdown');
   await pg.waitForSelector('.asheet', { timeout: 3000 });
-  ok(/Add 500 steps/.test(await pg.textContent('.asheet')), 'long-press opens quick presets (+500 for steps)');
-  await actionChoose(pg, 'Add 500 steps'); await settle(pg);
-  ok((await stored(pg)).days[tk].vals.steps === 9000, 'quick preset added 500 steps');
+  ok(/Add 5 reps/.test(await pg.textContent('.asheet')), 'long-press opens quick presets (+5 for reps)');
+  await actionChoose(pg, 'Add 5 reps'); await settle(pg);
+  ok((await stored(pg)).days[tk].vals.pushups === 30, 'quick preset added 5 reps');
+  await pg.dispatchEvent('#habitList .hcard:nth-child(1)', 'pointerdown'); await pg.waitForTimeout(800);
+  ok(!(await pg.$('.asheet')), 'long-press on the read-only Steps card opens no quick presets');
 
   // day navigation: previous day
   await pg.click('#prevDay'); await pg.waitForTimeout(100);
   ok((await pg.textContent('#dayLabelText')) === 'Yesterday' && !(await pg.$eval('#nextDay', b => b.disabled)) === true, 'day switcher moves to yesterday');
-  await setHabit(pg, 1, 7000); await setBody(pg, 'weight', '87.6'); await setNote(pg, '- starts with dash'); await settle(pg);
+  await setHabit(pg, 3, 15); await setBody(pg, 'weight', '87.6'); await setNote(pg, '- starts with dash'); await settle(pg);
   d = await stored(pg);
   ok(Object.keys(d.days).length === 3 && d.days[daysAgo(1)], 'two new days saved next to the migrated day', Object.keys(d.days));
   ok(await pg.$eval('#nextDay', b => !b.disabled), 'next day is available when viewing the past');
@@ -406,12 +408,12 @@ console.log('Accessibility and theming');
     ok(r.small.length === 0, `every tap target on ${t} is at least 44x44`, r.small);
   }
   // sheets too
-  await tab(pg, 'today'); await pg.click('#habitList .hcard:nth-child(1)'); await pg.waitForSelector('.keypad');
+  await tab(pg, 'today'); await pg.click('#habitList .hcard:not([data-id="steps"])'); await pg.waitForSelector('.keypad');
   const sh = await pg.evaluate(() => [...document.querySelectorAll('.sheet button')].map(b => { const r = b.getBoundingClientRect(); return { n: b.getAttribute('aria-label') || b.textContent.trim(), w: r.width, h: r.height }; }).filter(x => !x.n || Math.min(x.w, x.h) < 43.5));
   ok(sh.length === 0, 'number sheet: named controls, 44px+ targets', sh);
   await pg.keyboard.press('Escape'); await sheetGone(pg);
   ok(await pg.$eval('#ring', e => e.getAttribute('role') === 'img' && /score \d+ percent/.test(e.getAttribute('aria-label'))), 'ring has a spoken summary', await pg.getAttribute('#ring', 'aria-label'));
-  ok(await pg.$eval('#habitList .hcard', e => /of .* \w+/.test(e.getAttribute('aria-label'))), 'habit cards describe value and target');
+  ok(await pg.$eval('#habitList .hcard:not([data-id="steps"])', e => /of .* \w+/.test(e.getAttribute('aria-label'))) && await pg.$eval('#habitList .hcard[data-id="steps"]', e => /Steps/.test(e.getAttribute('aria-label'))), 'habit cards describe value and target (Steps card is described too)');
   ok(await pg.$eval('#ruleList input.switch', e => e.getAttribute('role') === 'switch'), 'rules are real switches');
   // status is never colour alone: heat cells and pills carry text
   await tab(pg, 'progress');
@@ -463,7 +465,7 @@ console.log('Part B: mocked native bridge');
   await tab(pg, 'today');
   ok((await calls('impact')).length > 0, 'tapping gives a light haptic');
   // save -> auto backup
-  await setHabit(pg, 1, 8000); await setNote(pg, 'native day'); await settle(pg);
+  await setHabit(pg, 4, 3); await setNote(pg, 'native day'); await settle(pg);
   await pg.waitForFunction(() => !document.getElementById('lastBackup').textContent.includes('never'));
   let m = await mock();
   const pref = JSON.parse(m.prefs.comeback);

@@ -106,9 +106,9 @@ console.log('Signed out (local only)');
 await pg.goto(base); await ready(pg);
 await tab(pg, 'setup');
 ok(await pg.isVisible('#signInBtn') && !(await pg.isVisible('#signOutBtn')), 'Plan shows "Sign in to sync" when signed out');
-await logDay(pg, { steps: 8000, weight: 87, note: 'local one' });
+await logDay(pg, { reps: 8000, weight: 87, note: 'local one' });
 await pg.click('#prevDay');
-await logDay(pg, { steps: 7000, weight: 87.5, note: 'local two' });
+await logDay(pg, { reps: 7000, weight: 87.5, note: 'local two' });
 await pg.waitForTimeout(300);
 ok(cloud() === 0, 'changing data while signed out makes no cloud requests');
 ok(Object.keys((await stored(pg)).days).length === 2, 'local days saved');
@@ -157,14 +157,14 @@ ok(fake.days.length === 2 && fake.days.every(r => r.user_id === uid), 'both loca
 ok(fake.settings.length === 1 && Array.isArray(fake.settings[0].data.habits) && Array.isArray(fake.settings[0].data.rules), 'settings uploaded');
 const loc = await stored(pg);
 const row = fake.days.find(r => r.log_date === tk);
-ok(row && Object.keys(row.data).sort().join() === 'note,rules,vals,waist,weight' && row.data.note === 'local one' && row.data.vals.steps === 8000, 'cloud row data has exactly vals/rules/weight/waist/note', row && row.data);
+ok(row && Object.keys(row.data).sort().join() === 'note,rules,vals,waist,weight' && row.data.note === 'local one' && row.data.vals.pushups === 8000, 'cloud row data has exactly vals/rules/weight/waist/note', row && row.data);
 ok(row && Date.parse(row.updated_at) === loc.days[tk].updatedAt, 'cloud updated_at equals the local updatedAt');
 ok(await pg.isVisible('#signOutBtn') && (await pg.textContent('#acctEmail')) === EMAIL, 'signed-in rows show the email and Sign out');
 
 /* ---------- 4. save while online ---------- */
 console.log('Changing data while signed in');
 await goDate(pg, '2026-09-20');
-await logDay(pg, { steps: 9100, weight: 86.1, note: 'third day' });
+await logDay(pg, { reps: 9100, weight: 86.1, note: 'third day' });
 await tab(pg, 'setup'); await waitStatus(/Synced at/);
 ok(fake.days.some(r => r.log_date === '2026-09-20' && r.data.note === 'third day'), 'a new change is upserted right away (after the auto-save)');
 ok(!fake.days.some(r => r.user_id !== uid), 'every cloud row belongs to the signed-in user');
@@ -195,7 +195,7 @@ ok((await pg.textContent('#sDays')) === '3', 'Progress shows the downloaded days
 console.log('Offline queue');
 fake.offline = true; await ctx.setOffline(true);
 await tab(pg, 'today');
-await logDay(pg, { steps: 5000, weight: 85, note: 'saved offline' });
+await logDay(pg, { reps: 5000, weight: 85, note: 'saved offline' });
 await tab(pg, 'setup');
 await waitStatus(/1 change is waiting to sync/);
 ok(/Offline|waiting to sync/.test(await status()), 'status says a change is waiting', await status());
@@ -253,7 +253,7 @@ await actionChoose(pg, 'Sign out');
 await pg.waitForSelector('#signInBtn', { state: 'visible' });
 fake.calls.length = 0;
 ok(Object.keys((await stored(pg)).days).length === keep && keep >= 4, 'signing out keeps local data on the phone');
-await logDay(pg, { steps: 4000, weight: 84, note: 'after sign out' });
+await logDay(pg, { reps: 4000, weight: 84, note: 'after sign out' });
 await pg.waitForTimeout(300);
 ok(cloud() === 0 && !fake.days.some(r => r.data.note === 'after sign out'), 'after sign out, changes stay local');
 await pg.reload(); await ready(pg); await tab(pg, 'setup');

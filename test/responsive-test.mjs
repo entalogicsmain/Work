@@ -75,7 +75,7 @@ for (const scheme of ['light', 'dark']) {
     const small = await pg.evaluate(() => [...document.querySelectorAll('.tab,.hcard,.iconbtn,.daypill,.txtbtn')].filter(e => e.offsetParent !== null).map(e => { const r = e.getBoundingClientRect(); return { n: (e.className || e.tagName).toString().slice(0, 20), w: Math.round(r.width), h: Math.round(r.height) }; }).filter(x => x.w < 44 || x.h < 44));
     ok(small.length === 0, `${name}: tap targets are at least 44 px`, small.slice(0, 4));
     // a sheet fits on screen and its Done button can be reached
-    await pg.click('#habitList .hcard:nth-child(1)'); await pg.waitForSelector('.keypad'); await pg.waitForTimeout(600);
+    await pg.click('#habitList .hcard:nth-child(3)'); await pg.waitForSelector('.keypad'); await pg.waitForTimeout(600);
     const sh = await pg.evaluate(() => { const s = document.querySelector('.sheet').getBoundingClientRect(); const d = document.querySelector('.sheet .txtbtn.strong').getBoundingClientRect(); return { top: Math.round(s.top), bottom: Math.round(s.bottom), left: Math.round(s.left), right: Math.round(s.right), vh: innerHeight, vw: innerWidth, doneTop: Math.round(d.top), doneBottom: Math.round(d.bottom) }; });
     ok(sh.top >= 0 && sh.bottom <= sh.vh + 1 && sh.left >= -1 && sh.right <= sh.vw + 1 && sh.doneTop >= 0 && sh.doneBottom <= sh.vh, `${name}: the number sheet fits on screen`, sh);
     const reach = await pg.evaluate(() => { const k = document.querySelector('.keypad .key[aria-label="0"]'); k.scrollIntoView({ block: 'nearest' }); const r = k.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!hit && (hit === k || k.contains(hit)) && r.bottom <= innerHeight + 1; });

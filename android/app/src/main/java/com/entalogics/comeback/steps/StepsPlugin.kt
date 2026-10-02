@@ -8,6 +8,8 @@ import com.getcapacitor.PermissionState
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
+import androidx.activity.result.ActivityResult
+import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
@@ -21,9 +23,14 @@ import com.getcapacitor.annotation.PermissionCallback
     ]
 )
 class StepsPlugin : Plugin() {
+    // The page only hears about new totals while the app is on screen; in the background the service just counts.
+    @Volatile private var visible = true
+    override fun handleOnStart() { visible = true; super.handleOnStart() }
+    override fun handleOnStop() { visible = false; super.handleOnStop() }
+
     override fun load() {
         StepTracker.init(context)
-        StepTracker.listener = { notifyListeners("stepsChanged", daysObject()) }
+        StepTracker.listener = { if (visible) notifyListeners("stepsChanged", daysObject()) }
         val cfg = StepTracker.config()
         if (cfg.enabled && StepTracker.hasActivityPermission(context)) {
             if (System.currentTimeMillis() - StepTracker.lastHeartbeat > StepTracker.STALE_MS) StepService.start(context)
@@ -113,9 +120,17 @@ class StepsPlugin : Plugin() {
     }
     @PermissionCallback private fun locationPermissionResult(call: PluginCall) { call.resolve(JSObject().put("granted", StepTracker.hasLocationPermission(context))) }
 
+    /** Resolves when the user has answered the system dialog (or left the settings screen), with whether the exemption is now on. */
     @PluginMethod fun requestIgnoreBatteryOptimizations(call: PluginCall) {
         val a = activity ?: run { call.reject("No activity"); return }
-        call.resolve(JSObject().put("result", DeviceHelper.requestIgnoreBatteryOptimizations(a)))
+        if (DeviceHelper.ignoringBatteryOptimizations(context)) { call.resolve(JSObject().put("result", "already").put("granted", true)); return }
+        for (intent in DeviceHelper.batteryIntents(a)) {
+            try { startActivityForResult(call, intent, "batteryDialogResult"); return } catch (e: Exception) { }
+        }
+        call.resolve(JSObject().put("result", DeviceHelper.requestIgnoreBatteryOptimizations(a)).put("granted", false))
+    }
+    @ActivityCallback private fun batteryDialogResult(call: PluginCall?, result: ActivityResult) {
+        call?.resolve(JSObject().put("result", "dialog").put("granted", DeviceHelper.ignoringBatteryOptimizations(context)))
     }
 
     /** target: "app" | "battery" | "autostart" */

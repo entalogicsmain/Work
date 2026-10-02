@@ -295,19 +295,10 @@ function renderToday(inPlace){
     card.querySelector('.hval').textContent=fmt(v);
     card.querySelector('.bar i').style.width=Math.min(100,x.target>0?v/x.target*100:0)+'%';
     card.querySelector('.met-ic').innerHTML=met?icon('circle-check','sm'):'';
-    let extra='';
-    const src=card.querySelector('.hsrc');
-    if(x.id==='steps'&&stepsAvailable()){
-      const lab=stepsLabelFor(current);
-      src.innerHTML='';
-      if(lab){
-        src.innerHTML=icon(lab==='counted'?'smartphone':'pencil')+'<span></span>';
-        const km=v>0?' · '+fmtKm(kmFor(v)):'';
-        src.querySelector('span').textContent=(lab==='counted'?'Counted by phone':'Edited manually')+km;
-        extra=', '+(lab==='counted'?'counted by phone':'edited manually')+(v>0?', about '+fmtKm(kmFor(v)):'');
-      }
-    }
-    card.setAttribute('aria-label',x.name+', '+fmt(v)+' of '+fmt(x.target)+' '+x.unit+(met?', target met':'')+extra+'. Tap to edit.');
+    const src=card.querySelector('.hsrc');src.innerHTML='';
+    if(x.id==='steps'){renderStepsCard(card,x,v,current);return}
+    card.classList.remove('steps-off');
+    card.setAttribute('aria-label',x.name+', '+fmt(v)+' of '+fmt(x.target)+' '+x.unit+(met?', target met':'')+'. Tap to edit.');
   });
 
   // rules
@@ -342,6 +333,23 @@ function renderToday(inPlace){
   body('weight','kg','rowWeight');body('waist','cm','rowWaist');
   const note=(d&&d.note)||'';const ns=$('noteSub');ns.textContent=note?note.split('\n')[0]:'What you ate, how you felt.';ns.style.color=note?'var(--label)':'';
 }
+function setHabitValue(d,x,v){if(v==null)delete d.vals[x.id];else d.vals[x.id]=v}
+/* The Steps card is read-only: the phone's count, the target, progress and distance. Tap = details (or setup when counting is off). */
+function renderStepsCard(card,x,v,k){
+  const kind=stepsCardKind(k),hv=card.querySelector('.hval'),src=card.querySelector('.hsrc'),met=x.target>0&&v>=x.target;
+  const off=kind==='turnon'||kind==='phoneonly';
+  card.classList.toggle('steps-off',off);
+  let aria;
+  if(kind==='turnon'){hv.textContent='Turn on step counting';card.querySelector('.bar i').style.width='0%';card.querySelector('.met-ic').innerHTML='';aria='Steps. Turn on step counting. Tap to set it up.'}
+  else if(kind==='phoneonly'){hv.textContent='–';src.innerHTML=icon('smartphone')+'<span>Counted in the Android app</span>';aria='Steps. Counted in the Android app.'}
+  else{
+    hv.textContent=fmt(v);
+    const lab=stepsLabelFor(k),km=v>0?' · '+fmtKm(kmFor(v)):'';
+    if(lab){src.innerHTML=icon(lab==='counted'?'smartphone':'pencil')+'<span></span>';src.querySelector('span').textContent=(lab==='counted'?'Counted by phone':MANUAL_OLD)+km}
+    aria='Steps, '+fmt(v)+' of '+fmt(x.target)+' '+x.unit+(met?', target met':'')+(lab==='counted'?', counted by phone':lab==='manual'?', entered manually (old)':'')+(v>0?', about '+fmtKm(kmFor(v)):'')+'. Tap for details.';
+  }
+  card.setAttribute('aria-label',aria);
+}
 function buildHabitCards(){
   const list=$('habitList');list.innerHTML='';
   settings.habits.forEach(x=>{
@@ -350,25 +358,19 @@ function buildHabitCards(){
     c.querySelector('.hname').textContent=x.name;c.querySelector('.htgt').textContent='of '+fmt(x.target)+' '+x.unit;
     c.dataset.id=x.id;
     let timer=null,long=false;
-    c.addEventListener('pointerdown',()=>{long=false;clearTimeout(timer);timer=setTimeout(()=>{long=true;haptic('medium');habitPresets(x)},520)});
+    if(x.id!=='steps')c.addEventListener('pointerdown',()=>{long=false;clearTimeout(timer);timer=setTimeout(()=>{long=true;haptic('medium');habitPresets(x)},520)});
     ['pointerup','pointerleave','pointercancel','pointermove'].forEach(ev=>c.addEventListener(ev,e=>{if(ev==='pointermove'&&Math.abs(e.movementX)+Math.abs(e.movementY)<3)return;clearTimeout(timer)}));
-    c.addEventListener('click',e=>{if(long){long=false;e.preventDefault();return}habitSheet(x)});
+    c.addEventListener('click',e=>{if(long){long=false;e.preventDefault();return}if(x.id==='steps'){stepsCardTap();return}habitSheet(x)});
     c.addEventListener('contextmenu',e=>e.preventDefault());
     list.appendChild(c);
   });
 }
 function curVal(x){const d=days[current];return d&&d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null}
+function stepsCardTap(){if(stepsCardKind(current)==='turnon'){haptic('light');turnOnStepCounting();return}stepsDetailSheet(current)}
 function habitSheet(x){
   const p=presetsFor(x);
-  let unitLine='of '+fmt(x.target)+' '+x.unit,extras=[];
-  if(x.id==='steps'&&stepsAvailable()&&dayInAutoRange(current)){
-    const m=days[current]&&days[current].steps_meta;
-    if(m&&m.source==='manual'){
-      unitLine+=' · edited manually';
-      extras=[{label:'Use counted steps ('+fmt(m.counted)+')',onClick:sh=>{sh.close('cancel');commitDay('Using counted steps',d=>{useCountedSteps(d)})}}];
-    }else unitLine+=' · counted by phone. Enter a number to change this day.';
-  }
-  numberSheet({title:x.name,value:curVal(x),unitLine,step:stepFor(x),extras,
+  const unitLine='of '+fmt(x.target)+' '+x.unit;
+  numberSheet({title:x.name,value:curVal(x),unitLine,step:stepFor(x),
     presets:p.map(a=>({label:'+'+fmt(a),apply:v=>v+a})).concat([{label:'Target',set:x.target}]),
     onDone:v=>{if(v===curVal(x))return;commitDay(x.name+' updated',d=>{setHabitValue(d,x,v)})}});
 }
@@ -416,7 +418,7 @@ function metricInfo(m){
   if(m==='weight')return{name:'Weight',unit:'kg',get:d=>d.weight};
   if(m==='waist')return{name:'Waist',unit:'cm',get:d=>d.waist};
   const x=settings.habits.find(q=>'h:'+q.id===m);
-  if(x)return{name:x.name,unit:x.unit,get:d=>d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null,target:x.target,note:x.id==='steps'?k=>{const d=days[k];return d&&d.steps_meta?(d.steps_meta.source==='auto'?'Counted by phone':'Edited manually'):'Entered manually'}:null};
+  if(x)return{name:x.name,unit:x.unit,get:d=>d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null,target:x.target,note:x.id==='steps'?k=>{const l=stepsLabelFor(k);return l==='counted'?'Counted by phone':l==='manual'?MANUAL_OLD:''}:null};
   return metricInfo('score');
 }
 function changeIn(keys,key){
@@ -477,7 +479,7 @@ function renderProgress(){
     const sc=scoreOf(days[k]),d=days[k];
     const row=h('<button class="row"><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="pill"></span><svg data-ic="chevron-right" class="chev"></svg></button>');
     row.querySelector('.row-label').textContent=nice(k);
-    const bits=settings.habits.filter(x=>d.vals&&d.vals[x.id]!=null).map(x=>x.name+' '+fmt(d.vals[x.id]));
+    const bits=settings.habits.filter(x=>d.vals&&d.vals[x.id]!=null).map(x=>x.name+' '+fmt(d.vals[x.id])+(x.id==='steps'&&stepsLabelFor(k)==='manual'?' ('+MANUAL_OLD+')':''));
     if(d.weight!=null)bits.push(fmt(d.weight)+' kg');
     row.querySelector('.row-sub').textContent=bits.join(', ')+(d.note?(bits.length?' · ':'')+d.note:'');
     if(!row.querySelector('.row-sub').textContent)row.querySelector('.row-sub').remove();else row.querySelector('.row-sub').classList.add('clamp');
@@ -539,17 +541,9 @@ function drawHoursChart(){
   $('hoursHead').hidden=!show;$('hoursCard').hidden=!show;
   if(!show){if(hoursChart){hoursChart.destroy();hoursChart=null}return}
   if(!window.Chart||activeTab!=='progress')return;
-  const cs=getComputedStyle(document.documentElement),accent=cs.getPropertyValue('--accent').trim(),muted=cs.getPropertyValue('--label2').trim(),sep=cs.getPropertyValue('--sep').trim();
-  const labels=m.hourly.map((_,i)=>i===0?'12 AM':i===12?'12 PM':i<12?i+' AM':(i-12)+' PM');
-  const best=m.hourly.indexOf(Math.max(...m.hourly));
-  const total=m.hourly.reduce((a,b)=>a+b,0);
-  const summ='Steps counted by your phone today by hour: '+fmt(total)+' in total. Most active hour: '+labels[best]+' with '+fmt(m.hourly[best])+' steps.';
-  $('hoursSummary').textContent=summ;$('chartHours').setAttribute('aria-label',summ);
   if(hoursChart)hoursChart.destroy();
-  const fnt={family:'Inter, system-ui, sans-serif',size:11};
-  hoursChart=new Chart($('chartHours'),{type:'bar',data:{labels,datasets:[{data:m.hourly,backgroundColor:accent,borderRadius:3,maxBarThickness:14}]},
-    options:{responsive:true,maintainAspectRatio:false,animation:reduced()?false:{duration:400},plugins:{legend:{display:false},tooltip:{callbacks:{title:i=>labels[i[0].dataIndex],label:c=>fmt(c.parsed.y)+' steps'}}},
-      scales:{x:{grid:{display:false},border:{display:false},ticks:{color:muted,maxRotation:0,autoSkip:false,font:fnt,callback:(v,i)=>i%6===0?labels[i]:''}},y:{grid:{color:sep},border:{display:false},beginAtZero:true,ticks:{color:muted,maxTicksLimit:4,font:fnt}}}}});
+  const r=makeHoursChart($('chartHours'),m.hourly,'today');
+  hoursChart=r.chart;$('hoursSummary').textContent=r.summary;
 }
 
 function daySheet(k){
@@ -564,6 +558,7 @@ function daySheet(k){
     settings.habits.forEach(x=>{const v=Number((d.vals||{})[x.id]||0),met=x.target>0&&v>=x.target;
       const r=h('<div class="row"><span class="row-body"><span class="row-label"></span></span><span class="row-val"></span></div>');
       r.querySelector('.row-label').textContent=x.name;
+      if(x.id==='steps'&&stepsLabelFor(k)==='manual'){const sb=h('<span class="row-sub"></span>');sb.textContent=MANUAL_OLD;r.querySelector('.row-body').appendChild(sb)}
       const val=r.querySelector('.row-val');val.innerHTML=(met?icon('circle-check','sm')+' ':'');val.appendChild(document.createTextNode(fmt(v)+' / '+fmt(x.target)+' '+x.unit));val.style.color=met?'var(--green)':'';val.style.maxWidth='70%';g1.appendChild(r)});
     root.appendChild(g1);
     if(settings.rules.length){
@@ -686,7 +681,6 @@ function habitForm(x){
       if(x){x.name=v.fName;x.target=Number(v.fTarget);x.unit=v.fUnit||x.unit;persistSettings('Target updated')}
       else{settings.habits.push({id:slug(v.fName),name:v.fName,unit:v.fUnit||'times',target:Number(v.fTarget)});persistSettings('Added '+v.fName)}
     },
-    extraButton:x&&x.id==='steps'&&stepsAvailable()?{label:'Source: '+(stepsAuto()?'Automatic (phone sensor)':'Manual')+'  ·  change',onClick:()=>{chooseStepSource()}}:null,
     remove:x?{label:'Remove target',confirm:()=>confirmRemove(x.name),run:()=>{settings.habits=settings.habits.filter(q=>q.id!==x.id);persistSettings('Removed '+x.name)}}:null});
 }
 function ruleForm(r){
@@ -740,46 +734,116 @@ function refreshAll(){renderToday();renderProgress();renderSetup();showLastBacku
 /* ================= onboarding ================= */
 const ONB_KEY='comeback_onboarded';
 let onb=null;
-function showOnboarding(){
+/* Onboarding. mode 'full' = first launch: welcome, targets, reminder, then (Android app) one permission screen, brand help, height.
+   mode 'permissions' = existing users who still need the permission screen once. mode 'replay' = "Show intro again" (welcome pages only). */
+function showPermissionSetup(){showOnboarding({mode:'permissions'})}
+function showOnboarding(opts){
   if(onb)return;
+  const mode=(opts&&opts.mode)||'replay';
+  const stepFlow=stepsAvailable()&&mode!=='replay';   // permission screen, brand help and height only exist in the Android app
+  const intro=mode!=='permissions';
   const edits={};
-  const root=h('<div class="onb" role="dialog" aria-modal="true" aria-label="Welcome to Comeback"><div class="onb-top"><button class="txtbtn" id="onbSkip">Skip</button></div><div class="onb-pages"><div class="onb-track" id="onbTrack"></div></div><div class="dots" aria-hidden="true"><i class="on"></i><i></i><i></i></div><div class="onb-foot" id="onbFoot"></div></div>');
-  const track=root.querySelector('#onbTrack');
-  const p1=h('<div class="onb-page"><div class="onb-art"></div><h2>Get back to your best, one day at a time.</h2><p>Tap a target to log steps, workouts and water. Switch on the rules you kept. Everything saves by itself, and you can undo any change.</p></div>');
-  p1.querySelector('.onb-art').innerHTML=icon('trending-up');
-  const p2=h('<div class="onb-page"><div class="onb-art"></div><h2>Set your targets</h2><p>These are a starting point. Change a number now or later in Plan.</p><div class="group" id="onbTargets"></div></div>');
-  p2.querySelector('.onb-art').innerHTML=icon('target');
-  settings.habits.forEach(x=>{
-    const r=h('<label class="row"><span class="row-label"></span><input class="numin" type="number" inputmode="decimal"></label>');
-    r.querySelector('.row-label').textContent=x.name+' ('+x.unit+')';const i=r.querySelector('input');i.value=x.target;i.setAttribute('aria-label',x.name+' daily target');
-    i.addEventListener('input',()=>{edits[x.id]=Number(i.value)});p2.querySelector('#onbTargets').appendChild(r);
-  });
-  const p3=h('<div class="onb-page"><div class="onb-art"></div><h2>Never miss a day</h2><p>Get one gentle reminder a day. Pick the time that suits you. You can turn it off anytime in Plan.</p><div class="group"><label class="row"><span class="row-label">Reminder time</span><input type="time" id="onbTime" value="21:00" aria-label="Reminder time"></label></div></div>');
-  p3.querySelector('.onb-art').innerHTML=icon('bell');
-  [p1,p2,p3].forEach(p=>track.appendChild(p));
-  let page=0;
-  const foot=root.querySelector('#onbFoot');
-  async function finish(){
+  const root=h('<div class="onb" role="dialog" aria-modal="true" aria-label="'+(intro?'Welcome to Comeback':'Set up step counting')+'"><div class="onb-top"><button class="txtbtn" id="onbSkip">Skip</button></div><div class="onb-pages"><div class="onb-track" id="onbTrack"></div></div><div class="dots" id="onbDots" aria-hidden="true"></div><div class="onb-foot" id="onbFoot"></div></div>');
+  const track=root.querySelector('#onbTrack'),foot=root.querySelector('#onbFoot'),dotsEl=root.querySelector('#onbDots');
+  const pages=[];   // [{id,el}]
+  const addPage=(id,el,at)=>{const rec={id,el};if(at==null)pages.push(rec);else pages.splice(at,0,rec);track.innerHTML='';pages.forEach(q=>track.appendChild(q.el));layout()};
+  const idx=id=>pages.findIndex(q=>q.id===id);
+  function layout(){
+    track.style.width=(pages.length*100)+'%';
+    pages.forEach(q=>{q.el.style.width=(100/pages.length)+'%'});
+    dotsEl.innerHTML=pages.map((_,i)=>'<i'+(i===page?' class="on"':'')+'></i>').join('');
+    track.style.transform='translateX(-'+(page*100/pages.length)+'%)';
+  }
+  const art=(el,name)=>{el.querySelector('.onb-art').innerHTML=icon(name);return el};
+  let page=0,permResult=null,reminderSwitch=null;
+
+  if(intro){
+    addPage('welcome',art(h('<div class="onb-page"><div class="onb-art"></div><h2>Get back to your best, one day at a time.</h2><p>Tap a target to log your workouts and water. Steps are counted by your phone. Switch on the rules you kept. Everything saves by itself, and you can undo any change.</p></div>'),'trending-up'));
+    const p2=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Set your targets</h2><p>These are a starting point. Change a number now or later in Plan.</p><div class="group" id="onbTargets"></div></div>'),'target');
+    settings.habits.forEach(x=>{
+      const r=h('<label class="row"><span class="row-label"></span><input class="numin" type="number" inputmode="decimal"></label>');
+      r.querySelector('.row-label').textContent=x.name+' ('+x.unit+')';const i=r.querySelector('input');i.value=x.target;i.setAttribute('aria-label',x.name+' daily target');
+      i.addEventListener('input',()=>{edits[x.id]=Number(i.value)});p2.querySelector('#onbTargets').appendChild(r);
+    });
+    addPage('targets',p2);
+    const p3=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Never miss a day</h2><p>Get one gentle reminder a day. Pick the time that suits you. You can turn it off anytime in Plan.</p><div class="group"><label class="row"><span class="row-label">Reminder time</span><input type="time" id="onbTime" value="21:00" aria-label="Reminder time"></label></div></div>'),'bell');
+    if(stepFlow){
+      const sw=h('<label class="row"><span class="row-label">Daily reminder</span><input type="checkbox" class="switch" role="switch" id="onbRemOn" aria-label="Daily reminder" checked></label>');
+      p3.querySelector('.group').insertBefore(sw,p3.querySelector('.group').firstChild);reminderSwitch=sw.querySelector('input');
+    }
+    addPage('reminder',p3);
+  }
+  if(stepFlow){
+    const pp=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Let Comeback track for you</h2><p>Three quick permissions so counting works all day, even when the app is closed.</p><div class="group ic" id="onbPerms"></div></div>'),'footprints');
+    [['footprints','Physical activity','To count steps and pause counting in vehicles.'],['bell','Notifications','For the daily reminder and the step counter notification.'],['battery-low','Battery','So step counting keeps running in the background.']].forEach(r=>{
+      const row=h('<div class="row"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span></div>');
+      row.querySelector('.row-ic').innerHTML=icon(r[0]);row.querySelector('.row-label').textContent=r[1];row.querySelector('.row-sub').textContent=r[2];pp.querySelector('#onbPerms').appendChild(row);
+    });
+    addPage('perm',pp);
+    const ph=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Your height</h2><p>Used to estimate how far you walk. You can change it any time in Plan.</p><div class="group"><label class="row"><span class="row-label">Height (cm)</span><input class="numin" id="onbHeight" type="number" inputmode="numeric" aria-label="Height in centimetres"></label></div><p class="err" id="onbHeightErr" role="alert"></p></div>'),'user');
+    ph.querySelector('#onbHeight').value=meta.steps.heightCm;
+    addPage('height',ph);
+  }
+  hydrate(root);
+
+  async function finish(applyReminder){
     const ch=Object.keys(edits).filter(id=>edits[id]>0&&settings.habits.find(x=>x.id===id&&x.target!==edits[id]));
     if(ch.length){ch.forEach(id=>{settings.habits.find(x=>x.id===id).target=edits[id]});await persistSettings('Targets saved')}
+    if(applyReminder){$('remTime').value=root.querySelector('#onbTime')?root.querySelector('#onbTime').value||'21:00':'21:00';$('remOn').checked=true;await setReminder(true)}
     try{await prefSet(ONB_KEY,'1')}catch(e){}
     root.style.opacity='0';root.style.transition='opacity .25s';setTimeout(()=>{root.remove();onb=null},reduced()?20:260);
   }
+  const btn=(label,id,cls,fn)=>{const b=h('<button class="btn'+(cls?' '+cls:'')+'" id="'+id+'"></button>');b.textContent=label;b.addEventListener('click',fn);foot.appendChild(b);return b};
   function go(n){
-    page=clamp(n,0,2);track.style.transform='translateX(-'+(page*33.3334)+'%)';
-    root.querySelectorAll('.dots i').forEach((d,i)=>d.classList.toggle('on',i===page));
+    page=clamp(n,0,pages.length-1);layout();
     foot.innerHTML='';
-    if(page<2){const b=h('<button class="btn" id="onbNext">Next</button>');b.addEventListener('click',()=>go(page+1));foot.appendChild(b)}
-    else{
-      const on=h('<button class="btn" id="onbRemind">Turn on reminder</button>'),off=h('<button class="btn secondary" id="onbLater">Not now</button>');
-      on.addEventListener('click',async()=>{$('remTime').value=root.querySelector('#onbTime').value||'21:00';$('remOn').checked=true;await setReminder(true);finish()});
-      off.addEventListener('click',finish);foot.appendChild(on);foot.appendChild(off);
+    const id=pages[page].id;
+    if(id==='welcome'||id==='targets')btn('Next','onbNext','',()=>go(page+1));
+    else if(id==='reminder'){
+      if(stepFlow)btn('Next','onbNext','',()=>go(page+1));
+      else{
+        btn('Turn on reminder','onbRemind','',()=>finish(true));
+        btn('Not now','onbLater','secondary',()=>finish(false));
+      }
     }
-    root.querySelector('#onbSkip').hidden=page===2;
+    else if(id==='perm'){
+      const b=btn('Allow and continue','onbAllow','',async()=>{
+        b.disabled=true;b.textContent='Asking…';
+        permResult=await requestAllStepPermissions();
+        let info={brand:'other'};try{info=await stepsPlugin().getDeviceInfo()}catch(e){}
+        if(AGGRESSIVE_BRANDS.includes(info.brand)&&idx('brand')<0){
+          const br=BRANDS[info.brand];
+          const pb=art(h('<div class="onb-page"><div class="onb-art"></div><h2></h2><p>Your phone can close background apps to save battery. These steps keep Comeback counting.</p><div class="group" id="onbBrandTips"></div></div>'),'battery-low');
+          pb.querySelector('h2').textContent='Keep counting on '+br.name.split(' / ')[0];
+          br.tips.forEach((t,i)=>{const r=h('<div class="row"><span class="row-label" style="font-size:.9375rem"></span></div>');r.querySelector('.row-label').textContent=(i+1)+'. '+t;pb.querySelector('#onbBrandTips').appendChild(r)});
+          pb.dataset.brand=info.brand;
+          addPage('brand',pb,idx('perm')+1);
+        }
+        go(page+1);
+      });
+    }
+    else if(id==='brand'){
+      const brand=pages[page].el.dataset.brand;
+      btn('Open '+BRANDS[brand].name.split(' / ')[0]+' settings','onbOpenBrand','',async()=>{
+        try{await stepsPlugin().openSettings({target:'autostart'})}catch(e){}
+        const sk=root.querySelector('#onbBrandNext');if(sk)sk.textContent='Continue';
+      });
+      btn('Skip for now','onbBrandNext','secondary',()=>go(page+1));
+    }
+    else if(id==='height'){
+      btn('Start counting','onbStart','',async()=>{
+        const v=Number(root.querySelector('#onbHeight').value),err=root.querySelector('#onbHeightErr');
+        if(!(v>=100&&v<=230)){err.textContent='Enter a height between 100 and 230 cm';haptic('light');return}
+        err.textContent='';
+        await enableStepCounting(Math.round(v));
+        await finish(!!(reminderSwitch&&reminderSwitch.checked));
+      });
+    }
+    root.querySelector('#onbSkip').hidden=!(id==='welcome'||id==='targets')||(mode==='permissions');
   }
-  root.querySelector('#onbSkip').addEventListener('click',finish);
-  onb={back(){if(page>0)go(page-1);else finish()}};
-  document.body.appendChild(root);hydrate(root);go(0);
+  root.querySelector('#onbSkip').addEventListener('click',()=>{if(stepFlow)go(idx('perm'));else finish(false)});
+  onb={back(){if(page>0)go(page-1);else finish(false)}};
+  document.body.appendChild(root);go(0);
 }
 
 /* ================= tabs, nav bar, native glue ================= */
@@ -814,7 +878,7 @@ function onForeground(){onResume();syncOnResume();stepsOnForeground()}
 function initNativeGlue(){
   try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{syncBars();drawChart()})}catch(e){}
   syncBars();
-  try{if(Native.Network)Native.Network.addListener('networkStatusChange',s=>{if(s.connected)syncSoon(true)})}catch(e){}
+  try{if(Native.Network)Native.Network.addListener('networkStatusChange',s=>{if(s.connected&&!document.hidden)syncSoon(true)})}catch(e){}
   document.addEventListener('visibilitychange',()=>{if(document.hidden)flushSave();else if(!IS_NATIVE)onForeground()});
   window.addEventListener('pagehide',flushSave);
   if(!IS_NATIVE)return;
@@ -825,11 +889,11 @@ function initNativeGlue(){
     flushSave();
     Native.App.exitApp();
   });
-  Native.App.addListener('appStateChange',s=>{if(s.isActive)onForeground();else flushSave()});
+  Native.App.addListener('appStateChange',s=>{if(s.isActive)onForeground();else{flushSave();stepsOnBackground()}});
   LN().addListener('localNotificationActionPerformed',()=>openToday());
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeTopLayer()});
-$('replayIntro').addEventListener('click',showOnboarding);
+$('replayIntro').addEventListener('click',()=>showOnboarding({mode:'replay'}));
 
 /* ================= start ================= */
 (async function(){
@@ -850,7 +914,7 @@ $('replayIntro').addEventListener('click',showOnboarding);
   initSteps();
   try{
     if(await prefGet(ONB_KEY)==null){
-      if(Object.keys(days).length)await prefSet(ONB_KEY,'1');else showOnboarding();
-    }
+      if(Object.keys(days).length){await prefSet(ONB_KEY,'1');await maybeShowPermissionSetup()}else showOnboarding({mode:'full'});
+    }else await maybeShowPermissionSetup();
   }catch(e){}
 })();

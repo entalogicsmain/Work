@@ -89,9 +89,10 @@ export async function actionChoose(pg, label) {
   await pg.waitForFunction(() => !document.querySelector('.asheet[data-picked]'), null, { timeout: 5000 });
 }
 // habit + body + note in one go, like logging a day
-export async function logDay(pg, { steps, weight, note }) {
+// (steps cannot be typed in any more, so "reps" logs Pushups, the third target)
+export async function logDay(pg, { reps, weight, note }) {
   await tab(pg, 'today');
-  if (steps != null) await setHabit(pg, 1, steps);
+  if (reps != null) await setHabit(pg, 3, reps);
   if (weight != null) await setBody(pg, 'weight', weight);
   if (note != null) await setNote(pg, note);
   await settle(pg);
@@ -132,16 +133,17 @@ export const MOCK = `
     App:{addListener:async function(ev,f){(listeners[ev]=listeners[ev]||[]).push(f);return{remove:function(){}}},exitApp:async function(){st.exit++;save()}},
     StatusBar:{setStyle:async function(o){rec('statusStyle',o)},setBackgroundColor:async function(o){rec('statusBg',o)}},
     Steps:(function(){
-      function status(){var c=st.steps.cfg;return{supported:{stepCounter:st.steps.source==='counter',stepDetector:true,accelerometer:true,activityRecognition:true},source:st.steps.source,enabled:!!c.enabled,health:st.steps.health,inVehicle:st.steps.health==='paused_vehicle',activityPermission:st.steps.activityGranted,locationPermission:st.steps.locationGranted,batteryIgnored:st.steps.batteryIgnored,brand:st.steps.brand,manufacturer:'Test',model:'Mock',sdk:35,todaySteps:0,filteredToday:st.steps.filteredToday,config:c}}
+      function hk(){return st.steps.activityGranted===false?'permission_missing':st.steps.health}
+      function status(){var c=st.steps.cfg;return{supported:{stepCounter:st.steps.source==='counter',stepDetector:true,accelerometer:true,activityRecognition:true},source:st.steps.source,enabled:!!c.enabled,health:hk(),inVehicle:st.steps.health==='paused_vehicle',activityPermission:st.steps.activityGranted,locationPermission:st.steps.locationGranted,batteryIgnored:st.steps.batteryIgnored,brand:st.steps.brand,manufacturer:'Test',model:'Mock',sdk:35,todaySteps:0,filteredToday:st.steps.filteredToday,config:c}}
       return{
         getStatus:async function(){return status()},
         configure:async function(o){rec('stepsConfigure',o);st.steps.cfg=Object.assign({},st.steps.cfg,o);save();return status()},
         requestActivityPermission:async function(){rec('reqActivity');if(st.steps.activityGranted===false&&st.steps.grantOnRequest){st.steps.activityGranted=true;st.steps.health='working';save()}return{granted:st.steps.activityGranted!==false}},
         requestLocationPermission:async function(){rec('reqLocation');return{granted:st.steps.locationGranted!==false}},
-        requestIgnoreBatteryOptimizations:async function(){rec('reqBattery');st.steps.batteryIgnored=true;save();return{result:'dialog'}},
+        requestIgnoreBatteryOptimizations:async function(){rec('reqBattery');var ok=st.steps.batteryGrant!==false;if(ok)st.steps.batteryIgnored=true;save();return{result:'dialog',granted:ok}},
         openSettings:async function(o){rec('openSettings',o);return{result:'ok'}},
         getDeviceInfo:async function(){return{brand:st.steps.brand,manufacturer:'Test',model:'Mock',sdk:35,batteryIgnored:st.steps.batteryIgnored}},
-        getDays:async function(){return{days:st.steps.days,health:st.steps.health,inVehicle:st.steps.health==='paused_vehicle'}},
+        getDays:async function(){rec('stepsGetDays');return{days:st.steps.days,health:hk(),inVehicle:st.steps.health==='paused_vehicle'}},
         addListener:async function(ev,f){(listeners[ev]=listeners[ev]||[]).push(f);return{remove:function(){}}}
       }
     })(),

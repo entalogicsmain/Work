@@ -131,7 +131,7 @@ function mergeData(local,inc){
 }
 
 /* ---------- storage (Capacitor Preferences) ---------- */
-let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'},steps:{source:'manual',heightCm:180,strictness:'balanced',sensitivity:'normal',useLocation:false,enabledAt:null,setupFailed:false}};
+let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'},steps:{heightCm:180,strictness:'balanced',sensitivity:'normal',useLocation:false,enabledAt:null,setupShown:false},nudges:[]};
 let loadProblem='';
 const prefGet=async k=>(await Prefs.get({key:k})).value;
 const prefSet=(k,v)=>Prefs.set({key:k,value:v});
@@ -181,7 +181,7 @@ store={
       }
       if(!loadProblem)await prefSet(MIGRATED_KEY,'1');
     }
-    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={source:st.source==='auto'?'auto':'manual',heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupFailed:!!st.setupFailed}}if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
+    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupShown:!!st.setupShown}}if(Array.isArray(mm.nudges))meta.nudges=mm.nudges.filter(t=>typeof t==='string').slice(-20);if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
     try{const sv=await prefGet(SYNC_KEY);if(sv){const ss=JSON.parse(sv);sync.signedIn=!!ss.signedIn;sync.userId=typeof ss.userId==='string'?ss.userId:null;sync.email=typeof ss.email==='string'?ss.email:'';sync.lastSyncAt=num(ss.lastSyncAt)?ss.lastSyncAt:null;sync.settingsUpdatedAt=num(ss.settingsUpdatedAt)?ss.settingsUpdatedAt:0;sync.pendingDays=Array.isArray(ss.pendingDays)?ss.pendingDays.filter(k=>typeof k==='string'):[];sync.pendingSettings=!!ss.pendingSettings}}catch(e){}
     if(raw==null)return{migrated};
     try{
@@ -260,6 +260,7 @@ function csvCell(v){
   return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
 }
 /** 'counted' (phone sensor), 'manual', or '' when the day has no steps */
+/* 'counted' = read by the phone. 'manual' only ever appears on days entered by hand before steps became phone-only; those rows keep it. */
 function stepsSourceOf(d){return d.steps_meta?(d.steps_meta.source==='auto'?'counted':'manual'):(d.vals&&d.vals.steps!=null?'manual':'')}
 function buildCsv(){
   const head=['Date','Score %'].concat(settings.habits.map(h=>h.name+' ('+h.unit+')'),settings.rules.map(r=>r.name),['Steps source','Distance (km)','Filtered steps','Weight (kg)','Waist (cm)','Note']);

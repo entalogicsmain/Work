@@ -35,12 +35,18 @@ object DeviceHelper {
         a.startActivity(i); true
     } catch (e: Exception) { false }
 
-    // Sideloaded personal app, not distributed through Google Play, so the Play policy on this permission does not apply.
-    @SuppressLint("BatteryLife")
+    /** Intents that ask Android to let this app run in the background, best first: the direct dialog, then the settings list. */
+    @SuppressLint("BatteryLife")   // Sideloaded personal app, not distributed through Google Play, so the Play policy on this permission does not apply.
+    fun batteryIntents(a: Activity): List<Intent> = listOf(
+        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${a.packageName}")),
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+    )
+
+    // Fire-and-forget version, used when the result is not awaited.
     fun requestIgnoreBatteryOptimizations(a: Activity): String {
-        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${a.packageName}"))
-        if (launch(a, direct)) return "dialog"
-        if (launch(a, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))) return "settings"
+        val intents = batteryIntents(a)
+        if (launch(a, intents[0])) return "dialog"
+        if (launch(a, intents[1])) return "settings"
         return if (openAppSettings(a)) "app" else "none"
     }
 
