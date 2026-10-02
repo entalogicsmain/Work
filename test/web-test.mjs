@@ -427,12 +427,12 @@ console.log('Accessibility and theming');
   ok(errs.length === 0, 'no JS errors (a11y)', errs);
   await ctx.close();
   // light / dark tokens
-  for (const [scheme, bg, card] of [['light', 'rgb(242, 242, 247)', 'rgb(255, 255, 255)'], ['dark', 'rgb(0, 0, 0)', 'rgb(28, 28, 30)']]) {
+  for (const [scheme, bg, card] of [['light', 'rgb(233, 239, 249)', 'rgba(255, 255, 255, 0.72)'], ['dark', 'rgb(7, 12, 15)', 'rgba(255, 255, 255, 0.055)']]) {
     const c2 = await browser.newContext({ viewport: { width: 360, height: 800 }, colorScheme: scheme });
     await skipOnboarding(c2);
     const p2 = await newPage(c2, errs); await p2.goto(base); await ready(p2);
     const got = await p2.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, card: getComputedStyle(document.querySelector('.hcard')).backgroundColor }));
-    ok(got.bg === bg && got.card === card, `${scheme} mode: background ${bg}, cards ${card}`, got);
+    ok(got.bg === bg && got.card === card, `${scheme} mode: background ${bg}, glass cards ${card}`, got);
     await c2.close();
   }
 }
@@ -562,7 +562,7 @@ console.log('Part B: mocked native bridge');
 }
 
 // status bar follows light/dark
-for (const [scheme, color, style] of [['dark', '#000000', 'DARK'], ['light', '#f2f2f7', 'LIGHT']]) {
+for (const [scheme, color, style] of [['dark', '#070c0f', 'DARK'], ['light', '#e9eff9', 'LIGHT']]) {
   const errs = [];
   const ctx = await browser.newContext({ colorScheme: scheme });
   await ctx.route('**/vendor/native.js', r => r.fulfill({ contentType: 'text/javascript', body: MOCK }));

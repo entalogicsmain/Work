@@ -22,6 +22,8 @@
 
   <!-- ============ Today ============ -->
   <section class="screen on" id="p-today" aria-labelledby="todayTitle">
+   <div class="today-grid">
+    <div class="today-side">
     <h1 class="large-title" id="todayTitle"></h1>
     <p class="subtitle" id="todaySub"></p>
     <div class="dayswitch">
@@ -45,7 +47,9 @@
       </div>
     </div>
     <p class="hint" id="todayHint" role="status"></p>
+    </div>
 
+    <div class="today-main">
     <h2 class="sec-head">Targets</h2>
     <div class="habits" id="habitList"></div>
 
@@ -57,6 +61,8 @@
 
     <h2 class="sec-head">Notes</h2>
     <div class="group ic" id="noteList"></div>
+    </div>
+   </div>
   </section>
 
   <!-- ============ Progress ============ -->
@@ -87,6 +93,8 @@
       </div>
       <p class="note-line" id="streakNote"></p>
 
+      <div class="pcols">
+      <div class="pcol">
       <h2 class="sec-head">Trend</h2>
       <div class="card">
         <div class="chips" id="chips" role="group" aria-label="What to chart"></div>
@@ -101,6 +109,8 @@
         <p class="t-foot muted" id="hoursSummary" style="margin:12px 0 0"></p>
       </div>
 
+      </div>
+      <div class="pcol">
       <h2 class="sec-head">Calendar</h2>
       <div class="card heatcard">
         <div class="heat" id="heat"></div>
@@ -111,6 +121,8 @@
 
       <h2 class="sec-head">Recent days</h2>
       <div class="group" id="logList"></div>
+      </div>
+      </div>
     </div>
   </section>
 
@@ -118,6 +130,8 @@
   <section class="screen" id="p-setup" aria-labelledby="planTitle">
     <h1 class="large-title" id="planTitle">Plan</h1>
 
+    <div class="plan-cols">
+    <div class="plan-col">
     <div class="group-head"><span>Daily targets</span><button class="txtbtn" id="reorderBtn">Reorder</button></div>
     <div class="group ic" id="setHabits"></div>
     <div class="group-foot">Raise targets as you get stronger. Swipe a row left to remove it.</div>
@@ -130,6 +144,8 @@
     <div class="group-head"><span>Rules</span></div>
     <div class="group ic" id="setRules"></div>
 
+    </div>
+    <div class="plan-col">
     <div class="group-head"><span>Reminder</span></div>
     <div class="group ic" id="remGroup">
       <label class="row"><span class="row-ic"><svg data-ic="bell"></svg></span><span class="row-body"><span class="row-label">Daily reminder</span></span><input type="checkbox" class="switch" role="switch" id="remOn" aria-label="Daily reminder"></label>
@@ -168,6 +184,8 @@
       <div class="row"><span class="row-ic"><svg data-ic="shield-check"></svg></span><span class="row-body"><span class="row-label">Version</span></span><span class="row-val">1.0</span></div>
     </div>
     <div class="group-foot" id="storeNote"></div>
+    </div>
+    </div>
   </section>
 </main>
 

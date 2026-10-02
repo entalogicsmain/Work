@@ -11,6 +11,8 @@ Comeback is a habit tracker for getting back to your best, one day at a time: da
 
 The UI follows the principles behind Apple's Human Interface Guidelines (clarity, deference, depth, consistency) with an original look. It uses no Apple fonts, icons or branding: the typeface is **Inter** and the icons are **Lucide** (1.75px stroke), both bundled locally (see `THIRD_PARTY.md`).
 
+- **Glass look:** frosted, translucent surfaces (cards, the top bar, the floating tab bar, sheets, the toast) over a soft aurora backdrop, with a thin light edge and a gentle shadow. Contrast is checked against the worst colours the glass can sit on (`npm run test:contrast`). Phones with little memory or few cores keep the translucency but drop the blur on cards, and if Android asks for less transparency (or the WebView has no backdrop blur) every surface becomes solid.
+- **Responsive:** one layout that adapts from a 280 px folded cover screen to a desktop window. Phones get a floating bottom tab bar; from 600 px targets and stats use three columns; from 840 px (tablets, landscape) the tab bar becomes a side rail, Today splits into a sticky summary and a targets grid, Progress and Plan use two columns and sheets open as centred dialogs. Short landscape screens get a tighter layout, notches and cut-outs are respected, and 130% and 160% text sizes still fit (`npm run test:responsive`).
 - **Today:** the date as a large title, one progress ring, a card per target (tap to log with a big number, steppers and a number pad; long-press for quick +500 / +10 presets), rules as switches, body and notes as rows that open sheets. Every change saves by itself, shows "Saved", and can be undone for 5 seconds.
 - **Progress:** Week / Month / 3 Months, stat tiles, a trend chart you can touch and drag across to read exact values, a calendar of soft squares (tap a day to open it), and recent days.
 - **Plan:** grouped lists for targets, rules, reminder, account and sync, backup and about. Swipe a row left to remove it (with confirmation), use Reorder to drag targets, and edit or add in bottom sheets.
@@ -19,20 +21,31 @@ The UI follows the principles behind Apple's Human Interface Guidelines (clarity
 
 | Today | Log a value | Progress | Plan |
 | --- | --- | --- | --- |
-| ![Today, light](docs/screenshots/05-today-360x800-light.png) | ![Number sheet, light](docs/screenshots/08-sheet-number-keypad-360x800-light.png) | ![Progress, light](docs/screenshots/14-progress-month-360x800-light.png) | ![Plan, light](docs/screenshots/21-plan-top-360x800-light.png) |
-| ![Today, dark](docs/screenshots/05-today-360x800-dark.png) | ![Number sheet, dark](docs/screenshots/08-sheet-number-keypad-360x800-dark.png) | ![Progress, dark](docs/screenshots/14-progress-month-360x800-dark.png) | ![Plan, dark](docs/screenshots/21-plan-top-360x800-dark.png) |
+| ![Today, light](docs/screenshots/05-today-360x800-light.webp) | ![Number sheet, light](docs/screenshots/08-sheet-number-keypad-360x800-light.webp) | ![Progress, light](docs/screenshots/14-progress-month-360x800-light.webp) | ![Plan, light](docs/screenshots/21-plan-top-360x800-light.webp) |
+| ![Today, dark](docs/screenshots/05-today-360x800-dark.webp) | ![Number sheet, dark](docs/screenshots/08-sheet-number-keypad-360x800-dark.webp) | ![Progress, dark](docs/screenshots/14-progress-month-360x800-dark.webp) | ![Plan, dark](docs/screenshots/21-plan-top-360x800-dark.webp) |
+
+Responsive layouts (light and dark):
+
+| Small phone 320 | Small tablet 600 | Tablet portrait 768 | Tablet landscape 1024 |
+| --- | --- | --- | --- |
+| ![320 light](docs/screenshots/60-responsive-today-320x640-light.webp) | ![600 light](docs/screenshots/60-responsive-today-600x960-light.webp) | ![768 light](docs/screenshots/60-responsive-today-768x1024-light.webp) | ![1024 light](docs/screenshots/60-responsive-today-1024x768-light.webp) |
+| ![320 dark](docs/screenshots/60-responsive-today-320x640-dark.webp) | ![600 dark](docs/screenshots/60-responsive-today-600x960-dark.webp) | ![768 dark](docs/screenshots/60-responsive-today-768x1024-dark.webp) | ![1024 dark](docs/screenshots/60-responsive-today-1024x768-dark.webp) |
+
+| Phone landscape 915 | Laptop 1280 (Progress) | Laptop 1280 (Plan) | Dialog sheet 1024 |
+| --- | --- | --- | --- |
+| ![915 dark](docs/screenshots/60-responsive-today-915x412-dark.webp) | ![1280 progress](docs/screenshots/61-responsive-progress-1280x800-dark.webp) | ![1280 plan](docs/screenshots/62-responsive-plan-1280x800-dark.webp) | ![1024 sheet](docs/screenshots/63-responsive-sheet-1024x768-light.webp) |
 
 | Day done | Calendar | Day sheet | Intro |
 | --- | --- | --- | --- |
-| ![All done, light](docs/screenshots/34-today-all-done-360x800-light.png) | ![Calendar, light](docs/screenshots/15-progress-calendar-360x800-light.png) | ![Day sheet, light](docs/screenshots/20-sheet-day-360x800-light.png) | ![Intro, light](docs/screenshots/01-onboarding-1-welcome-360x800-light.png) |
-| ![All done, dark](docs/screenshots/34-today-all-done-360x800-dark.png) | ![Calendar, dark](docs/screenshots/15-progress-calendar-360x800-dark.png) | ![Day sheet, dark](docs/screenshots/20-sheet-day-360x800-dark.png) | ![Intro, dark](docs/screenshots/01-onboarding-1-welcome-360x800-dark.png) |
+| ![All done, light](docs/screenshots/34-today-all-done-360x800-light.webp) | ![Calendar, light](docs/screenshots/15-progress-calendar-360x800-light.webp) | ![Day sheet, light](docs/screenshots/20-sheet-day-360x800-light.webp) | ![Intro, light](docs/screenshots/01-onboarding-1-welcome-360x800-light.webp) |
+| ![All done, dark](docs/screenshots/34-today-all-done-360x800-dark.webp) | ![Calendar, dark](docs/screenshots/15-progress-calendar-360x800-dark.webp) | ![Day sheet, dark](docs/screenshots/20-sheet-day-360x800-dark.webp) | ![Intro, dark](docs/screenshots/01-onboarding-1-welcome-360x800-dark.webp) |
 
 **Automatic steps**
 
 | Setup | Battery help | Steps card | Step tracking | Progress |
 | --- | --- | --- | --- | --- |
-| ![Explanation, light](docs/screenshots/42-sheet-steps-explain-360x800-light.png) | ![Battery help, light](docs/screenshots/44-sheet-steps-battery-xiaomi-360x800-light.png) | ![Counted by phone, light](docs/screenshots/47-today-steps-counted-by-phone-360x800-light.png) | ![Step tracking, light](docs/screenshots/46-plan-step-tracking-automatic-360x800-light.png) | ![Steps by hour, light](docs/screenshots/53-progress-steps-by-hour-360x800-light.png) |
-| ![Explanation, dark](docs/screenshots/42-sheet-steps-explain-360x800-dark.png) | ![Battery help, dark](docs/screenshots/44-sheet-steps-battery-xiaomi-360x800-dark.png) | ![Counted by phone, dark](docs/screenshots/47-today-steps-counted-by-phone-360x800-dark.png) | ![Step tracking, dark](docs/screenshots/46-plan-step-tracking-automatic-360x800-dark.png) | ![Steps by hour, dark](docs/screenshots/53-progress-steps-by-hour-360x800-dark.png) |
+| ![Explanation, light](docs/screenshots/42-sheet-steps-explain-360x800-light.webp) | ![Battery help, light](docs/screenshots/44-sheet-steps-battery-xiaomi-360x800-light.webp) | ![Counted by phone, light](docs/screenshots/47-today-steps-counted-by-phone-360x800-light.webp) | ![Step tracking, light](docs/screenshots/46-plan-step-tracking-automatic-360x800-light.webp) | ![Steps by hour, light](docs/screenshots/53-progress-steps-by-hour-360x800-light.webp) |
+| ![Explanation, dark](docs/screenshots/42-sheet-steps-explain-360x800-dark.webp) | ![Battery help, dark](docs/screenshots/44-sheet-steps-battery-xiaomi-360x800-dark.webp) | ![Counted by phone, dark](docs/screenshots/47-today-steps-counted-by-phone-360x800-dark.webp) | ![Step tracking, dark](docs/screenshots/46-plan-step-tracking-automatic-360x800-dark.webp) | ![Steps by hour, dark](docs/screenshots/53-progress-steps-by-hour-360x800-dark.webp) |
 
 All screenshots (every screen, sheet, the step-tracking flow and the intro, at 360x800 and 412x915, light and dark, plus 130% text) are in [`docs/screenshots`](docs/screenshots). Regenerate them with `node scripts/screenshots.mjs`.
 
@@ -195,7 +208,7 @@ npm run build:apk        # bundles plugins, syncs www/ into android/, runs Gradl
 ```
 
 - The web app is `www/index.html` with `www/css/app.css`, `www/js/logic.js` (data, storage, backup, reminder, sync) and `www/js/ui.js` (screens and sheets). The Capacitor plugins and supabase-js are bundled from `src/native.js` into `www/vendor/native.js`, and the Lucide icons into `www/vendor/icons.js`, by `npm run build:web`.
-- `npm run test:rename` (old-data move, old backups still restore, new copy, no leftover old name or medical wording), `npm run lint:android` (Android lint, warnings count as errors), `npm run test:android` (Kotlin sensor tests), `npm run test:steps` (step tracking UI) and `npm run test:contrast` (WCAG AA colour contrast). `npm run test:web` and `npm run test:sync` run the headless-browser tests (they need a Chromium for Playwright). `test:sync` uses a fake Supabase server; `npm run test:real` runs the same kind of checks against the real project and needs `E2E_EMAIL` and `E2E_PASSWORD` of an existing confirmed user.
+- `npm run test:responsive` (10 screen sizes x light and dark: no sideways scrolling, tap targets, sheets and keypads fit, bars clear the content, large text, glass effects and low-end fallback), `npm run test:rename` (old-data move, old backups still restore, new copy, no leftover old name or medical wording), `npm run lint:android` (Android lint, warnings count as errors), `npm run test:android` (Kotlin sensor tests), `npm run test:steps` (step tracking UI) and `npm run test:contrast` (WCAG AA colour contrast). `npm run test:web` and `npm run test:sync` run the headless-browser tests (they need a Chromium for Playwright). `test:sync` uses a fake Supabase server; `npm run test:real` runs the same kind of checks against the real project and needs `E2E_EMAIL` and `E2E_PASSWORD` of an existing confirmed user.
 - `supabase/migrations/` holds the SQL that creates the two tables and their security policies. The Supabase URL and publishable key are in `www/config.js`.
 - `npm run assets` regenerates icons and splash screens from `assets/`.
 

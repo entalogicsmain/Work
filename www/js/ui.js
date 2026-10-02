@@ -6,6 +6,8 @@ const ICONS=window.CB_ICONS||{};
 const icon=(n,cls)=>'<svg class="ic'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" aria-hidden="true">'+(ICONS[n]||'')+'</svg>';
 function hydrate(root){(root||document).querySelectorAll('svg[data-ic]').forEach(s=>{s.setAttribute('viewBox','0 0 24 24');s.setAttribute('aria-hidden','true');s.classList.add('ic');s.innerHTML=ICONS[s.dataset.ic]||'';s.removeAttribute('data-ic')})}
 function h(html){const t=document.createElement('template');t.innerHTML=html.trim();const el=t.content.firstElementChild;hydrate(el);return el}
+/* Low-end phones keep the glass look without the expensive blur on every card. */
+try{const mem=navigator.deviceMemory,cores=navigator.hardwareConcurrency;if((mem&&mem<=2)||(cores&&cores<=4))document.documentElement.classList.add('lite')}catch(e){}
 const reduced=()=>{try{return window.matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return false}};
 const fmt=n=>Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));

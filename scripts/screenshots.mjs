@@ -50,7 +50,7 @@ const FULL = JSON.parse(JSON.stringify(SEED));
 const SIZES = [[360, 800], [412, 915]];
 let count = 0;
 async function setup(browserCtxOpts, data, onboarded) {
-  const ctx = await browser.newContext({ ...browserCtxOpts, deviceScaleFactor: 2 });
+  const ctx = await browser.newContext({ ...browserCtxOpts, deviceScaleFactor: 1.5 });
   await ctx.addInitScript(([d, ob]) => {
     if (!localStorage.getItem('__seeded')) {
       localStorage.setItem('__seeded', '1');
@@ -219,15 +219,31 @@ for (const scheme of ['light', 'dark']) {
   if (errs.length) console.log('ERRORS', tag, errs);
   await ctx.close();
 }
+// responsive layouts: small phone, small tablet, tablet portrait and landscape, phone landscape, laptop
+for (const scheme of ['light', 'dark']) {
+  for (const [w, h] of [[320, 640], [600, 960], [768, 1024], [1024, 768], [915, 412], [1280, 800]]) {
+    const tag = `${w}x${h}-${scheme}`;
+    const { ctx, pg, errs } = await setup({ viewport: { width: w, height: h }, colorScheme: scheme }, SEED, true);
+    const snap = async name => { await pg.waitForTimeout(450); await pg.screenshot({ path: path.join(OUT, `${name}-${tag}.png`) }); count++; };
+    await pg.goto(base); await pg.waitForSelector('#habitList .hcard'); await pg.waitForTimeout(900);
+    await snap('60-responsive-today');
+    await tab(pg, 'progress'); await pg.waitForTimeout(900); await snap('61-responsive-progress');
+    await tab(pg, 'setup'); await pg.waitForTimeout(300); await snap('62-responsive-plan');
+    await tab(pg, 'today'); await pg.waitForTimeout(300);
+    await pg.click('#habitList .hcard:nth-child(1)'); await pg.waitForSelector('.keypad'); await snap('63-responsive-sheet');
+    if (errs.length) console.log('ERRORS', tag, errs);
+    await ctx.close();
+  }
+}
 await browser.close(); srv.close();
 console.log('screenshots:', count, '->', OUT);
 
-// shrink the PNGs so the repo stays small (palette PNG, visually identical for flat UI)
+// glass backdrops make PNGs large, so the review shots are saved as WebP (about a quarter of the size)
 try {
   const { default: sharp } = await import('sharp');
   for (const f of fs.readdirSync(OUT).filter(x => x.endsWith('.png'))) {
     const p = path.join(OUT, f);
-    const buf = await sharp(p).png({ palette: true, quality: 90, compressionLevel: 9, effort: 8 }).toBuffer();
-    fs.writeFileSync(p, buf);
+    fs.writeFileSync(p.replace(/\.png$/, '.webp'), await sharp(p).webp({ quality: 80, effort: 5 }).toBuffer());
+    fs.unlinkSync(p);
   }
-} catch (e) { console.log('(skipped PNG optimisation:', e.message + ')'); }
+} catch (e) { console.log('(skipped WebP conversion:', e.message + ')'); }
