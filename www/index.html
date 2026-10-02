@@ -3,1013 +3,177 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Reset log</title>
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:,">
-<style>
-@font-face{font-family:'Barlow';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/barlow-400-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-@font-face{font-family:'Barlow';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/barlow-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'Barlow';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/barlow-500-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-@font-face{font-family:'Barlow';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/barlow-500-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'Barlow';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-600-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-@font-face{font-family:'Barlow';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-600-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'Barlow';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-700-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-@font-face{font-family:'Barlow';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-700-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/barlow-condensed-400-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/barlow-condensed-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/barlow-condensed-500-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/barlow-condensed-500-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-condensed-600-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-condensed-600-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-condensed-700-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-condensed-700-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
---bg:#F3F4EF;--card:#FFFFFF;--ink:#1C2629;--muted:#5E6A6C;--line:#DDE0D8;--go:#1F7A4C;--go-bg:#E2F1E8;--mid:#B57A12;--mid-bg:#F7EDD8;--bad:#B23A35;--bad-bg:#F6E1DF;--track:#E8EAE3;--accent:#1F4E5F;
---disp:'Barlow Condensed','Arial Narrow',Arial,sans-serif;--body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121718;--card:#1B2224;--ink:#E9ECE6;--muted:#9AA5A6;--line:#2C3638;--go:#4CC086;--go-bg:#16301F;--mid:#E2A63A;--mid-bg:#33280F;--bad:#E8716B;--bad-bg:#3A1A18;--track:#263032;--accent:#7FB8CB}}
-:root[data-theme="dark"]{--bg:#121718;--card:#1B2224;--ink:#E9ECE6;--muted:#9AA5A6;--line:#2C3638;--go:#4CC086;--go-bg:#16301F;--mid:#E2A63A;--mid-bg:#33280F;--bad:#E8716B;--bad-bg:#3A1A18;--track:#263032;--accent:#7FB8CB}
-*{box-sizing:border-box}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5}
-.wrap{max-width:640px;margin:0 auto;padding:16px 16px 96px}
-header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:8px 0 16px;border-bottom:2px solid var(--ink)}
-h1{font-family:var(--disp);font-weight:700;font-size:40px;line-height:1;margin:0;letter-spacing:.5px}
-.sub{color:var(--muted);font-size:14px}
-.score{text-align:right}
-.score b{font-family:var(--disp);font-size:44px;line-height:1;display:block}
-nav{display:flex;gap:4px;margin:16px 0;background:var(--track);padding:4px;border-radius:10px}
-nav button{flex:1;border:0;background:transparent;color:var(--muted);font:600 15px var(--body);padding:10px 4px;border-radius:7px;cursor:pointer}
-nav button[aria-selected="true"]{background:var(--card);color:var(--ink)}
-.panel{display:none}.panel.on{display:block}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
-h2{font-family:var(--disp);font-weight:600;font-size:24px;margin:0 0 4px}
-.hint{color:var(--muted);font-size:14px;margin:0 0 12px}
-.banner{border-radius:12px;padding:14px 16px;margin-bottom:14px;font-weight:500}
-.banner.todo{background:var(--mid-bg);color:var(--mid)}
-.banner.done{background:var(--go-bg);color:var(--go)}
-.date-row{display:flex;align-items:center;gap:8px;margin-bottom:14px}
-.date-row button{width:44px;height:44px}
-.date-row input{flex:1}
-.habit{padding:12px 0;border-top:1px solid var(--line)}
-.habit:first-of-type{border-top:0;padding-top:0}
-.hrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.hname{font-weight:600}
-.htgt{color:var(--muted);font-size:13px}
-.stepper{display:flex;align-items:center;gap:6px}
-.stepper button{width:40px;height:40px;font-size:20px;padding:0}
-.stepper input{width:84px;text-align:center;font:600 18px var(--body)}
-.bar{height:6px;background:var(--track);border-radius:3px;margin-top:8px;overflow:hidden}
-.bar i{display:block;height:100%;background:var(--go);width:0;transition:width .25s}
-.rule{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;cursor:pointer;user-select:none}
-.rule input{width:22px;height:22px;accent-color:var(--go);flex:none}
-.rule.kept{background:var(--go-bg);border-color:transparent}
-.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-label.f{display:block;font-size:14px;color:var(--muted);margin-bottom:4px}
-input,textarea,select{width:100%;font:16px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
-textarea{min-height:90px;resize:vertical}
-input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-button{font:600 15px var(--body);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;cursor:pointer}
-.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);width:100%;padding:14px;font-size:17px}
-.savebar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--bg);border-top:1px solid var(--line)}
-.savebar div{max-width:640px;margin:0 auto}
-.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-.stat span{font-size:13px;color:var(--muted)}
-.stat b{display:block;font-family:var(--disp);font-size:32px;line-height:1.1}
-.heat{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
-.heat div{aspect-ratio:1;border-radius:5px;background:var(--track);font-size:11px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer}
-.legend{display:flex;gap:12px;font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap}
-.legend span{display:flex;align-items:center;gap:4px}.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
-.chartbox{position:relative;height:240px;margin-top:10px}
-.list-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
-.list-item:first-child{border-top:0}
-.del{color:var(--bad);border-color:transparent;background:transparent;padding:6px 8px}
-.addrow{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:10px}
-.log{padding:12px 0;border-top:1px solid var(--line)}
-.log:first-child{border-top:0}
-.pill{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s}
-.toast.show{opacity:1}
-.err{color:var(--bad);font-size:13px;margin-top:6px}
-.btnrow{display:grid;gap:8px}
-.btnrow button{width:100%}
-.msg{font-size:14px;margin-top:10px;min-height:0;overflow-wrap:anywhere}
-.msg:empty{display:none}
-.msg.ok{color:var(--go)}.msg.bad{color:var(--bad)}
-.meta{font-size:13px;color:var(--muted);margin-top:10px}
-.timerow{display:flex;align-items:center;gap:12px;margin-top:4px}
-.timerow label{flex:none;margin:0}
-.timerow input{width:auto;flex:1}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:50}
-.modal[hidden]{display:none}
-.sheet{background:var(--card);width:100%;max-width:640px;border-radius:16px 16px 0 0;padding:20px 16px calc(16px + env(safe-area-inset-bottom,0px))}
-.sheet p{margin:0 0 14px;color:var(--muted);font-size:15px;overflow-wrap:anywhere}
-.sheet .mbtns{display:grid;gap:8px}
-.sheet button{padding:13px}
-.sheet .danger{color:var(--bad)}
-@media (prefers-reduced-motion:reduce){.bar i,.toast{transition:none}}
-</style>
+<title>Reset log</title>
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<div class="wrap">
-<header>
-  <div><h1>Reset log</h1><div class="sub" id="todayLabel"></div></div>
-  <div class="score"><span class="sub">Today</span><b id="headScore">0%</b></div>
+
+<header class="navbar" id="navbar">
+  <div class="navbar-in">
+    <span></span>
+    <div class="nav-title" id="navTitle" aria-hidden="true"></div>
+    <div class="nav-trail"><span class="saved" id="savedInd" role="status"><svg data-ic="check" class="sm"></svg>Saved</span></div>
+  </div>
 </header>
 
-<nav role="tablist">
-  <button role="tab" aria-selected="true" data-tab="today">Today</button>
-  <button role="tab" aria-selected="false" data-tab="progress">Progress</button>
-  <button role="tab" aria-selected="false" data-tab="setup">My plan</button>
-</nav>
+<main id="screens">
 
-<section class="panel on" id="p-today">
-  <div class="banner todo" id="banner">You haven't logged today yet. Fill in what you did and tap save.</div>
-  <div class="date-row">
-    <button id="prevDay" aria-label="Previous day">&#8249;</button>
-    <input type="date" id="dateInput" aria-label="Day to log">
-    <button id="nextDay" aria-label="Next day">&#8250;</button>
-  </div>
-  <div class="card"><h2>Workout and movement</h2><p class="hint">Enter what you actually did. The bar fills toward your target.</p><div id="habitList"></div></div>
-  <div class="card"><h2>Rules kept today</h2><p class="hint">Tick each one you stuck to.</p><div id="ruleList"></div></div>
-  <div class="card"><h2>Body</h2><p class="hint">Weigh in the morning before eating. Waist every 2 weeks is enough.</p>
-    <div class="grid2">
-      <div><label class="f" for="weight">Weight (kg)</label><input id="weight" type="number" step="0.1" inputmode="decimal" placeholder="87.0"></div>
-      <div><label class="f" for="waist">Waist (cm)</label><input id="waist" type="number" step="0.5" inputmode="decimal" placeholder="97"></div>
+  <!-- ============ Today ============ -->
+  <section class="screen on" id="p-today" aria-labelledby="todayTitle">
+    <h1 class="large-title" id="todayTitle"></h1>
+    <p class="subtitle" id="todaySub"></p>
+    <div class="dayswitch">
+      <button class="iconbtn" id="prevDay" aria-label="Previous day"><svg data-ic="chevron-left"></svg></button>
+      <button class="daypill" id="dayLabel" aria-label="Choose a date"><svg data-ic="calendar" class="sm"></svg><span id="dayLabelText"></span></button>
+      <button class="iconbtn" id="nextDay" aria-label="Next day"><svg data-ic="chevron-right"></svg></button>
     </div>
-  </div>
-  <div class="card"><h2>Notes</h2><p class="hint">What you ate, how you felt, anything worth remembering.</p><textarea id="note" placeholder="Had daal and roti for lunch, walked after dinner, craved a burger at 11 pm but skipped it."></textarea></div>
-</section>
 
-<section class="panel" id="p-progress">
-  <div class="stats">
-    <div class="stat"><span>Current streak</span><b id="sStreak">0 days</b></div>
-    <div class="stat"><span>Days logged</span><b id="sDays">0</b></div>
-    <div class="stat"><span>Weight change</span><b id="sWeight">–</b></div>
-    <div class="stat"><span>Waist change</span><b id="sWaist">–</b></div>
-  </div>
-  <div class="card"><h2>Last 28 days</h2><p class="hint">Each square is a day. Tap one to open it.</p><div class="heat" id="heat"></div>
-    <div class="legend"><span><i style="background:var(--track)"></i>Not logged</span><span><i style="background:var(--bad)"></i>Under 40%</span><span><i style="background:var(--mid)"></i>40–79%</span><span><i style="background:var(--go)"></i>80%+</span></div>
-  </div>
-  <div class="card"><h2>Trend</h2>
-    <select id="metric" aria-label="What to chart"></select>
-    <div class="chartbox"><canvas id="chart" role="img" aria-label="Line chart of the selected metric over time">Selected metric over time.</canvas></div>
-    <p class="hint" id="chartEmpty" style="margin-top:8px"></p>
-  </div>
-  <div class="card"><h2>Recent days</h2><div id="logList"></div></div>
-</section>
-
-<section class="panel" id="p-setup">
-  <div class="card"><h2>Daily targets</h2><p class="hint">Raise targets as you get stronger. Add anything you want to track.</p>
-    <div id="setHabits"></div>
-    <div class="addrow">
-      <input id="nhName" placeholder="Pull-ups" aria-label="New item name">
-      <input id="nhTarget" type="number" inputmode="decimal" placeholder="10" aria-label="Daily target">
-      <input id="nhUnit" placeholder="reps" aria-label="Unit">
+    <div class="card ringcard" id="ringCard">
+      <div class="ring" id="ring" role="img" aria-label="Score">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="trk" cx="60" cy="60" r="52" fill="none" stroke-width="11"/>
+          <circle class="prg" id="ringPrg" cx="60" cy="60" r="52" fill="none" stroke-width="11" stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
+        </svg>
+        <div class="ring-c" aria-hidden="true"><b id="headScore">0%</b><span id="ringCap">of today</span></div>
+      </div>
+      <div class="ring-side">
+        <div class="chiprow" id="chipTargets"><svg data-ic="target" class="sm"></svg><span></span></div>
+        <div class="chiprow" id="chipRules"><svg data-ic="list-checks" class="sm"></svg><span></span></div>
+        <div class="streakline" id="streakLine"><svg data-ic="flame" class="sm"></svg><span></span></div>
+      </div>
     </div>
-    <div class="err" id="nhErr"></div>
-    <button style="margin-top:10px;width:100%" id="addHabit">Add item</button>
-  </div>
-  <div class="card"><h2>Rules</h2><p class="hint">Things you're avoiding. These show as tick boxes each day.</p>
-    <div id="setRules"></div>
-    <div style="display:flex;gap:8px;margin-top:10px"><input id="nrName" placeholder="No mithai" aria-label="New rule"><button id="addRule">Add</button></div>
-    <div class="err" id="nrErr"></div>
-  </div>
-  <div class="card"><h2>Your starting point</h2><p class="hint" style="margin:0">Oct 2026 reports: ALT 99, triglycerides 282, HDL 36. Weight 87 kg, waist 97 cm. Goal by January: 78–81 kg, waist under 90 cm, then retest LFTs and lipids.</p></div>
-  <div class="card"><h2>Cloud sync</h2>
-    <div id="acctOut"><p class="hint">Optional. Sign in to keep your log in the cloud and on your other phones. The app works fully without it.</p>
-      <button class="primary" id="signInBtn" style="font-size:16px;padding:12px">Sign in to sync</button>
-      <p class="hint" id="acctOffNote" style="margin:0" hidden>Cloud sync isn't set up in this build.</p></div>
-    <div id="acctIn" hidden><p class="hint" style="margin-bottom:10px">Signed in as <b id="acctEmail"></b></p>
-      <div class="btnrow"><button id="syncNowBtn">Sync now</button><button id="signOutBtn">Sign out</button></div></div>
-    <div class="meta" id="syncStatus" role="status"></div>
-    <div class="msg" id="acctMsg" role="status"></div>
-  </div>
-  <div class="card"><h2>Daily reminder</h2><p class="hint">A nudge to log your day. Android may delay it a few minutes to save battery.</p>
-    <label class="rule" id="remRow"><input type="checkbox" id="remOn"><span>Remind me every day</span></label>
-    <div class="timerow"><label class="f" for="remTime">Time</label><input type="time" id="remTime" value="21:00"></div>
-    <div class="msg" id="remMsg" role="status"></div>
-  </div>
-  <div class="card"><h2>Backup</h2><p class="hint" id="bkHint">Your entries live on this phone. Keep a copy somewhere safe.</p>
-    <div class="btnrow">
-      <button id="expJson">Export backup (JSON)</button>
-      <button id="expCsv">Export as spreadsheet (CSV)</button>
-      <button id="restoreBtn">Restore from backup</button>
+    <p class="hint" id="todayHint" role="status"></p>
+
+    <h2 class="sec-head">Targets</h2>
+    <div class="habits" id="habitList"></div>
+
+    <h2 class="sec-head">Rules</h2>
+    <div class="group" id="ruleList"></div>
+
+    <h2 class="sec-head">Body</h2>
+    <div class="group ic" id="bodyList"></div>
+
+    <h2 class="sec-head">Notes</h2>
+    <div class="group ic" id="noteList"></div>
+  </section>
+
+  <!-- ============ Progress ============ -->
+  <section class="screen" id="p-progress" aria-labelledby="progressTitle">
+    <h1 class="large-title" id="progressTitle">Progress</h1>
+    <p class="subtitle" id="progressSub"></p>
+    <div class="seg" role="tablist" aria-label="Time range" id="seg">
+      <button role="tab" data-range="7" aria-selected="false">Week</button>
+      <button role="tab" data-range="30" aria-selected="true">Month</button>
+      <button role="tab" data-range="90" aria-selected="false">3 Months</button>
+    </div>
+
+    <div class="empty card" id="progEmpty" hidden>
+      <svg data-ic="trending-up"></svg>
+      <b class="t-head">Nothing to chart yet</b>
+      <p>Log your first day to see your progress here.</p>
+      <button class="btn small" id="progGo">Log today</button>
+    </div>
+
+    <div id="progBody">
+      <div class="stats">
+        <div class="stat"><span><svg data-ic="flame" class="sm"></svg>Current streak</span><b id="sStreak">0 days</b></div>
+        <div class="stat"><span><svg data-ic="calendar" class="sm"></svg>Days logged</span><b id="sDays">0</b><small id="sDaysSub"></small></div>
+        <div class="stat"><span><svg data-ic="activity" class="sm"></svg>Weight change</span><b id="sWeight">–</b><small id="sWeightSub"></small></div>
+        <div class="stat"><span><svg data-ic="activity" class="sm"></svg>Waist change</span><b id="sWaist">–</b><small id="sWaistSub"></small></div>
+      </div>
+      <p class="note-line" id="streakNote"></p>
+
+      <h2 class="sec-head">Trend</h2>
+      <div class="card">
+        <div class="chips" id="chips" role="group" aria-label="What to chart"></div>
+        <div class="readout" id="readout" aria-live="polite"></div>
+        <div class="chartbox"><canvas id="chart" role="img" aria-label="Chart"></canvas></div>
+        <p class="t-foot muted" id="chartSummary" style="margin:12px 0 0"></p>
+      </div>
+
+      <h2 class="sec-head">Calendar</h2>
+      <div class="card heatcard">
+        <div class="heat" id="heat"></div>
+        <div class="legend" aria-hidden="false">
+          <span><i class="g"></i>80% or more</span><span><i class="o"></i>40 to 79%</span><span><i class="r"></i>Under 40%</span><span><i></i>Not logged</span>
+        </div>
+      </div>
+
+      <h2 class="sec-head">Recent days</h2>
+      <div class="group" id="logList"></div>
+    </div>
+  </section>
+
+  <!-- ============ Plan ============ -->
+  <section class="screen" id="p-setup" aria-labelledby="planTitle">
+    <h1 class="large-title" id="planTitle">Plan</h1>
+
+    <div class="group-head"><span>Daily targets</span><button class="txtbtn" id="reorderBtn">Reorder</button></div>
+    <div class="group ic" id="setHabits"></div>
+    <div class="group-foot">Raise targets as you get stronger. Swipe a row left to remove it.</div>
+
+    <div class="group-head"><span>Rules</span></div>
+    <div class="group ic" id="setRules"></div>
+
+    <div class="group-head"><span>Reminder</span></div>
+    <div class="group ic" id="remGroup">
+      <label class="row"><span class="row-ic"><svg data-ic="bell"></svg></span><span class="row-body"><span class="row-label">Daily reminder</span></span><input type="checkbox" class="switch" role="switch" id="remOn" aria-label="Daily reminder"></label>
+      <label class="row"><span class="row-ic"><svg data-ic="clock"></svg></span><span class="row-body"><span class="row-label">Time</span></span><input type="time" id="remTime" value="21:00" aria-label="Reminder time"></label>
+    </div>
+    <div class="group-foot" id="remMsg" role="status"></div>
+
+    <div class="group-head"><span>Account and sync</span></div>
+    <div class="group ic" id="acctOut">
+      <button class="row" id="signInBtn"><span class="row-ic"><svg data-ic="cloud"></svg></span><span class="row-body"><span class="row-label">Sign in to sync</span><span class="row-sub">Optional. Keep your log on all your phones.</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
+      <div class="row" id="acctOffNote" hidden><span class="row-ic"><svg data-ic="cloud-off"></svg></span><span class="row-body"><span class="row-label">Cloud sync is not set up</span><span class="row-sub">This build runs on this phone only.</span></span></div>
+    </div>
+    <div class="group ic" id="acctIn" hidden>
+      <div class="row"><span class="row-ic green"><svg data-ic="user"></svg></span><span class="row-body"><span class="row-label">Account</span><span class="row-sub" id="acctEmail"></span></span></div>
+      <div class="row"><span class="row-ic"><svg data-ic="refresh-cw"></svg></span><span class="row-body"><span class="row-label">Sync</span><span class="row-sub" id="syncStatus" role="status"></span></span></div>
+      <button class="row" id="syncNowBtn"><span class="row-ic"><svg data-ic="refresh-cw"></svg></span><span class="row-body"><span class="row-label" style="color:var(--accent)">Sync now</span></span></button>
+      <button class="row danger" id="signOutBtn"><span class="row-ic red"><svg data-ic="log-out"></svg></span><span class="row-body"><span class="row-label">Sign out</span></span></button>
+    </div>
+    <div class="group-foot" id="acctMsg" role="status"></div>
+
+    <div class="group-head"><span>Backup</span></div>
+    <div class="group ic" id="bkGroup">
+      <button class="row" id="expJson"><span class="row-ic"><svg data-ic="download"></svg></span><span class="row-body"><span class="row-label">Export backup (JSON)</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
+      <button class="row" id="expCsv"><span class="row-ic"><svg data-ic="table"></svg></span><span class="row-body"><span class="row-label">Export as spreadsheet (CSV)</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
+      <button class="row" id="restoreBtn"><span class="row-ic orange"><svg data-ic="upload"></svg></span><span class="row-body"><span class="row-label">Restore from backup</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
     </div>
     <input type="file" id="restoreFile" accept="application/json,.json,text/plain,application/octet-stream" hidden>
-    <div class="meta" id="lastBackup">Last backup: never</div>
-    <div class="msg" id="bkMsg" role="status"></div>
-  </div>
-  <p class="hint" id="storeNote"></p>
-</section>
-</div>
+    <div class="group-foot" id="lastBackup">Last backup: never</div>
+    <div class="group-foot" id="bkMsg" role="status"></div>
+    <div class="group-foot" id="bkHint"></div>
 
-<div class="savebar" id="savebar"><div><button class="primary" id="saveBtn">Save today</button></div></div>
-<div class="toast" id="toast" role="status"></div>
-<div class="modal" id="authModal" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="aTitle"><h2 id="aTitle">Sign in to sync</h2><p>Use the same email and password on each phone.</p>
-  <label class="f" for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false">
-  <label class="f" for="authPw" style="margin-top:10px">Password</label><input id="authPw" type="password" autocomplete="current-password">
-  <div class="msg" id="authMsg" role="alert"></div>
-  <div class="mbtns" style="margin-top:14px"><button class="primary" id="authIn">Sign in</button><button id="authUp">Create account</button><button id="authCancel">Cancel</button></div></div></div>
-<div class="modal" id="modal" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle"><h2 id="mTitle"></h2><p id="mBody"></p><div class="mbtns" id="mBtns"></div></div></div>
+    <div class="group-head"><span>About</span></div>
+    <div class="group ic">
+      <div class="row"><span class="row-ic"><svg data-ic="info"></svg></span><span class="row-body"><span class="row-label">Your starting point</span><span class="row-sub">Oct 2026 reports: ALT 99, triglycerides 282, HDL 36. Weight 87 kg, waist 97 cm. Goal by January: 78 to 81 kg, waist under 90 cm, then retest LFTs and lipids.</span></span></div>
+      <button class="row" id="replayIntro"><span class="row-ic"><svg data-ic="sparkles"></svg></span><span class="row-body"><span class="row-label">Show intro again</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
+      <div class="row"><span class="row-ic"><svg data-ic="shield-check"></svg></span><span class="row-body"><span class="row-label">Version</span></span><span class="row-val">1.0</span></div>
+    </div>
+    <div class="group-foot" id="storeNote"></div>
+  </section>
+</main>
+
+<nav class="tabbar" aria-label="Main">
+  <div class="tabbar-in">
+    <button class="tab" data-tab="today" aria-current="page"><svg data-ic="sun"></svg><span>Today</span></button>
+    <button class="tab" data-tab="progress"><svg data-ic="trending-up"></svg><span>Progress</span></button>
+    <button class="tab" data-tab="setup"><svg data-ic="list-checks"></svg><span>Plan</span></button>
+  </div>
+</nav>
+
+<div id="layer"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><svg data-ic="circle-check" class="sm" id="toastIc"></svg><span id="toastMsg"></span><button id="toastUndo" hidden>Undo</button></div>
 
 <script src="config.js"></script>
+<script src="vendor/icons.js"></script>
 <script src="vendor/chart.umd.js"></script>
 <script src="vendor/native.js"></script>
-<script>
-const DEFAULT_SETTINGS={
-  habits:[
-    {id:'steps',name:'Steps',unit:'steps',target:8000},
-    {id:'walk',name:'Brisk walk',unit:'min',target:30},
-    {id:'pushups',name:'Pushups',unit:'reps',target:30},
-    {id:'pullups',name:'Pull-ups',unit:'reps',target:5},
-    {id:'squats',name:'Squats',unit:'reps',target:30},
-    {id:'plank',name:'Plank',unit:'sec',target:60},
-    {id:'water',name:'Water',unit:'litres',target:2.5},
-    {id:'sleep',name:'Sleep',unit:'hours',target:7}
-  ],
-  rules:[
-    {id:'nofried',name:'No fried food (zinger, fries, samosa)'},
-    {id:'nosugar',name:'No cold drinks, juice or sugar in tea'},
-    {id:'nomaida',name:'No maida (buns, naan, bakery)'},
-    {id:'nolate',name:'Nothing eaten after 10 pm'}
-  ]
-};
-let settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-let days={};
-let store=null;
-let current=null;
-let chart=null;
-let dirty=false;
-let activeTab='today';
-
-const $=id=>document.getElementById(id);
-const pad=n=>String(n).padStart(2,'0');
-const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-const parse=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
-const todayStr=()=>ymd(new Date());
-const nice=s=>parse(s).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
-const r1=n=>Math.round(n*10)/10;
-const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30)+'-'+Date.now().toString(36);
-
-function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),1800)}
-
-function scoreOf(d){
-  if(!d)return null;
-  const parts=[];
-  settings.habits.forEach(h=>{const v=Number((d.vals||{})[h.id]||0);parts.push(h.target>0?Math.min(v/h.target,1):0)});
-  settings.rules.forEach(r=>parts.push((d.rules||{})[r.id]?1:0));
-  if(!parts.length)return 0;
-  return Math.round(parts.reduce((a,b)=>a+b,0)/parts.length*100);
-}
-function colorFor(s){if(s==null)return'var(--track)';if(s>=80)return'var(--go)';if(s>=40)return'var(--mid)';return'var(--bad)'}
-
-/* ---------- platform ---------- */
-const Native=window.ResetNative||{isNative:false};
-const IS_NATIVE=!!Native.isNative;
-const localShim={
-  async get({key}){try{return{value:localStorage.getItem('CapacitorStorage.'+key)}}catch(e){return{value:null}}},
-  async set({key,value}){localStorage.setItem('CapacitorStorage.'+key,value)},
-  async remove({key}){localStorage.removeItem('CapacitorStorage.'+key)}
-};
-const Prefs=Native.Preferences||localShim;
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const errText=e=>String((e&&(e.message||e.errorMessage))||e||'Unknown error');
-const clone=o=>JSON.parse(JSON.stringify(o));
-
-/* ---------- data shape ----------
-   { version:1, settings:{habits:[...],rules:[...]}, days:{ "YYYY-MM-DD":{vals,rules,weight,waist,note,date,updatedAt} } } */
-const DATA_KEY='resetlog', META_KEY='resetlog_meta', MIGRATED_KEY='resetlog_migrated';
-const buildData=()=>({version:1,settings,days});
-const ID_RE=/^[A-Za-z0-9_-]{1,64}$/, DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
-const num=v=>typeof v==='number'&&isFinite(v);
-
-function validDateKey(k){if(!DATE_RE.test(k))return false;const d=parse(k);return ymd(d)===k}
-
-function normalizeSettings(s){
-  if(!s||typeof s!=='object'||!Array.isArray(s.habits)||!Array.isArray(s.rules))throw new Error('The backup is missing its settings (habits and rules).');
-  const seen=new Set();
-  const habits=s.habits.map((h,i)=>{
-    if(!h||typeof h.id!=='string'||!ID_RE.test(h.id)||typeof h.name!=='string'||!h.name.trim())throw new Error('Habit #'+(i+1)+' in the backup is not valid.');
-    if(!num(h.target)||h.target<=0)throw new Error('Habit "'+h.name.slice(0,40)+'" has an invalid target.');
-    return{id:h.id,name:h.name,unit:typeof h.unit==='string'&&h.unit?h.unit:'times',target:h.target};
-  }).filter(h=>!seen.has(h.id)&&seen.add(h.id));
-  const seenR=new Set();
-  const rules=s.rules.map((r,i)=>{
-    if(!r||typeof r.id!=='string'||!ID_RE.test(r.id)||typeof r.name!=='string'||!r.name.trim())throw new Error('Rule #'+(i+1)+' in the backup is not valid.');
-    return{id:r.id,name:r.name};
-  }).filter(r=>!seenR.has(r.id)&&seenR.add(r.id));
-  return{habits,rules};
-}
-function normalizeDay(k,d){
-  if(!validDateKey(k))throw new Error('"'+String(k).slice(0,30)+'" is not a valid date (expected YYYY-MM-DD).');
-  if(!d||typeof d!=='object'||Array.isArray(d))throw new Error('Day '+k+' is not valid.');
-  const vals={},rl={};
-  if(d.vals!=null){if(typeof d.vals!=='object'||Array.isArray(d.vals))throw new Error('Day '+k+' has invalid values.');Object.keys(d.vals).forEach(id=>{if(!num(d.vals[id]))throw new Error('Day '+k+' has a non-numeric value for "'+id.slice(0,30)+'".');vals[id]=d.vals[id]})}
-  if(d.rules!=null){if(typeof d.rules!=='object'||Array.isArray(d.rules))throw new Error('Day '+k+' has invalid rules.');Object.keys(d.rules).forEach(id=>{rl[id]=!!d.rules[id]})}
-  if(d.weight!=null&&!num(d.weight))throw new Error('Day '+k+' has an invalid weight.');
-  if(d.waist!=null&&!num(d.waist))throw new Error('Day '+k+' has an invalid waist.');
-  return{vals,rules:rl,weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:typeof d.note==='string'?d.note:'',date:k,updatedAt:num(d.updatedAt)?d.updatedAt:0};
-}
-/* Throws an Error with a readable message when the object is not a Reset Log backup. */
-function normalizeData(obj){
-  if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error("This isn't a Reset Log backup (expected a JSON object).");
-  if(obj.version!=null&&obj.version!==1)throw new Error(typeof obj.version==='number'&&obj.version>1?'This backup was made by a newer version of Reset Log (version '+obj.version+'). Update the app first.':'Unknown backup version: '+esc(String(obj.version)).slice(0,20)+'.');
-  const settings=normalizeSettings(obj.settings);
-  if(!obj.days||typeof obj.days!=='object'||Array.isArray(obj.days))throw new Error("The backup is missing its 'days' section.");
-  const outDays={};
-  Object.keys(obj.days).forEach(k=>{outDays[k]=normalizeDay(k,obj.days[k])});
-  return{version:1,settings,days:outDays};
-}
-
-function mergeData(local,inc){
-  const outDays=Object.assign({},local.days);let added=0,updated=0,kept=0;
-  Object.keys(inc.days).forEach(k=>{
-    const cur=outDays[k],d=inc.days[k];
-    if(!cur){outDays[k]=d;added++}
-    else if((d.updatedAt||0)>(cur.updatedAt||0)){outDays[k]=d;updated++}
-    else kept++;
-  });
-  const hs=local.settings.habits.slice(),rs=local.settings.rules.slice();
-  inc.settings.habits.forEach(h=>{if(!hs.some(x=>x.id===h.id))hs.push(h)});
-  inc.settings.rules.forEach(r=>{if(!rs.some(x=>x.id===r.id))rs.push(r)});
-  return{data:{version:1,settings:{habits:hs,rules:rs},days:outDays},added,updated,kept};
-}
-
-/* ---------- storage (Capacitor Preferences) ---------- */
-let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'}};
-let loadProblem='';
-const prefGet=async k=>(await Prefs.get({key:k})).value;
-const prefSet=(k,v)=>Prefs.set({key:k,value:v});
-
-store={
-  queue:Promise.resolve(),
-  persist(){
-    const json=JSON.stringify(buildData());
-    const p=this.queue.then(()=>prefSet(DATA_KEY,json));
-    this.queue=p.catch(()=>{});
-    return p;
-  },
-  async load(){
-    let raw=await prefGet(DATA_KEY),migrated=0;
-    if(await prefGet(MIGRATED_KEY)==null){
-      // one-time move of the old browser copy (localStorage "resetlog") into Preferences
-      let old=null;try{old=localStorage.getItem('resetlog')}catch(e){}
-      if(raw==null&&old){
-        try{
-          const parsed=JSON.parse(old);
-          if(!parsed.settings)parsed.settings=clone(DEFAULT_SETTINGS);
-          const norm=normalizeData(parsed);
-          raw=JSON.stringify(norm);await prefSet(DATA_KEY,raw);migrated=Object.keys(norm.days).length;
-        }catch(e){loadProblem="Couldn't move your old saved entries: "+errText(e)}
-      }
-      if(!loadProblem)await prefSet(MIGRATED_KEY,'1');
-    }
-    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
-    try{const sv=await prefGet(SYNC_KEY);if(sv){const ss=JSON.parse(sv);sync.signedIn=!!ss.signedIn;sync.userId=typeof ss.userId==='string'?ss.userId:null;sync.email=typeof ss.email==='string'?ss.email:'';sync.lastSyncAt=num(ss.lastSyncAt)?ss.lastSyncAt:null;sync.settingsUpdatedAt=num(ss.settingsUpdatedAt)?ss.settingsUpdatedAt:0;sync.pendingDays=Array.isArray(ss.pendingDays)?ss.pendingDays.filter(k=>typeof k==='string'):[];sync.pendingSettings=!!ss.pendingSettings}}catch(e){}
-    if(raw==null)return{migrated};
-    try{
-      const norm=normalizeData(JSON.parse(raw));
-      return{data:norm,migrated};
-    }catch(e){
-      // keep the unreadable copy instead of overwriting it with an empty one
-      try{await prefSet('resetlog_unreadable_'+Date.now(),raw)}catch(e2){}
-      loadProblem="Your saved data couldn't be read ("+errText(e)+"). A copy was kept. Use Restore from backup to bring your entries back.";
-      return{migrated};
-    }
-  },
-  async saveMeta(){await prefSet(META_KEY,JSON.stringify(meta))}
-};
-
-/* ---------- files: export, auto backup ---------- */
-const DIR='ResetLog';
-const fmtWhen=t=>new Date(t).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'});
-function setMsg(id,text,bad){const el=$(id);el.textContent=text||'';el.className='msg'+(text?(bad?' bad':' ok'):'')}
-function showLastBackup(){$('lastBackup').textContent='Last backup: '+(meta.lastBackup?fmtWhen(meta.lastBackup):'never')}
-async function markBackup(){meta.lastBackup=Date.now();showLastBackup();try{await store.saveMeta()}catch(e){}}
-
-const FS=()=>Native.Filesystem;
-async function writeDocs(name,text){
-  return FS().writeFile({path:DIR+'/'+name,data:text,directory:Native.Directory.Documents,encoding:Native.Encoding.UTF8,recursive:true});
-}
-
-let autoQueue=Promise.resolve(),autoErrText='';
-function autoFail(text){autoErrText=text;setMsg('bkMsg',text,true)}
-function autoBackup(){
-  if(!IS_NATIVE)return Promise.resolve();
-  autoQueue=autoQueue.then(async()=>{
-    try{
-      const text=JSON.stringify(buildData(),null,2);
-      await writeDocs('resetlog-autobackup.json',text);
-      await writeDocs('resetlog-autobackup-'+todayStr()+'.json',text);
-      try{
-        const list=await FS().readdir({path:DIR,directory:Native.Directory.Documents});
-        const dated=list.files.map(f=>f.name).filter(n=>/^resetlog-autobackup-\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort().reverse();
-        for(const n of dated.slice(7))await FS().deleteFile({path:DIR+'/'+n,directory:Native.Directory.Documents});
-      }catch(e){await markBackup();autoFail("Backup saved, but cleaning up old copies failed: "+errText(e));return}
-      await markBackup();
-      if(autoErrText&&$('bkMsg').textContent===autoErrText){setMsg('bkMsg','')}autoErrText='';
-    }catch(e){autoFail("Automatic backup failed: "+errText(e)+". Your entry is saved in the app; use Export backup to keep a copy.")}
-  });
-  return autoQueue;
-}
-
-async function exportFile(name,text,mime,label){
-  if(!IS_NATIVE){
-    const url=URL.createObjectURL(new Blob([text],{type:mime}));
-    const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),4000);
-    await markBackup();return 'Downloaded '+name+'.';
-  }
-  let uri,note='';
-  try{uri=(await writeDocs(name,text)).uri;await markBackup()}
-  catch(e){
-    note="Couldn't save a copy in Documents ("+errText(e)+"). ";
-    try{uri=(await FS().writeFile({path:name,data:text,directory:Native.Directory.Cache,encoding:Native.Encoding.UTF8})).uri}
-    catch(e2){throw new Error("Couldn't write the file: "+errText(e2))}
-  }
-  const where=note?'':'Saved to Documents/'+DIR+'/'+name+'. ';
-  try{
-    await Native.Share.share({title:label,text:label,files:[uri],dialogTitle:'Share '+label});
-    return note+where+'Shared.';
-  }catch(e){
-    if(/cancel/i.test(errText(e)))return note+where+'Sharing was cancelled.';
-    const err=new Error(note+where+"Couldn't open the share sheet: "+errText(e));err.partial=!note;throw err;
-  }
-}
-
-function csvCell(v){
-  if(v==null)return'';
-  let s=String(v);
-  if(typeof v==='string'&&/^[=+\-@\t\r]/.test(s))s="'"+s;
-  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
-}
-function buildCsv(){
-  const head=['Date','Score %'].concat(settings.habits.map(h=>h.name+' ('+h.unit+')'),settings.rules.map(r=>r.name),['Weight (kg)','Waist (cm)','Note']);
-  const rows=Object.keys(days).sort().map(k=>{
-    const d=days[k];
-    return [k,scoreOf(d)].concat(
-      settings.habits.map(h=>d.vals&&d.vals[h.id]!=null?d.vals[h.id]:''),
-      settings.rules.map(r=>d.rules&&d.rules[r.id]?'yes':'no'),
-      [d.weight==null?'':d.weight,d.waist==null?'':d.waist,d.note||'']);
-  });
-  return '﻿'+[head].concat(rows).map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n';
-}
-
-async function runExport(btn,fn){
-  btn.disabled=true;setMsg('bkMsg','');
-  try{setMsg('bkMsg',await fn())}catch(e){setMsg('bkMsg',errText(e),true)}
-  btn.disabled=false;
-}
-$('expJson').addEventListener('click',e=>runExport(e.currentTarget,()=>exportFile('resetlog-backup-'+todayStr()+'.json',JSON.stringify(buildData(),null,2),'application/json','Reset Log backup')));
-$('expCsv').addEventListener('click',e=>runExport(e.currentTarget,()=>exportFile('resetlog-'+todayStr()+'.csv',buildCsv(),'text/csv','Reset Log spreadsheet')));
-
-/* ---------- restore ---------- */
-let modalResolve=null;
-function askModal(title,body,buttons){
-  return new Promise(res=>{
-    modalResolve=res;
-    $('mTitle').textContent=title;$('mBody').textContent=body;
-    const box=$('mBtns');box.innerHTML='';
-    buttons.forEach(b=>{const el=document.createElement('button');el.textContent=b.label;if(b.cls)el.className=b.cls;el.addEventListener('click',()=>closeModal(b.value));box.appendChild(el)});
-    $('modal').hidden=false;
-    box.querySelector('button').focus();
-  });
-}
-function closeModal(v){if($('modal').hidden)return;$('modal').hidden=true;const r=modalResolve;modalResolve=null;if(r)r(v)}
-const modalOpen=()=>!$('modal').hidden;
-
-function readText(file){
-  if(file.text)return file.text();
-  return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>rej(fr.error);fr.readAsText(file)});
-}
-const fmtD=k=>parse(k).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
-const range=ks=>{ks=ks.slice().sort();return ks.length?fmtD(ks[0])+' to '+fmtD(ks[ks.length-1]):''};
-
-async function restoreFromFile(file){
-  setMsg('bkMsg','');
-  let inc;
-  try{
-    let obj;
-    try{obj=JSON.parse(await readText(file))}catch(e){throw new Error("That file isn't valid JSON, so it can't be a Reset Log backup.")}
-    inc=normalizeData(obj);
-  }catch(e){setMsg('bkMsg',"Couldn't restore: "+errText(e),true);return}
-  const n=Object.keys(inc.days).length;
-  const body=(file.name||'This file')+' has '+n+' logged '+(n===1?'day':'days')+(n?' ('+range(Object.keys(inc.days))+')':'')+', '+inc.settings.habits.length+(inc.settings.habits.length===1?' item':' items')+' and '+inc.settings.rules.length+(inc.settings.rules.length===1?' rule':' rules')+'. This phone has '+Object.keys(days).length+' logged days.'+(dirty?' Unsaved changes on the Today tab will be discarded.':'');
-  if(await askModal('Restore this backup?',body,[{label:'Continue',value:'go'},{label:'Cancel',value:'cancel'}])!=='go')return;
-  const mode=await askModal('How should it be restored?','Merge keeps what is on this phone and adds the backup. If a day is in both, the newer save wins. Replace everything deletes what is on this phone and uses only the backup.'+(signedIn()?' The restored data is also sent to your cloud copy; days that exist only in the cloud will come back on the next sync.':''),[{label:'Merge',value:'merge'},{label:'Replace everything',value:'replace',cls:'danger'},{label:'Cancel',value:'cancel'}]);
-  if(mode!=='merge'&&mode!=='replace')return;
-  let warn='';
-  if(IS_NATIVE){try{await writeDocs('resetlog-before-restore.json',JSON.stringify(buildData(),null,2))}catch(e){warn=" Couldn't save a safety copy of your old data first ("+errText(e)+")."}}
-  const before=buildData();let summary;
-  try{
-    let next;
-    if(mode==='replace'){next=inc;summary='Replaced everything with the backup: '+n+(n===1?' day.':' days.')}
-    else{const m=mergeData(before,inc);next=m.data;summary='Merged: '+m.added+' new, '+m.updated+' updated, '+m.kept+' kept as they were.'}
-    settings=next.settings;days=next.days;
-    await store.persist();
-  }catch(e){settings=before.settings;days=before.days;setMsg('bkMsg',"Couldn't restore: "+errText(e)+' Nothing was changed.',true);return}
-  if(signedIn()){
-    // restored data counts as a fresh write, so it also wins over older cloud copies
-    const now=Date.now();
-    Object.keys(days).forEach(k=>{if(mode==='replace'||days[k]!==before.days[k]){days[k]=Object.assign({},days[k],{updatedAt:now});markDayDirty(k)}});
-    markSettingsDirty();
-    try{await store.persist()}catch(e){}
-  }
-  dirty=false;
-  renderToday();renderProgress();renderSetup();
-  $('headScore').textContent=(days[todayStr()]?scoreOf(days[todayStr()]):0)+'%';
-  setMsg('bkMsg',summary+warn,!!warn);
-  autoBackup();
-  syncSoon(false);
-}
-$('restoreBtn').addEventListener('click',()=>$('restoreFile').click());
-$('restoreFile').addEventListener('change',async e=>{
-  const f=e.target.files&&e.target.files[0];
-  if(f)await restoreFromFile(f);
-  e.target.value='';
-});
-
-/* ---------- daily reminder ---------- */
-const REM_ID=1001,REM_CHANNEL='daily-reminder';
-const LN=()=>Native.LocalNotifications;
-async function scheduleReminder(time){
-  const [h,m]=time.split(':').map(Number);
-  await LN().cancel({notifications:[{id:REM_ID}]});
-  await LN().createChannel({id:REM_CHANNEL,name:'Daily reminder',description:'Reminds you to log your day',importance:4,visibility:1});
-  await LN().schedule({notifications:[{
-    id:REM_ID,title:'Reset Log',body:'Time to log today. How did your workout and food go?',
-    channelId:REM_CHANNEL,smallIcon:'ic_stat_resetlog',
-    schedule:{on:{hour:h,minute:m},allowWhileIdle:true},isExactNotification:false,
-    extra:{tab:'today'}
-  }]});
-}
-const BLOCKED="Notifications are blocked for Reset Log. Turn them on in Android Settings > Apps > Reset Log > Notifications, then switch this on again.";
-async function setReminder(on){
-  const box=$('remOn');setMsg('remMsg','');
-  try{
-    if(on){
-      if(!IS_NATIVE){box.checked=false;setMsg('remMsg','Reminders only work in the Android app.',true);return}
-      let p=await LN().checkPermissions();
-      if(p.display!=='granted')p=await LN().requestPermissions();
-      if(p.display!=='granted'){box.checked=false;meta.reminder.enabled=false;await store.saveMeta();setMsg('remMsg',BLOCKED,true);return}
-      await scheduleReminder($('remTime').value);
-      meta.reminder={enabled:true,time:$('remTime').value};await store.saveMeta();
-      setMsg('remMsg','Reminder set for '+fmtTime($('remTime').value)+' every day.');
-    }else{
-      if(IS_NATIVE)await LN().cancel({notifications:[{id:REM_ID}]});
-      meta.reminder.enabled=false;await store.saveMeta();
-      setMsg('remMsg','Reminder is off.');
-    }
-  }catch(e){
-    box.checked=!on;
-    setMsg('remMsg',"Couldn't "+(on?'set':'turn off')+' the reminder: '+errText(e),true);
-  }
-  $('remRow').classList.toggle('kept',box.checked);
-}
-const fmtTime=t=>{const [h,m]=t.split(':').map(Number);return new Date(2000,0,1,h,m).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})};
-$('remOn').addEventListener('change',e=>setReminder(e.target.checked));
-$('remTime').addEventListener('change',async e=>{
-  const t=e.target.value;
-  if(!/^\d{2}:\d{2}$/.test(t)){e.target.value=meta.reminder.time;return}
-  const was=meta.reminder.time;
-  if(!$('remOn').checked){meta.reminder.time=t;try{await store.saveMeta()}catch(x){}return}
-  try{await scheduleReminder(t);meta.reminder.time=t;await store.saveMeta();setMsg('remMsg','Reminder moved to '+fmtTime(t)+' every day.')}
-  catch(x){e.target.value=was;setMsg('remMsg',"Couldn't change the time: "+errText(x),true)}
-});
-async function initReminder(){
-  $('remOn').checked=meta.reminder.enabled;$('remTime').value=meta.reminder.time;
-  $('remRow').classList.toggle('kept',meta.reminder.enabled);
-  if(!IS_NATIVE){if(!meta.reminder.enabled)setMsg('remMsg','Reminders only work in the Android app.')}
-  if(!IS_NATIVE||!meta.reminder.enabled)return;
-  try{
-    const p=await LN().checkPermissions();
-    if(p.display==='granted')await scheduleReminder(meta.reminder.time); // re-arms the alarm after app updates
-    else setMsg('remMsg',BLOCKED,true);
-  }catch(e){setMsg('remMsg',"Couldn't check the reminder: "+errText(e),true)}
-}
-
-/* ---------- cloud sync (Supabase, optional) ----------
-   Local Preferences stay the source the UI reads. Supabase is the cloud copy.
-   Saves go to the cloud right away when online; otherwise the day is queued in
-   Preferences and sent later. A full sync (open, sign in, foreground, network back,
-   "Sync now") pulls every cloud row and keeps whichever side has the newer timestamp. */
-const CFG=window.RESETLOG_CONFIG||{};
-const SYNC_KEY='resetlog_sync';
-let sb=null,session=null;
-let sync={signedIn:false,userId:null,email:'',lastSyncAt:null,settingsUpdatedAt:0,pendingDays:[],pendingSettings:false};
-let syncRunning=null,syncAgain=false,wantFull=false,syncError='',syncOffline=false,lastFullAt=0;
-const cloudConfigured=()=>!!(CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&Native.createClient);
-const signedIn=()=>cloudConfigured()&&sync.signedIn;
-const saveSync=()=>prefSet(SYNC_KEY,JSON.stringify(sync));
-const pendingCount=()=>sync.pendingDays.length+(sync.pendingSettings?1:0);
-const isDefaultSettings=()=>JSON.stringify(settings)===JSON.stringify(DEFAULT_SETTINGS);
-const dayData=d=>({vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''});
-const isNetErr=e=>!!e&&(e.name==='AuthRetryableFetchError'||e.status===0||/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(String(e.message||e)));
-function syncErrText(e){
-  if(isNetErr(e))return 'No internet connection.';
-  const m=errText(e);
-  return /jwt|token/i.test(m)?m+' Try signing out and in again.':m;
-}
-
-const authStorage={
-  getItem:async k=>(await Prefs.get({key:'sb:'+k})).value,
-  setItem:async(k,v)=>{await Prefs.set({key:'sb:'+k,value:v})},
-  removeItem:async k=>{await Prefs.remove({key:'sb:'+k})}
-};
-
-function renderSyncStatus(){
-  const el=$('syncStatus'),n=pendingCount();
-  if(!signedIn()){el.textContent='';return}
-  const waiting=n?n+(n===1?' change is':' changes are')+' waiting to sync':'';
-  let t,bad=false;
-  if(syncRunning)t='Syncing…';
-  else if(syncError){t='Sync problem: '+syncError+(waiting?' ('+waiting+')':'');bad=true}
-  else if(syncOffline&&n)t='Offline. '+waiting+'.';
-  else if(n)t=waiting.charAt(0).toUpperCase()+waiting.slice(1)+'.';
-  else if(sync.lastSyncAt)t='Synced at '+new Date(sync.lastSyncAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
-  else t='Not synced yet.';
-  el.textContent=t;el.style.color=bad?'var(--bad)':'';
-  $('syncNowBtn').disabled=!!syncRunning;
-}
-function renderAccount(){
-  const on=cloudConfigured(),inn=signedIn();
-  $('acctOut').hidden=inn;$('acctIn').hidden=!inn;
-  $('signInBtn').hidden=!on;
-  $('acctOffNote').hidden=on;
-  $('acctEmail').textContent=sync.email||'your account';
-  renderSyncStatus();
-}
-
-function markDayDirty(k){if(signedIn()&&!sync.pendingDays.includes(k)){sync.pendingDays.push(k);saveSync().catch(()=>{})}}
-function markSettingsDirty(){sync.settingsUpdatedAt=Date.now();if(signedIn())sync.pendingSettings=true;saveSync().catch(()=>{})}
-
-async function fetchAllDays(){
-  const out=[];
-  for(let from=0;;from+=1000){
-    const {data,error}=await sb.from('day_logs').select('log_date,data,updated_at').eq('user_id',sync.userId).order('log_date').range(from,from+999);
-    if(error)throw error;
-    out.push(...data);
-    if(data.length<1000)break;
-  }
-  return out;
-}
-
-async function pullAndMerge(){
-  const rows=await fetchAllDays();
-  const {data:srow,error:serr}=await sb.from('user_settings').select('data,updated_at').eq('user_id',sync.userId).maybeSingle();
-  if(serr)throw serr;
-  let changed=false,skipped=0;
-  const cloud={};
-  rows.forEach(r=>{cloud[r.log_date]=Date.parse(r.updated_at)});
-  rows.forEach(r=>{
-    const ts=Date.parse(r.updated_at),local=days[r.log_date];
-    if(!local||ts>(local.updatedAt||0)){
-      try{days[r.log_date]=normalizeDay(r.log_date,Object.assign({},r.data,{updatedAt:ts}));changed=true}catch(e){skipped++}
-    }
-  });
-  // first sign in with customised local settings: they count as newer than an untouched cloud copy
-  if(!sync.settingsUpdatedAt&&!isDefaultSettings())sync.settingsUpdatedAt=Date.now();
-  const cts=srow?Date.parse(srow.updated_at):null;
-  if(srow&&cts>sync.settingsUpdatedAt){
-    try{settings=normalizeSettings(srow.data);sync.settingsUpdatedAt=cts;sync.pendingSettings=false;changed=true}catch(e){skipped++}
-  }else if(!srow||sync.settingsUpdatedAt>cts)sync.pendingSettings=true;
-  else sync.pendingSettings=false;
-  // everything the cloud lacks or has an older copy of still has to go up
-  sync.pendingDays=Object.keys(days).filter(k=>cloud[k]==null||(days[k].updatedAt||0)>cloud[k]);
-  if(changed){await store.persist();refreshAfterCloudChange()}
-  if(skipped)throw new Error(skipped+' cloud '+(skipped===1?'row was':'rows were')+' skipped because it could not be read.');
-}
-
-async function flushPending(){
-  const uid=sync.userId;
-  const sent=sync.pendingDays.filter(k=>days[k]).map(k=>({k,at:days[k].updatedAt||0}));
-  for(let i=0;i<sent.length;i+=200){
-    const chunk=sent.slice(i,i+200);
-    const {error}=await sb.from('day_logs').upsert(chunk.map(x=>({user_id:uid,log_date:x.k,data:dayData(days[x.k]),updated_at:new Date(x.at).toISOString()})),{onConflict:'user_id,log_date'});
-    if(error)throw error;
-    chunk.forEach(x=>{if(days[x.k]&&(days[x.k].updatedAt||0)===x.at)sync.pendingDays=sync.pendingDays.filter(d=>d!==x.k)});
-    await saveSync();
-  }
-  sync.pendingDays=sync.pendingDays.filter(k=>days[k]);
-  if(sync.pendingSettings){
-    const at=sync.settingsUpdatedAt;
-    const {error}=await sb.from('user_settings').upsert({user_id:uid,data:settings,updated_at:new Date(at).toISOString()},{onConflict:'user_id'});
-    if(error)throw error;
-    if(sync.settingsUpdatedAt===at)sync.pendingSettings=false;
-  }
-}
-
-async function doSync(full){
-  syncError='';syncOffline=false;
-  try{
-    if(Native.Network&&!(await Native.Network.getStatus()).connected){syncOffline=true;return}
-    renderSyncStatus();
-    if(full){await pullAndMerge();lastFullAt=Date.now()}
-    await flushPending();
-    sync.lastSyncAt=Date.now();
-  }catch(e){syncError=syncErrText(e);if(isNetErr(e))syncOffline=true}
-  try{await saveSync()}catch(e){}
-}
-function syncSoon(full){
-  if(!signedIn()||!sb)return Promise.resolve();
-  if(full)wantFull=true;
-  if(syncRunning){syncAgain=true;return syncRunning}
-  syncRunning=(async()=>{
-    do{syncAgain=false;const f=wantFull;wantFull=false;renderSyncStatus();await doSync(f)}while(syncAgain);
-  })().finally(()=>{syncRunning=null;renderSyncStatus()});
-  renderSyncStatus();
-  return syncRunning;
-}
-function syncOnResume(){if(signedIn()&&(pendingCount()||Date.now()-lastFullAt>30000))syncSoon(true)}
-
-function refreshAfterCloudChange(){
-  // never overwrite a form the user is typing in
-  if(!dirty)renderToday();
-  renderProgress();renderSetup();
-  $('headScore').textContent=(days[todayStr()]?scoreOf(days[todayStr()]):0)+'%';
-}
-
-/* ---------- account: sign up / sign in / out ---------- */
-function authErrText(e){
-  const c=String((e&&e.code)||''),m=String((e&&e.message)||e);
-  if(c==='invalid_credentials'||/invalid login credentials/i.test(m))return 'Wrong email or password.';
-  if(c==='email_not_confirmed'||/email not confirmed/i.test(m))return 'Check your email to confirm your account, then sign in.';
-  if(c==='user_already_exists'||/already (registered|been registered|exists)/i.test(m))return 'An account with this email already exists. Try signing in.';
-  if(c==='weak_password'||/password should|password is too/i.test(m))return 'That password is too weak. '+m;
-  if(/rate.?limit|too many|security purposes/i.test(c+' '+m))return 'Too many attempts. Wait a few minutes and try again.';
-  if(c==='signup_disabled')return 'New sign ups are turned off for this project.';
-  if(c==='email_address_not_authorized'||/not authorized|not part of the project/i.test(m))return "Sign up emails can't be sent to this address yet because the app's email service isn't fully set up. Please contact the app owner.";
-  if(c==='email_address_invalid'||/email address .* is invalid/i.test(m))return "That email address isn't accepted. Use a real address that can receive mail.";
-  if(isNetErr(e))return 'No internet connection. Check your connection and try again.';
-  return m;
-}
-const authModalOpen=()=>!$('authModal').hidden;
-function openAuth(){setMsg('authMsg','');$('authPw').value='';$('authModal').hidden=false;$('authEmail').focus()}
-function closeAuth(){$('authModal').hidden=true;$('authPw').value=''}
-async function doAuth(mode){
-  const email=$('authEmail').value.trim(),pw=$('authPw').value;
-  if(!/^\S+@\S+\.\S+$/.test(email)){setMsg('authMsg','Enter a valid email address.',true);return}
-  if(pw.length<6){setMsg('authMsg','Password must be at least 6 characters.',true);return}
-  ['authIn','authUp'].forEach(i=>$(i).disabled=true);setMsg('authMsg','Working…');
-  try{
-    let res;
-    if(mode==='up'){
-      res=await sb.auth.signUp({email,password:pw});
-      if(res.error)throw res.error;
-      if(res.data.user&&Array.isArray(res.data.user.identities)&&res.data.user.identities.length===0)throw {code:'user_already_exists',message:'User already registered'};
-      if(!res.data.session){setMsg('authMsg','Check your email to confirm your account, then sign in.');return}
-    }else{
-      res=await sb.auth.signInWithPassword({email,password:pw});
-      if(res.error)throw res.error;
-    }
-    closeAuth();
-    await onSignedIn(res.data.session);
-  }catch(e){setMsg('authMsg',authErrText(e),true)}
-  finally{['authIn','authUp'].forEach(i=>$(i).disabled=false)}
-}
-async function onSignedIn(s){
-  const uid=s.user.id;
-  if(sync.userId&&sync.userId!==uid&&Object.keys(days).length){
-    const pick=await askModal('Different account','The entries on this phone were synced with another account. Add them to this account too, or use only this account\'s data?',[{label:'Add this phone\'s entries to this account',value:'merge'},{label:'Use only this account\'s data',value:'replace',cls:'danger'},{label:'Cancel and sign out',value:'cancel'}]);
-    if(pick!=='merge'&&pick!=='replace'){try{await sb.auth.signOut({scope:'local'})}catch(e){}sync.signedIn=false;renderAccount();return}
-    if(pick==='replace'){days={};settings=clone(DEFAULT_SETTINGS);sync.settingsUpdatedAt=0;try{await store.persist()}catch(e){setMsg('acctMsg',"Couldn't clear the old entries: "+errText(e),true);return}refreshAfterCloudChange()}
-  }
-  Object.assign(sync,{signedIn:true,userId:uid,email:s.user.email||'',pendingDays:[],pendingSettings:false});
-  session=s;await saveSync();
-  renderAccount();setMsg('acctMsg','');
-  syncSoon(true);
-}
-async function signOut(){
-  try{await sb.auth.signOut({scope:'local'})}catch(e){}
-  Object.assign(sync,{signedIn:false,email:''});session=null;
-  try{await saveSync()}catch(e){}
-  renderAccount();setMsg('acctMsg','Signed out. Your entries stay on this phone.');
-}
-$('signInBtn').addEventListener('click',openAuth);
-$('authIn').addEventListener('click',()=>doAuth('in'));
-$('authUp').addEventListener('click',()=>doAuth('up'));
-$('authCancel').addEventListener('click',closeAuth);
-$('signOutBtn').addEventListener('click',signOut);
-$('syncNowBtn').addEventListener('click',()=>syncSoon(true));
-['authEmail','authPw'].forEach(i=>$(i).addEventListener('keydown',e=>{if(e.key==='Enter')doAuth('in')}));
-
-async function initSync(){
-  renderAccount();
-  if(!cloudConfigured())return;
-  sb=Native.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_PUBLISHABLE_KEY,{auth:{storage:authStorage,persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-  sb.auth.onAuthStateChange((ev,s)=>{
-    session=s;
-    if(ev==='SIGNED_OUT'&&sync.signedIn){sync.signedIn=false;renderAccount()} // token revoked or removed elsewhere
-  });
-  try{
-    const {data,error}=await sb.auth.getSession();
-    if(data.session){session=data.session;if(!sync.signedIn||sync.userId!==data.session.user.id){sync.signedIn=true;sync.userId=data.session.user.id;sync.email=data.session.user.email||'';await saveSync()}}
-    else if(!error&&sync.signedIn){sync.signedIn=false;await saveSync()} // no stored session any more
-    // a network error while refreshing keeps us "signed in" and retries when back online
-  }catch(e){}
-  renderAccount();
-  syncSoon(true);
-}
-
-/* ---------- native glue: status bar, back button, notification tap, resume ---------- */
-function syncBars(){
-  if(!IS_NATIVE||!Native.StatusBar)return;
-  try{
-    const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#F3F4EF';
-    const dark=getComputedStyle(document.body).backgroundColor==='rgb(18, 23, 24)';
-    Native.StatusBar.setStyle({style:dark?'DARK':'LIGHT'}).catch(()=>{});
-    Native.StatusBar.setBackgroundColor({color:bg}).catch(()=>{});
-  }catch(e){}
-}
-function openToday(){showTab('today');if(!dirty&&current!==todayStr()){current=todayStr();renderToday()}}
-let lastToday=null;
-function onResume(){
-  const t=todayStr();if(t===lastToday)return;
-  const wasToday=current===lastToday;lastToday=t;
-  $('todayLabel').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
-  if(wasToday&&!dirty)current=t;
-  renderToday();renderProgress();
-}
-function onForeground(){onResume();syncOnResume()}
-function initNativeGlue(){
-  try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{syncBars();drawChart()})}catch(e){}
-  syncBars();
-  try{if(Native.Network)Native.Network.addListener('networkStatusChange',s=>{if(s.connected)syncSoon(true)})}catch(e){}
-  if(!IS_NATIVE){document.addEventListener('visibilitychange',()=>{if(!document.hidden)onForeground()});return}
-  Native.App.addListener('backButton',()=>{
-    if(authModalOpen()){closeAuth();return}
-    if(modalOpen()){closeModal('cancel');return}
-    if(activeTab!=='today'){showTab('today');return}
-    if(dirty&&!confirm('You have unsaved changes. Exit without saving?'))return;
-    Native.App.exitApp();
-  });
-  Native.App.addListener('appStateChange',s=>{if(s.isActive)onForeground()});
-  LN().addListener('localNotificationActionPerformed',()=>openToday());
-}
-
-function blankDay(){return{vals:{},rules:{},weight:null,waist:null,note:''}}
-
-function renderToday(){
-  const d=days[current]||blankDay();
-  $('dateInput').value=current;
-  $('dateInput').max=todayStr();
-  $('nextDay').disabled=current>=todayStr();
-  const isToday=current===todayStr();
-  $('saveBtn').textContent=isToday?'Save today':'Save '+nice(current);
-  const logged=!!days[current];
-  const b=$('banner');
-  if(logged){b.className='banner done';b.textContent=(isToday?'Today':nice(current))+' is logged at '+scoreOf(days[current])+'%. You can still update it.'}
-  else{b.className='banner todo';b.textContent=isToday?"You haven't logged today yet. Fill in what you did and tap save.":nice(current)+' was not logged. You can fill it in now.'}
-
-  $('habitList').innerHTML=settings.habits.map(h=>{
-    const v=(d.vals||{})[h.id];
-    const step=h.unit==='steps'?500:(h.target<10?0.5:5);
-    return `<div class="habit" data-id="${esc(h.id)}"><div class="hrow"><div><div class="hname"></div><div class="htgt">Target ${esc(h.target)} ${esc(h.unit)}</div></div>
-    <div class="stepper"><button type="button" data-d="-${step}" aria-label="Less">&minus;</button><input type="number" inputmode="decimal" min="0" step="any" value="${esc(v??'')}" placeholder="0" aria-label="${esc(h.name)}"><button type="button" data-d="${step}" aria-label="More">+</button></div></div><div class="bar"><i></i></div></div>`}).join('');
-  settings.habits.forEach((h,i)=>{const row=$('habitList').children[i];row.querySelector('.hname').textContent=h.name;updBar(row,h)});
-  $('habitList').querySelectorAll('.habit').forEach(row=>{
-    const h=settings.habits.find(x=>x.id===row.dataset.id);
-    const inp=row.querySelector('input');
-    inp.addEventListener('input',()=>{dirty=true;updBar(row,h);liveScore()});
-    row.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{const n=Math.max(0,r1((Number(inp.value)||0)+Number(btn.dataset.d)));inp.value=n;dirty=true;updBar(row,h);liveScore()}));
-  });
-
-  $('ruleList').innerHTML=settings.rules.map(r=>`<label class="rule${(d.rules||{})[r.id]?' kept':''}" data-id="${esc(r.id)}"><input type="checkbox"${(d.rules||{})[r.id]?' checked':''}><span></span></label>`).join('');
-  settings.rules.forEach((r,i)=>{$('ruleList').children[i].querySelector('span').textContent=r.name});
-  $('ruleList').querySelectorAll('.rule').forEach(l=>l.querySelector('input').addEventListener('change',e=>{l.classList.toggle('kept',e.target.checked);dirty=true;liveScore()}));
-
-  $('weight').value=d.weight??'';$('waist').value=d.waist??'';$('note').value=d.note||'';
-  liveScore();
-}
-function updBar(row,h){const v=Number(row.querySelector('input').value)||0;row.querySelector('.bar i').style.width=Math.min(100,h.target>0?v/h.target*100:0)+'%'}
-function collect(){
-  const d={vals:{},rules:{},note:$('note').value.trim(),updatedAt:Date.now()};
-  $('habitList').querySelectorAll('.habit').forEach(row=>{const v=row.querySelector('input').value;if(v!=='')d.vals[row.dataset.id]=Number(v)});
-  $('ruleList').querySelectorAll('.rule').forEach(l=>{d.rules[l.dataset.id]=l.querySelector('input').checked});
-  const w=$('weight').value,wa=$('waist').value;
-  d.weight=w===''?null:Number(w);d.waist=wa===''?null:Number(wa);
-  return d;
-}
-function liveScore(){const s=scoreOf(collect());if(current===todayStr())$('headScore').textContent=s+'%'}
-
-async function save(){
-  const w=$('weight').value,wa=$('waist').value;
-  if(w!==''&&(Number(w)<30||Number(w)>250)){toast('Check the weight value');return}
-  if(wa!==''&&(Number(wa)<40||Number(wa)>200)){toast('Check the waist value');return}
-  const d=collect();d.date=current;
-  $('saveBtn').disabled=true;
-  const prev=days[current];
-  days[current]=d;
-  try{await store.persist();dirty=false;toast('Saved');renderToday();renderProgress();autoBackup();markDayDirty(current);syncSoon(false)}
-  catch(e){if(prev)days[current]=prev;else delete days[current];toast("Couldn't save. Try again.")}
-  $('saveBtn').disabled=false;
-}
-
-function streak(){let n=0;const d=new Date();if(!days[ymd(d)])d.setDate(d.getDate()-1);while(days[ymd(d)]&&scoreOf(days[ymd(d)])>=50){n++;d.setDate(d.getDate()-1)}return n}
-function firstLast(key){const ks=Object.keys(days).sort().filter(k=>days[k][key]!=null);if(ks.length<2)return null;return r1(days[ks[ks.length-1]][key]-days[ks[0]][key])}
-
-function renderProgress(){
-  const keys=Object.keys(days).sort();
-  const st=streak();$('sStreak').textContent=st+(st===1?' day':' days');
-  $('sDays').textContent=keys.length;
-  const wc=firstLast('weight'),wac=firstLast('waist');
-  $('sWeight').textContent=wc==null?'–':(wc>0?'+':'')+wc+' kg';
-  $('sWaist').textContent=wac==null?'–':(wac>0?'+':'')+wac+' cm';
-  const heat=$('heat');heat.innerHTML='';
-  const t=new Date();
-  for(let i=27;i>=0;i--){const d=new Date(t);d.setDate(t.getDate()-i);const k=ymd(d);const s=days[k]?scoreOf(days[k]):null;
-    const c=document.createElement('div');c.style.background=colorFor(s);c.textContent=d.getDate();if(s!=null)c.style.color='#fff';
-    c.title=nice(k)+(s==null?': not logged':': '+s+'%');c.setAttribute('role','button');c.setAttribute('aria-label',c.title);
-    c.addEventListener('click',()=>{current=k;showTab('today');renderToday()});heat.appendChild(c)}
-  const sel=$('metric');const prev=sel.value;
-  const opts=[['score','Daily score (%)'],['weight','Weight (kg)'],['waist','Waist (cm)']].concat(settings.habits.map(h=>['h:'+h.id,h.name+' ('+h.unit+')']));
-  sel.innerHTML=opts.map(o=>`<option value="${esc(o[0])}"></option>`).join('');
-  opts.forEach((o,i)=>sel.options[i].textContent=o[1]);
-  sel.value=opts.some(o=>o[0]===prev)?prev:'score';
-  drawChart();
-  const last=keys.slice(-10).reverse();
-  $('logList').innerHTML=last.length?'':'<p class="hint" style="margin:0">No days logged yet. Your first save will show up here.</p>';
-  last.forEach(k=>{const s=scoreOf(days[k]);const el=document.createElement('div');el.className='log';
-    el.innerHTML=`<div class="hrow"><b></b><span class="pill"></span></div><div class="htgt"></div>`;
-    el.querySelector('b').textContent=nice(k);const p=el.querySelector('.pill');p.textContent=s+'%';
-    p.style.background=s>=80?'var(--go-bg)':s>=40?'var(--mid-bg)':'var(--bad-bg)';p.style.color=s>=80?'var(--go)':s>=40?'var(--mid)':'var(--bad)';
-    const bits=settings.habits.filter(h=>days[k].vals&&days[k].vals[h.id]!=null).map(h=>h.name+' '+days[k].vals[h.id]);
-    if(days[k].weight!=null)bits.push(days[k].weight+' kg');
-    el.querySelector('.htgt').textContent=bits.join(', ')+(days[k].note?' — '+days[k].note:'');
-    el.style.cursor='pointer';el.addEventListener('click',()=>{current=k;showTab('today');renderToday()});
-    $('logList').appendChild(el)});
-}
-
-function drawChart(){
-  if(!window.Chart)return;
-  const m=$('metric').value;const keys=Object.keys(days).sort();
-  const pts=keys.map(k=>{let v=null;const d=days[k];if(m==='score')v=scoreOf(d);else if(m==='weight')v=d.weight;else if(m==='waist')v=d.waist;else{const id=m.slice(2);v=d.vals&&d.vals[id]!=null?d.vals[id]:null}return{k,v}}).filter(p=>p.v!=null);
-  $('chartEmpty').textContent=pts.length<2?'Log at least two days to see a trend here.':'';
-  const dark=getComputedStyle(document.body).backgroundColor==='rgb(18, 23, 24)';
-  const ink=dark?'#9AA5A6':'#5E6A6C',grid=dark?'#2C3638':'#E8EAE3',col=dark?'#4CC086':'#1F7A4C';
-  let target=null;if(m.startsWith('h:')){const h=settings.habits.find(x=>x.id===m.slice(2));if(h)target=h.target}
-  const data={labels:pts.map(p=>parse(p.k).toLocaleDateString(undefined,{day:'numeric',month:'short'})),datasets:[{data:pts.map(p=>p.v),borderColor:col,backgroundColor:col+'22',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:col,borderWidth:2}]};
-  if(target!=null)data.datasets.push({data:pts.map(()=>target),borderColor:ink,borderDash:[5,5],pointRadius:0,borderWidth:1,fill:false});
-  if(chart)chart.destroy();
-  chart=new Chart($('chart'),{type:'line',data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.datasetIndex===1?'Target '+target:String(r1(c.parsed.y))}}},scales:{x:{ticks:{color:ink,maxRotation:0,autoSkip:true},grid:{display:false}},y:{ticks:{color:ink},grid:{color:grid}}}}});
-}
-
-function renderSetup(){
-  const sh=$('setHabits');sh.innerHTML='';
-  settings.habits.forEach(h=>{const el=document.createElement('div');el.className='list-item';
-    el.innerHTML=`<div style="flex:1;min-width:0"><div class="hname"></div><div class="htgt"></div></div><input type="number" inputmode="decimal" style="width:84px" aria-label="Target"><button class="del" aria-label="Remove">Remove</button>`;
-    el.querySelector('.hname').textContent=h.name;el.querySelector('.htgt').textContent='Daily target in '+h.unit;
-    const inp=el.querySelector('input');inp.value=h.target;
-    inp.addEventListener('change',async()=>{const v=Number(inp.value);if(!(v>0)){inp.value=h.target;toast('Target must be above 0');return}h.target=v;await persistSettings('Target updated')});
-    el.querySelector('.del').addEventListener('click',async()=>{if(!confirm('Remove '+h.name+'? Past entries stay saved.'))return;settings.habits=settings.habits.filter(x=>x.id!==h.id);await persistSettings('Removed')});
-    sh.appendChild(el)});
-  const sr=$('setRules');sr.innerHTML='';
-  settings.rules.forEach(r=>{const el=document.createElement('div');el.className='list-item';el.innerHTML='<span></span><button class="del">Remove</button>';
-    el.querySelector('span').textContent=r.name;
-    el.querySelector('.del').addEventListener('click',async()=>{settings.rules=settings.rules.filter(x=>x.id!==r.id);await persistSettings('Removed')});
-    sr.appendChild(el)});
-  $('storeNote').textContent=IS_NATIVE?'Entries are saved on this phone and copied to Documents/ResetLog after every save.':'Entries are saved in this browser only.';
-  $('bkHint').textContent=IS_NATIVE?'Your entries live on this phone. A copy is also saved to Documents/ResetLog after every save. Export one to keep it somewhere safe.':'Your entries live in this browser. Export a copy to keep it somewhere safe.';
-}
-async function persistSettings(msg){try{await store.persist();toast(msg);autoBackup();markSettingsDirty();syncSoon(false)}catch(e){toast("Couldn't save. Try again.")}renderSetup();renderToday();renderProgress()}
-
-$('addHabit').addEventListener('click',async()=>{
-  const n=$('nhName').value.trim(),t=Number($('nhTarget').value),u=$('nhUnit').value.trim()||'times';
-  if(!n){$('nhErr').textContent='Enter a name first';return}
-  if(!(t>0)){$('nhErr').textContent='Enter a daily target above 0';return}
-  $('nhErr').textContent='';settings.habits.push({id:slug(n),name:n,unit:u,target:t});
-  $('nhName').value='';$('nhTarget').value='';$('nhUnit').value='';await persistSettings('Added '+n)});
-['nhName','nhTarget'].forEach(id=>$(id).addEventListener('input',()=>$('nhErr').textContent=''));
-$('addRule').addEventListener('click',async()=>{const n=$('nrName').value.trim();if(!n){$('nrErr').textContent='Enter a rule first';return}$('nrErr').textContent='';settings.rules.push({id:slug(n),name:n});$('nrName').value='';await persistSettings('Rule added')});
-$('nrName').addEventListener('input',()=>$('nrErr').textContent='');
-
-function showTab(t){activeTab=t;document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id==='p-'+t));$('savebar').style.display=t==='today'?'block':'none';if(t==='progress')drawChart();window.scrollTo(0,0)}
-document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
-$('metric').addEventListener('change',drawChart);
-$('saveBtn').addEventListener('click',save);
-['weight','waist','note'].forEach(id=>$(id).addEventListener('input',()=>dirty=true));
-function goTo(k){if(dirty&&!confirm('You have unsaved changes for this day. Leave without saving?'))return;dirty=false;current=k;renderToday()}
-$('prevDay').addEventListener('click',()=>{const d=parse(current);d.setDate(d.getDate()-1);goTo(ymd(d))});
-$('nextDay').addEventListener('click',()=>{const d=parse(current);d.setDate(d.getDate()+1);if(ymd(d)<=todayStr())goTo(ymd(d))});
-$('dateInput').addEventListener('change',e=>{if(e.target.value&&e.target.value<=todayStr())goTo(e.target.value);else e.target.value=current});
-
-(async function(){
-  current=todayStr();lastToday=current;
-  $('todayLabel').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
-  renderToday();showTab('today');
-  initNativeGlue();
-  try{
-    const all=await store.load();
-    if(all.data){settings=all.data.settings;days=all.data.days}
-    if(all.migrated)setMsg('bkMsg','Moved '+all.migrated+' saved '+(all.migrated===1?'day':'days')+' from the old browser storage.');
-  }catch(e){loadProblem="Couldn't read your saved entries: "+errText(e)}
-  renderToday();renderProgress();renderSetup();showLastBackup();
-  if(loadProblem)setMsg('bkMsg',loadProblem,true);
-  $('headScore').textContent=(days[todayStr()]?scoreOf(days[todayStr()]):scoreOf(collect()))+'%';
-  initReminder();
-  initSync();
-})();
-</script>
+<script src="js/logic.js"></script>
+<script src="js/ui.js"></script>
 </body>
 </html>

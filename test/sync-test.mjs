@@ -1,29 +1,13 @@
 // Cloud-sync tests. The page runs the real supabase-js bundle; the Supabase server is an
 // in-memory fake (auth + PostgREST, rows filtered by the caller's user id like RLS does).
 // Run: npm run test:sync
-import { chromium } from 'playwright';
-import http from 'http';
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
-import { fileURLToPath } from 'url';
+import { serve, launch, counter, newPage, skipOnboarding, tab, ready, stored, sheetGone, settle, setHabit, setBody, setNote, goDate, actionChoose, logDay, todayKey } from './helpers.mjs';
 
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'www');
-const mime = { '.js': 'text/javascript', '.woff2': 'font/woff2', '.html': 'text/html' };
-const srv = http.createServer((q, r) => {
-  let f = path.join(root, decodeURIComponent(q.url.split('?')[0]));
-  if (f.endsWith(path.sep)) f += 'index.html';
-  fs.readFile(f, (e, d) => {
-    if (e) { r.writeHead(404); r.end(); return; }
-    r.writeHead(200, { 'content-type': mime[path.extname(f)] || 'application/octet-stream' });
-    r.end(d);
-  });
-}).listen(0);
-const base = `http://localhost:${srv.address().port}/`;
+const { srv, base } = serve();
 const API = 'https://fake.supabase.test';
-
-let pass = 0, fail = 0;
-const ok = (c, name, extra) => { if (c) { pass++; console.log('  PASS', name); } else { fail++; console.log('  FAIL', name, extra !== undefined ? JSON.stringify(extra) : ''); } };
+const T = counter();
+const ok = T.ok;
 
 /* ---------- fake Supabase ---------- */
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -94,207 +78,198 @@ async function handler(route) {
 }
 
 /* ---------- helpers ---------- */
-const browser = await chromium.launch({ executablePath: fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined }).catch(() => chromium.launch());
+const browser = await launch();
 const ctx = await browser.newContext({ viewport: { width: 400, height: 800 } });
+await skipOnboarding(ctx);
 await ctx.route(API + '/**', handler);
 await ctx.route('**/config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.RESETLOG_CONFIG={SUPABASE_URL:'${API}',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fake'}` }));
 const errs = [];
-const pg = await ctx.newPage();
-pg.on('pageerror', e => errs.push('pageerror: ' + e.message));
-pg.on('console', m => { if (m.type() === 'error' && !/404|Failed to load resource|ERR_INTERNET/.test(m.text())) errs.push('console: ' + m.text()); });
-pg.on('dialog', d => d.accept());
+const pg = await newPage(ctx, errs);
 
-const tab = t => pg.click(`nav button[data-tab="${t}"]`);
 const status = () => pg.textContent('#syncStatus');
-const stored = () => pg.evaluate(() => JSON.parse(localStorage.getItem('CapacitorStorage.resetlog')));
 const waitStatus = (re, t = 8000) => pg.waitForFunction(r => new RegExp(r).test(document.getElementById('syncStatus').textContent), re.source, { timeout: t }).catch(async e => { console.log('  (status was: ' + (await status()) + ')'); throw e; });
-async function logDay(steps, weight, note) {
-  await tab('today');
-  await pg.fill('#habitList .habit:nth-child(1) input', String(steps));
-  await pg.fill('#weight', String(weight));
-  await pg.fill('#note', note);
-  await pg.click('#saveBtn');
-  await pg.waitForFunction(() => document.getElementById('banner').classList.contains('done'));
-}
 const authMsg = () => pg.$eval('#authMsg', e => ({ t: e.textContent, bad: e.classList.contains('bad') }));
+const authOpen = () => pg.$('#authEmail').then(x => !!x);
 async function auth(mode, email, pw) {
-  if (await pg.$eval('#authModal', e => e.hidden)) { await tab('setup'); await pg.click('#signInBtn'); }
+  if (!(await authOpen())) { await tab(pg, 'setup'); await pg.click('#signInBtn'); await pg.waitForSelector('#authEmail'); }
   await pg.fill('#authEmail', email); await pg.fill('#authPw', pw);
   await pg.click(mode === 'up' ? '#authUp' : '#authIn');
 }
-const pad = n => String(n).padStart(2, '0');
-const d0 = new Date(); const tk = `${d0.getFullYear()}-${pad(d0.getMonth() + 1)}-${pad(d0.getDate())}`;
+const authClosed = () => pg.waitForFunction(() => !document.getElementById('authEmail'), null, { timeout: 8000 });
+const waitAuthText = re => pg.waitForFunction(r => new RegExp(r, 'i').test((document.getElementById('authMsg') || {}).textContent || ''), re.source, { timeout: 8000 });
+const tk = todayKey();
 const EMAIL = 'tester@example.com', PW = 'correct horse 9';
+const cloud = () => fake.calls.filter(c => c.includes('/rest/')).length;
 
 /* ---------- 1. works without an account ---------- */
 console.log('Signed out (local only)');
-await pg.goto(base);
-await pg.waitForSelector('#sDays', { state: 'attached' });
-await tab('setup');
-ok(await pg.isVisible('#signInBtn') && !(await pg.isVisible('#signOutBtn')), 'My plan shows "Sign in to sync" when signed out');
-await logDay(8000, 87, 'local one');
+await pg.goto(base); await ready(pg);
+await tab(pg, 'setup');
+ok(await pg.isVisible('#signInBtn') && !(await pg.isVisible('#signOutBtn')), 'Plan shows "Sign in to sync" when signed out');
+await logDay(pg, { steps: 8000, weight: 87, note: 'local one' });
 await pg.click('#prevDay');
-await logDay(7000, 87.5, 'local two');
+await logDay(pg, { steps: 7000, weight: 87.5, note: 'local two' });
 await pg.waitForTimeout(300);
-ok(fake.calls.filter(c => c.includes('/rest/')).length === 0, 'saving while signed out makes no cloud requests');
-ok(Object.keys((await stored()).days).length === 2, 'local days saved');
+ok(cloud() === 0, 'changing data while signed out makes no cloud requests');
+ok(Object.keys((await stored(pg)).days).length === 2, 'local days saved');
 
 /* ---------- 2. sign up / sign in errors ---------- */
-console.log('Account screen');
+console.log('Account sheet');
 await auth('up', 'not-an-email', PW);
 ok((await authMsg()).bad && /valid email/.test((await authMsg()).t), 'invalid email is rejected');
 await auth('up', EMAIL, '123');
 ok(/at least 6/.test((await authMsg()).t), 'short password is rejected');
 fake.signupError = { code: 400, error_code: 'email_address_not_authorized', msg: 'Email address "tester@example.com" cannot be used as it is not authorized' };
 await auth('up', EMAIL, PW);
-await pg.waitForFunction(() => /email service/.test(document.getElementById('authMsg').textContent));
+await waitAuthText(/email service/);
 ok((await authMsg()).bad && /contact the app owner/.test((await authMsg()).t), 'default-SMTP "email not authorized" error is explained clearly');
 fake.signupError = { code: 400, error_code: 'email_address_invalid', msg: 'Email address "tester@example.com" is invalid' };
 await auth('up', EMAIL, PW);
-await pg.waitForFunction(() => /isn't accepted/.test(document.getElementById('authMsg').textContent));
+await waitAuthText(/isn't accepted/);
 ok((await authMsg()).bad, 'invalid-domain error is explained clearly');
 fake.signupError = null;
 fake.offline = true;
 await auth('up', EMAIL, PW);
-await pg.waitForFunction(() => /No internet/.test(document.getElementById('authMsg').textContent));
+await waitAuthText(/No internet/);
 ok((await authMsg()).bad, 'offline sign up shows a clear "No internet" message');
 fake.offline = false;
 await auth('up', EMAIL, PW);
-await pg.waitForFunction(() => /confirm/i.test(document.getElementById('authMsg').textContent));
-ok(/Check your email to confirm your account, then sign in\./.test((await authMsg()).t) && !(await pg.$eval('#authModal', e => e.hidden)), 'email confirmation required: clear message, still on sign-in screen');
+await waitAuthText(/confirm/);
+ok(/Check your email to confirm your account, then sign in\./.test((await authMsg()).t) && await authOpen(), 'email confirmation required: clear message, sheet stays open');
 await pg.click('#authIn');
-await pg.waitForFunction(() => /confirm/i.test(document.getElementById('authMsg').textContent) && document.getElementById('authMsg').classList.contains('bad'));
-ok(true, 'signing in before confirming says to confirm the email');
+await waitAuthText(/confirm/);
+ok((await authMsg()).bad, 'signing in before confirming says to confirm the email');
 await auth('up', EMAIL, PW);
-await pg.waitForFunction(() => /already exists/.test(document.getElementById('authMsg').textContent));
+await waitAuthText(/already exists/);
 ok((await authMsg()).bad, 'email already used: clear message');
 fake.users.get([...fake.users.keys()][0]).confirmed = true; // user clicks the email link
 await auth('in', EMAIL, 'wrong password');
-await pg.waitForFunction(() => /Wrong email or password/.test(document.getElementById('authMsg').textContent));
+await waitAuthText(/Wrong email or password/);
 ok((await authMsg()).bad, 'wrong password: clear message');
 
 /* ---------- 3. first sign in uploads local data ---------- */
 console.log('First sign in with local data');
 await auth('in', EMAIL, PW);
-await pg.waitForFunction(() => document.getElementById('authModal').hidden);
+await authClosed();
 await waitStatus(/Synced at/);
 const uid = [...fake.users.keys()][0];
 ok(fake.days.length === 2 && fake.days.every(r => r.user_id === uid), 'both local days uploaded to the cloud', fake.days.length);
 ok(fake.settings.length === 1 && Array.isArray(fake.settings[0].data.habits) && Array.isArray(fake.settings[0].data.rules), 'settings uploaded');
-const loc = await stored();
+const loc = await stored(pg);
 const row = fake.days.find(r => r.log_date === tk);
 ok(row && Object.keys(row.data).sort().join() === 'note,rules,vals,waist,weight' && row.data.note === 'local one' && row.data.vals.steps === 8000, 'cloud row data has exactly vals/rules/weight/waist/note', row && row.data);
 ok(row && Date.parse(row.updated_at) === loc.days[tk].updatedAt, 'cloud updated_at equals the local updatedAt');
-ok(await pg.isVisible('#signOutBtn') && (await pg.textContent('#acctEmail')) === EMAIL, 'signed-in state shows the email and Sign out');
+ok(await pg.isVisible('#signOutBtn') && (await pg.textContent('#acctEmail')) === EMAIL, 'signed-in rows show the email and Sign out');
 
 /* ---------- 4. save while online ---------- */
-console.log('Saving while signed in');
-await tab('today');
-await pg.fill('#dateInput', '2026-09-20'); await pg.dispatchEvent('#dateInput', 'change');
-await logDay(9100, 86.1, 'third day');
-await waitStatus(/Synced at/);
-ok(fake.days.some(r => r.log_date === '2026-09-20' && r.data.note === 'third day'), 'a new save is upserted right away');
+console.log('Changing data while signed in');
+await goDate(pg, '2026-09-20');
+await logDay(pg, { steps: 9100, weight: 86.1, note: 'third day' });
+await tab(pg, 'setup'); await waitStatus(/Synced at/);
+ok(fake.days.some(r => r.log_date === '2026-09-20' && r.data.note === 'third day'), 'a new change is upserted right away (after the auto-save)');
 ok(!fake.days.some(r => r.user_id !== uid), 'every cloud row belongs to the signed-in user');
-await tab('setup');
-await pg.fill('#setHabits .list-item:nth-child(1) input', '9999'); await pg.press('#setHabits .list-item:nth-child(1) input', 'Tab');
-await waitStatus(/Synced at/);
-await pg.waitForFunction(() => true);
-await pg.waitForTimeout(400);
+await pg.click('#setHabits .swipe:nth-child(1) .row'); await pg.fill('#fTarget', '9999'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg);
+await pg.waitForTimeout(700); await waitStatus(/Synced at/);
 ok(fake.settings[0].data.habits[0].target === 9999, 'changed settings are upserted');
 
 /* ---------- 5. stay logged in; new phone ---------- */
 console.log('Persistent login and new phone');
-await pg.reload(); await pg.waitForSelector('#sDays', { state: 'attached' }); await tab('setup');
+await pg.reload(); await ready(pg); await tab(pg, 'setup');
 await waitStatus(/Synced at/);
 ok(await pg.isVisible('#signOutBtn'), 'still signed in after closing and reopening the app (session kept in Preferences)');
-const before = await stored();
+const before = await stored(pg);
 fake.calls.length = 0;
-await pg.evaluate(() => { localStorage.clear(); });
-await pg.reload(); await pg.waitForSelector('#sDays', { state: 'attached' }); await tab('setup');
+await pg.evaluate(() => { localStorage.clear(); localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.resetlog_onboarded', '1'); });
+await pg.reload(); await ready(pg); await tab(pg, 'setup');
 ok((await pg.textContent('#sDays')) === '0' && await pg.isVisible('#signInBtn'), 'wiped phone: empty and signed out');
 await auth('in', EMAIL, PW);
-await pg.waitForFunction(() => document.getElementById('authModal').hidden);
+await authClosed();
 await waitStatus(/Synced at/);
-const after = await stored();
+const after = await stored(pg);
 ok(Object.keys(after.days).sort().join() === Object.keys(before.days).sort().join() && Object.keys(after.days).length === 3, 'signing in on a new phone downloads the full history', Object.keys(after.days));
 ok(after.settings.habits[0].target === 9999 && after.days[tk].note === 'local one' && after.days[tk].updatedAt === before.days[tk].updatedAt, 'settings and day contents (including updatedAt) match');
-ok((await pg.textContent('#sDays')) === '3', 'Progress tab shows the downloaded days');
+await tab(pg, 'progress'); await pg.waitForTimeout(400);
+ok((await pg.textContent('#sDays')) === '3', 'Progress shows the downloaded days');
 
 /* ---------- 6. offline queue ---------- */
 console.log('Offline queue');
 fake.offline = true; await ctx.setOffline(true);
-await logDay(5000, 85, 'saved offline');
+await tab(pg, 'today');
+await logDay(pg, { steps: 5000, weight: 85, note: 'saved offline' });
+await tab(pg, 'setup');
 await waitStatus(/1 change is waiting to sync/);
-await tab('setup');
 ok(/Offline|waiting to sync/.test(await status()), 'status says a change is waiting', await status());
 ok(!fake.days.some(r => r.data.note === 'saved offline'), 'nothing reached the cloud while offline');
-await pg.evaluate(() => { const s = JSON.parse(localStorage.getItem('CapacitorStorage.resetlog_sync')); window.__q = s.pendingDays; });
-ok(await pg.evaluate(() => window.__q.length === 1), 'pending queue is stored in Preferences');
+ok(await pg.evaluate(() => JSON.parse(localStorage.getItem('CapacitorStorage.resetlog_sync')).pendingDays.length === 1), 'pending queue is stored in Preferences');
 await ctx.setOffline(false); // the page itself must load; the cloud stays unreachable
-await pg.reload(); await pg.waitForSelector('#sDays', { state: 'attached' }); await tab('setup');
+await pg.reload(); await ready(pg); await tab(pg, 'setup');
 await waitStatus(/1 change is waiting to sync/);
 ok(true, 'queue survives restarting the app while still offline');
 await ctx.setOffline(true); await pg.waitForTimeout(200);
 fake.offline = false; await ctx.setOffline(false); // network comes back (fires the browser's online event)
 await waitStatus(/Synced at/, 10000);
 ok(fake.days.some(r => r.data.note === 'saved offline'), 'when the network returns the queued day is uploaded automatically');
-ok(/Synced at/.test(await status()), 'status returns to "Synced at"');
 
 /* ---------- 7. newest wins ---------- */
 console.log('Conflicts');
-const cur = await stored();
+const cur = await stored(pg);
 const kOld = '2026-09-20', rowOld = fake.days.find(r => r.log_date === kOld);
 fake.days[fake.days.indexOf(rowOld)] = { ...rowOld, data: { ...rowOld.data, note: 'edited on other phone', weight: 80 }, updated_at: new Date(Date.now() + 60000).toISOString() };
 const rowT = fake.days.find(r => r.log_date === tk);
 const newerLocalAt = cur.days[tk].updatedAt;
 fake.days[fake.days.indexOf(rowT)] = { ...rowT, data: { ...rowT.data, note: 'STALE cloud copy' }, updated_at: new Date(newerLocalAt - 100000).toISOString() };
-await tab('setup'); await pg.click('#syncNowBtn');
-await pg.waitForFunction(() => true); await waitStatus(/Synced at/);
-await pg.waitForTimeout(300);
-const merged = await stored();
+await tab(pg, 'setup'); await pg.click('#syncNowBtn');
+await waitStatus(/Synced at/); await pg.waitForTimeout(400);
+const merged = await stored(pg);
 ok(merged.days[kOld].note === 'edited on other phone' && merged.days[kOld].weight === 80, 'newer cloud day replaces the older local day');
 ok(merged.days[tk].note === cur.days[tk].note && fake.days.find(r => r.log_date === tk).data.note === cur.days[tk].note && cur.days[tk].note !== 'STALE cloud copy', 'newer local day replaces the older cloud day');
 fake.settings[0] = { ...fake.settings[0], data: { ...fake.settings[0].data, rules: fake.settings[0].data.rules.slice(0, 2) }, updated_at: new Date(Date.now() + 120000).toISOString() };
-await pg.click('#syncNowBtn'); await pg.waitForTimeout(600); await waitStatus(/Synced at/);
-ok((await stored()).settings.rules.length === 2, 'newer cloud settings replace local settings');
+await pg.click('#syncNowBtn'); await pg.waitForTimeout(700); await waitStatus(/Synced at/);
+ok((await stored(pg)).settings.rules.length === 2, 'newer cloud settings replace local settings');
+await tab(pg, 'today'); await pg.waitForTimeout(200);
+ok((await pg.$$('#ruleList .rule-row')).length === 2, 'the screen refreshes after a cloud change');
 
 /* ---------- 8. restore pushes to the cloud ---------- */
 console.log('Restore while signed in');
+await tab(pg, 'setup');
 const bk = { version: 1, settings: merged.settings, days: { '2025-01-02': { vals: { steps: 1234 }, rules: {}, weight: 90, waist: null, note: 'from old backup', date: '2025-01-02', updatedAt: 5 } } };
 await pg.setInputFiles('#restoreFile', { name: 'old.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bk)) });
-await pg.click('#mBtns button:has-text("Continue")');
-await pg.click('#mBtns button:has-text("Merge")');
+await actionChoose(pg, 'Continue');
+ok(/sent to your cloud copy/.test(await pg.textContent('.asheet .ah')), 'the restore dialog says the data is also sent to the cloud');
+await actionChoose(pg, 'Merge');
 await pg.waitForFunction(() => /Merged/.test(document.getElementById('bkMsg').textContent));
-await waitStatus(/Synced at/);
-await pg.waitForTimeout(300);
+await waitStatus(/Synced at/); await pg.waitForTimeout(300);
 ok(fake.days.some(r => r.log_date === '2025-01-02' && r.data.note === 'from old backup'), 'restored day is pushed to the cloud even though its timestamp was old');
 await pg.click('#syncNowBtn'); await waitStatus(/Synced at/);
-ok(Object.keys((await stored()).days).includes('2025-01-02'), 'and it stays after the next sync');
+ok(Object.keys((await stored(pg)).days).includes('2025-01-02'), 'and it stays after the next sync');
 
 /* ---------- 9. sign out ---------- */
 console.log('Sign out');
-const keep = Object.keys((await stored()).days).length;
+const keep = Object.keys((await stored(pg)).days).length;
 await pg.click('#signOutBtn');
+await pg.waitForSelector('.asheet');
+ok(/Sign out\?/.test(await pg.textContent('.asheet .ah')) && await pg.$eval('.asheet .ab.destructive', e => /Sign out/.test(e.textContent)), 'sign out asks first (red destructive option)');
+await actionChoose(pg, 'Sign out');
 await pg.waitForSelector('#signInBtn', { state: 'visible' });
 fake.calls.length = 0;
-ok(Object.keys((await stored()).days).length === keep && keep >= 4, 'signing out keeps local data on the phone');
-await logDay(4000, 84, 'after sign out');
+ok(Object.keys((await stored(pg)).days).length === keep && keep >= 4, 'signing out keeps local data on the phone');
+await logDay(pg, { steps: 4000, weight: 84, note: 'after sign out' });
 await pg.waitForTimeout(300);
-ok(fake.calls.filter(c => c.includes('/rest/')).length === 0 && !fake.days.some(r => r.data.note === 'after sign out'), 'after sign out, saves stay local');
-await pg.reload(); await pg.waitForSelector('#sDays', { state: 'attached' }); await tab('setup');
+ok(cloud() === 0 && !fake.days.some(r => r.data.note === 'after sign out'), 'after sign out, changes stay local');
+await pg.reload(); await ready(pg); await tab(pg, 'setup');
 ok(await pg.isVisible('#signInBtn'), 'stays signed out after restart');
 
 /* ---------- 10. different account on the same phone ---------- */
 console.log('Second account');
 fake.confirmEmail = false;
 await auth('up', 'other@example.com', PW);
-await pg.waitForFunction(() => !document.getElementById('modal').hidden, null, { timeout: 8000 });
-ok(/another account/.test(await pg.textContent('#mBody')), 'a different account on a phone with synced entries asks what to do');
-await pg.click('#mBtns button:has-text("Cancel and sign out")');
+await pg.waitForSelector('.asheet', { timeout: 8000 });
+ok(/another account/.test(await pg.textContent('.asheet .ah')), 'a different account on a phone with synced entries asks what to do');
+await actionChoose(pg, 'Cancel and sign out');
 await pg.waitForSelector('#signInBtn', { state: 'visible' });
 ok(fake.days.every(r => r.user_id === uid), 'cancelling uploads nothing to the other account');
 
 ok(errs.length === 0, 'no JS errors', errs);
 await browser.close(); srv.close();
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+console.log(`\n${T.pass} passed, ${T.fail} failed`);
+process.exit(T.fail ? 1 : 0);

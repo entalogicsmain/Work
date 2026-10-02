@@ -3,11 +3,34 @@
 A personal daily health tracker (workouts, steps, rules, weight, waist, notes, progress charts) packaged as an offline Android app with Capacitor.
 
 - App ID: `com.umar.resetlog` — minSdk 23, target SDK 36
-- Works fully offline (Chart.js and the Barlow fonts are bundled)
+- Works fully offline (Chart.js, the Inter font and the icons are bundled)
 - Data is stored with Capacitor Preferences on the phone
 - Backup, restore, a daily reminder and optional cloud sync are on the **My plan** tab
 
+## Design
+
+The UI follows the principles behind Apple's Human Interface Guidelines (clarity, deference, depth, consistency) with an original look. It uses no Apple fonts, icons or branding: the typeface is **Inter** and the icons are **Lucide** (1.75px stroke), both bundled locally (see `THIRD_PARTY.md`).
+
+- **Today:** the date as a large title, one progress ring, a card per target (tap to log with a big number, steppers and a number pad; long-press for quick +500 / +10 presets), rules as switches, body and notes as rows that open sheets. Every change saves by itself, shows "Saved", and can be undone for 5 seconds.
+- **Progress:** Week / Month / 3 Months, stat tiles, a trend chart you can touch and drag across to read exact values, a calendar of soft squares (tap a day to open it), and recent days.
+- **Plan:** grouped lists for targets, rules, reminder, account and sync, backup and about. Swipe a row left to remove it (with confirmation), use Reorder to drag targets, and edit or add in bottom sheets.
+- **Feel:** light haptics on taps, a success haptic when a target is reached, a short celebration when the whole day is done, and neutral wording on quiet days ("Not logged", "Start again today"). Reduce-motion turns animations into simple fades.
+- **Accessibility:** works at 130% text size, 44px minimum tap targets, labelled controls, text summaries for the ring and chart, status never shown by colour alone, and WCAG AA contrast in light and dark (`npm run test:contrast`).
+
+| Today | Log a value | Progress | Plan |
+| --- | --- | --- | --- |
+| ![Today, light](docs/screenshots/05-today-360x800-light.png) | ![Number sheet, light](docs/screenshots/08-sheet-number-keypad-360x800-light.png) | ![Progress, light](docs/screenshots/14-progress-month-360x800-light.png) | ![Plan, light](docs/screenshots/21-plan-top-360x800-light.png) |
+| ![Today, dark](docs/screenshots/05-today-360x800-dark.png) | ![Number sheet, dark](docs/screenshots/08-sheet-number-keypad-360x800-dark.png) | ![Progress, dark](docs/screenshots/14-progress-month-360x800-dark.png) | ![Plan, dark](docs/screenshots/21-plan-top-360x800-dark.png) |
+
+| Day done | Calendar | Day sheet | Intro |
+| --- | --- | --- | --- |
+| ![All done, light](docs/screenshots/34-today-all-done-360x800-light.png) | ![Calendar, light](docs/screenshots/15-progress-calendar-360x800-light.png) | ![Day sheet, light](docs/screenshots/20-sheet-day-360x800-light.png) | ![Intro, light](docs/screenshots/01-onboarding-1-welcome-360x800-light.png) |
+| ![All done, dark](docs/screenshots/34-today-all-done-360x800-dark.png) | ![Calendar, dark](docs/screenshots/15-progress-calendar-360x800-dark.png) | ![Day sheet, dark](docs/screenshots/20-sheet-day-360x800-dark.png) | ![Intro, dark](docs/screenshots/01-onboarding-1-welcome-360x800-dark.png) |
+
+All 142 screenshots (every screen, sheet and the intro, at 360x800 and 412x915, light and dark, plus 130% text) are in [`docs/screenshots`](docs/screenshots). Regenerate them with `node scripts/screenshots.mjs`.
+
 ## Install the APK
+
 
 1. Get `release/ResetLog-debug.apk` onto your phone (download it from this repo, or take it from the latest GitHub Actions run, see below).
 2. Open it. Android will ask you to allow **Install unknown apps** for the app you opened it from (Files, Chrome, etc.). Allow it, then tap Install.
@@ -82,8 +105,8 @@ npm run build:apk        # bundles plugins, syncs www/ into android/, runs Gradl
 # result: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- The web app is `www/index.html`. The Capacitor plugins are bundled from `src/native.js` into `www/vendor/native.js` by `npm run build:web`.
-- `npm run test:web` and `npm run test:sync` run the headless-browser tests (they need a Chromium for Playwright). `test:sync` uses a fake Supabase server; `npm run test:real` runs the same kind of checks against the real project and needs `E2E_EMAIL` and `E2E_PASSWORD` of an existing confirmed user.
+- The web app is `www/index.html` with `www/css/app.css`, `www/js/logic.js` (data, storage, backup, reminder, sync) and `www/js/ui.js` (screens and sheets). The Capacitor plugins and supabase-js are bundled from `src/native.js` into `www/vendor/native.js`, and the Lucide icons into `www/vendor/icons.js`, by `npm run build:web`.
+- `npm run test:contrast` checks WCAG AA colour contrast. `npm run test:web` and `npm run test:sync` run the headless-browser tests (they need a Chromium for Playwright). `test:sync` uses a fake Supabase server; `npm run test:real` runs the same kind of checks against the real project and needs `E2E_EMAIL` and `E2E_PASSWORD` of an existing confirmed user.
 - `supabase/migrations/` holds the SQL that creates the two tables and their security policies. The Supabase URL and publishable key are in `www/config.js`.
 - `npm run assets` regenerates icons and splash screens from `assets/`.
 

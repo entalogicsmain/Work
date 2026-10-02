@@ -9,6 +9,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { App } from '@capacitor/app';
 import { StatusBar } from '@capacitor/status-bar';
 import { Network } from '@capacitor/network';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { createClient } from '@supabase/supabase-js';
 
 window.ResetNative = {
@@ -22,5 +23,8 @@ window.ResetNative = {
   App,
   StatusBar,
   Network,
+  Haptics,
+  ImpactStyle,
+  NotificationType,
   createClient
 };
