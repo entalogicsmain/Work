@@ -35,7 +35,7 @@ import com.entalogics.comeback.R
 import java.text.NumberFormat
 
 /**
- * Foreground service (type "health") that listens to the motion sensors all day.
+ * Foreground service (type "health", plus "location" only when the user switched on a location feature) that listens to the motion sensors all day.
  * Hardware step counter: sensor batching (maxReportLatency) keeps battery use very low; the events carry their
  * own timestamps so nothing is lost by batching. Accelerometer fallback: continuous, so it holds a partial wake lock.
  */
@@ -46,11 +46,29 @@ class StepService : Service(), SensorEventListener {
         const val NOTIF_ID = 4201
         private const val BATCH_US = 20_000_000
         private const val WAKE_MS = 60_000L
+        private const val LOC_OFF = 0
+        private const val LOC_TRIP = 1      // travel distance only, and only while a vehicle / bicycle trip is active
+        private const val LOC_SPEED = 2     // "use location to improve accuracy in vehicles": speed check, all day
+        /** Balanced power is enough for trip distance and costs far less than GPS. If trips come out short, try HIGH_ACCURACY. */
+        private const val TRAVEL_PRIORITY = Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        private const val TRAVEL_INTERVAL_MS = 12_000L
+        private const val TRAVEL_MIN_DISTANCE_M = 20f
 
-        fun start(ctx: Context, action: String? = null): Boolean = try {
-            val i = Intent(ctx, StepService::class.java); if (action != null) i.action = action
-            ContextCompat.startForegroundService(ctx, i); true
-        } catch (e: Exception) { false }
+        fun start(ctx: Context, action: String? = null): Boolean {
+            // Without the permission the service could not start in the foreground (Android 14+ refuses the "health" type),
+            // and a service started with startForegroundService() that does not do so crashes the app.
+            if (!StepTracker.hasActivityPermission(ctx)) return false
+            return try {
+                val i = Intent(ctx, StepService::class.java); if (action != null) i.action = action
+                ContextCompat.startForegroundService(ctx, i); true
+            } catch (e: Exception) { false }
+        }
+
+        /** True while the running service declared the "location" foreground type (needed to use location in the background). */
+        @Volatile var locationType = false
+
+        /** Location is needed (now or later during a trip) and allowed. Decides whether the service declares the location type. */
+        fun wantsLocation(ctx: Context, cfg: StepTracker.Config) = (cfg.useLocation || cfg.travelDistance) && StepTracker.hasLocationPermission(ctx)
 
         fun stop(ctx: Context) { try { ctx.stopService(Intent(ctx, StepService::class.java)) } catch (e: Exception) { } }
     }
@@ -62,11 +80,12 @@ class StepService : Service(), SensorEventListener {
     private var accelDetector: AccelStepDetector? = null
     private var locationClient: com.google.android.gms.location.FusedLocationProviderClient? = null
     private var locationCb: LocationCallback? = null
+    private var locationMode = LOC_OFF
     private var transitionPi: PendingIntent? = null
     private var lastText = ""
     private var lastNotifAt = 0L
     private val ticker = object : Runnable {
-        override fun run() { tickOnce(); renewWake(); handler.postDelayed(this, 15_000) }
+        override fun run() { tickOnce(); renewWake(); syncLocation(); handler.postDelayed(this, 15_000) }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -85,8 +104,10 @@ class StepService : Service(), SensorEventListener {
             startInForeground(false)
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY
         }
-        startInForeground(cfg.useLocation && StepTracker.hasLocationPermission(this))
+        startInForeground(wantsLocation(this, cfg))
+        StepTracker.tripListener = { syncLocation() }
         if (!registered) registerAll(cfg)
+        syncLocation()
         if (intent?.action == ACTION_SAMPLE) try { sm.flush(this) } catch (e: Exception) { }
         StepTracker.scheduleMidnight(this)
         StepTracker.scheduleWatchdog(this)
@@ -94,14 +115,34 @@ class StepService : Service(), SensorEventListener {
         return START_STICKY
     }
 
+    /**
+     * The foreground type has to match what is granted: Android 14+ throws SecurityException for "health" without the
+     * activity permission and for "location" without a location permission. Before Android 14 there is no health type and
+     * no check, so we declare "location" only when it is going to be used (background location needs it) and nothing else.
+     * Tries the best type first and falls back, so a refusal never leaves the service without startForeground().
+     */
     private fun startInForeground(withLocation: Boolean) {
-        val type = when {
-            Build.VERSION.SDK_INT >= 34 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or (if (withLocation) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0)
-            Build.VERSION.SDK_INT >= 29 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST
-            else -> 0
+        // (foreground type, whether it includes "location")
+        val types = ArrayList<Pair<Int, Boolean>>()
+        when {
+            Build.VERSION.SDK_INT >= 34 -> {
+                if (withLocation) types.add(Pair(ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION, true))
+                types.add(Pair(ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH, false))
+            }
+            Build.VERSION.SDK_INT >= 29 -> {
+                if (withLocation) types.add(Pair(ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION, true))
+                types.add(Pair(0, false))
+            }
+            else -> types.add(Pair(0, true))   // Android 8 and 9: a foreground service may use location with no type
         }
-        try { ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(), type) }
-        catch (e: Exception) { try { startForeground(NOTIF_ID, buildNotification()) } catch (x: Exception) { stopSelf() } }
+        for ((t, loc) in types) {
+            try {
+                ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(), t)
+                locationType = loc
+                return
+            } catch (e: Exception) { }
+        }
+        stopSelf()
     }
 
     private fun registerAll(cfg: StepTracker.Config) {
@@ -123,7 +164,6 @@ class StepService : Service(), SensorEventListener {
             }
         } catch (e: Exception) { }
         registerActivityTransitions()
-        if (cfg.useLocation && StepTracker.hasLocationPermission(this)) startLocation()
         registered = true
     }
 
@@ -148,18 +188,49 @@ class StepService : Service(), SensorEventListener {
         } catch (e: Exception) { }
     }
 
-    private fun startLocation() {
+    /** Location runs for the speed check (all day, if switched on) or for trip distance (only while a trip is active). */
+    private fun syncLocation() {
+        val cfg = StepTracker.config()
+        val want = when {
+            !cfg.enabled || !StepTracker.hasLocationPermission(this) -> LOC_OFF
+            cfg.useLocation -> LOC_SPEED
+            cfg.travelDistance && StepTracker.tripActive() -> LOC_TRIP
+            else -> LOC_OFF
+        }
+        if (want == locationMode) return
+        stopLocation()
+        if (want != LOC_OFF && startLocation(want)) locationMode = want
+    }
+
+    // Guarded by hasLocationPermission() in syncLocation(); a revoked permission throws SecurityException, which is caught.
+    @SuppressLint("MissingPermission")
+    private fun startLocation(mode: Int): Boolean {
         try {
             val client = LocationServices.getFusedLocationProviderClient(this)
             val cb = object : LocationCallback() {
                 override fun onLocationResult(r: LocationResult) {
-                    for (loc in r.locations) if (loc.hasSpeed()) StepTracker.speed(loc.time.takeIf { it > 0 } ?: System.currentTimeMillis(), loc.speed * 3.6)
+                    val cfg = StepTracker.config()
+                    for (loc in r.locations) {
+                        val ts = loc.time.takeIf { it > 0 } ?: System.currentTimeMillis()
+                        if (cfg.useLocation && loc.hasSpeed()) StepTracker.speed(ts, loc.speed * 3.6)
+                        // coordinates go straight into the distance sum and are not stored
+                        if (cfg.travelDistance && loc.hasAccuracy()) StepTracker.fix(ts, loc.latitude, loc.longitude, loc.accuracy.toDouble())
+                    }
                 }
             }
-            val req = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 10_000).setMinUpdateIntervalMillis(5_000).build()
+            val req = if (mode == LOC_SPEED) LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 10_000).setMinUpdateIntervalMillis(5_000).build()
+            else LocationRequest.Builder(TRAVEL_PRIORITY, TRAVEL_INTERVAL_MS).setMinUpdateIntervalMillis(TRAVEL_INTERVAL_MS / 2).setMinUpdateDistanceMeters(TRAVEL_MIN_DISTANCE_M).build()
             client.requestLocationUpdates(req, cb, Looper.getMainLooper())
             locationClient = client; locationCb = cb
+            return true
         } catch (e: SecurityException) { } catch (e: Exception) { }
+        return false
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopLocation() {
+        try { locationCb?.let { locationClient?.removeLocationUpdates(it) } } catch (e: Exception) { }
+        locationCb = null; locationClient = null; locationMode = LOC_OFF
     }
 
     override fun onSensorChanged(e: SensorEvent) {
@@ -202,7 +273,9 @@ class StepService : Service(), SensorEventListener {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         try { sm.unregisterListener(this) } catch (e: Exception) { }
-        try { locationCb?.let { locationClient?.removeLocationUpdates(it) } } catch (e: Exception) { }
+        stopLocation()
+        StepTracker.tripListener = null
+        locationType = false
         try { transitionPi?.let { ActivityRecognition.getClient(this).removeActivityTransitionUpdates(it) } } catch (e: Exception) { }
         try { wake?.let { if (it.isHeld) it.release() } } catch (e: Exception) { }
         StepTracker.persist(true)

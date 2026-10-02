@@ -151,12 +151,13 @@ export const MOCK = `
     StatusBar:{setStyle:async function(o){rec('statusStyle',o)},setBackgroundColor:async function(o){rec('statusBg',o)}},
     Steps:(function(){
       function hk(){return st.steps.activityGranted===false?'permission_missing':st.steps.health}
-      function status(){var c=st.steps.cfg;return{supported:{stepCounter:st.steps.source==='counter',stepDetector:true,accelerometer:true,activityRecognition:true},source:st.steps.source,enabled:!!c.enabled,health:hk(),inVehicle:st.steps.health==='paused_vehicle',activityPermission:st.steps.activityGranted,locationPermission:st.steps.locationGranted,batteryIgnored:st.steps.batteryIgnored,brand:st.steps.brand,manufacturer:'Test',model:'Mock',sdk:35,todaySteps:0,filteredToday:st.steps.filteredToday,config:c}}
+      function status(){var c=st.steps.cfg;return{supported:{stepCounter:st.steps.source==='counter',stepDetector:true,accelerometer:true,activityRecognition:!st.steps.noAR},source:st.steps.source,enabled:!!c.enabled,health:hk(),inVehicle:st.steps.health==='paused_vehicle',activityPermission:st.steps.activityGranted,locationPermission:st.steps.locationGranted,batteryIgnored:st.steps.batteryIgnored,brand:st.steps.brand,manufacturer:'Test',model:'Mock',sdk:35,todaySteps:0,filteredToday:st.steps.filteredToday,travelDistance:!!c.travelDistance,config:c}}
       return{
         getStatus:async function(){return status()},
         configure:async function(o){rec('stepsConfigure',o);st.steps.cfg=Object.assign({},st.steps.cfg,o);save();return status()},
         requestActivityPermission:async function(){rec('reqActivity');if(st.steps.activityGranted===false&&st.steps.grantOnRequest){st.steps.activityGranted=true;st.steps.health='working';save()}return{granted:st.steps.activityGranted!==false}},
         requestLocationPermission:async function(){rec('reqLocation');return{granted:st.steps.locationGranted!==false}},
+        setTravelDistance:async function(o){rec('setTravelDistance',o);var ok=!!o.enabled&&st.steps.locationGranted!==false;st.steps.cfg=Object.assign({},st.steps.cfg,{travelDistance:ok});save();return{enabled:ok,locationPermission:st.steps.locationGranted!==false}},
         requestIgnoreBatteryOptimizations:async function(){rec('reqBattery');var ok=st.steps.batteryGrant!==false;if(ok)st.steps.batteryIgnored=true;save();return{result:'dialog',granted:ok}},
         openSettings:async function(o){rec('openSettings',o);return{result:'ok'}},
         getDeviceInfo:async function(){return{brand:st.steps.brand,manufacturer:'Test',model:'Mock',sdk:35,batteryIgnored:st.steps.batteryIgnored}},

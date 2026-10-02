@@ -45,7 +45,9 @@ object StepTracker {
         var heightCm: Int = 180,
         var strictness: String = "balanced",
         var sensitivity: String = "normal",
-        var useLocation: Boolean = false
+        var useLocation: Boolean = false,
+        /** Opt-in: record the distance of vehicle and bicycle trips (location runs only while a trip is active). */
+        var travelDistance: Boolean = false
     )
 
     private val lock = Any()
@@ -59,6 +61,8 @@ object StepTracker {
     @Volatile var lastHeartbeat = 0L
     /** Called (on the main thread) when totals changed; the plugin forwards it to the web app. */
     @Volatile var listener: (() -> Unit)? = null
+    /** Called (on the main thread) after every Activity Recognition transition; the service uses it to start/stop trip location. */
+    @Volatile var tripListener: (() -> Unit)? = null
 
     fun init(c: Context) {
         synchronized(lock) {
@@ -69,7 +73,7 @@ object StepTracker {
             p.getString(K_CFG, null)?.let { s ->
                 try {
                     val o = JSONObject(s)
-                    cfg = Config(o.optBoolean("enabled"), o.optInt("heightCm", 180), o.optString("strictness", "balanced"), o.optString("sensitivity", "normal"), o.optBoolean("useLocation"))
+                    cfg = Config(o.optBoolean("enabled"), o.optInt("heightCm", 180), o.optString("strictness", "balanced"), o.optString("sensitivity", "normal"), o.optBoolean("useLocation"), o.optBoolean("travelDistance"))
                 } catch (e: Exception) { }
             }
             p.getString(K_ENGINE, null)?.let { s -> try { engine.loadJson(s) } catch (e: Exception) { engine = StepEngine() } }
@@ -84,7 +88,7 @@ object StepTracker {
     fun saveConfig(c: Config) = synchronized(lock) {
         cfg = c
         engine.applyStrictness(Strictness.of(c.strictness))
-        prefs().edit().putString(K_CFG, JSONObject().put("enabled", c.enabled).put("heightCm", c.heightCm).put("strictness", c.strictness).put("sensitivity", c.sensitivity).put("useLocation", c.useLocation).toString()).apply()
+        prefs().edit().putString(K_CFG, JSONObject().put("enabled", c.enabled).put("heightCm", c.heightCm).put("strictness", c.strictness).put("sensitivity", c.sensitivity).put("useLocation", c.useLocation).put("travelDistance", c.travelDistance).toString()).apply()
     }
 
     fun setSource(s: CountSource) = synchronized(lock) { if (engine.source != s) { engine.source = s; dirty = true } }
@@ -97,8 +101,17 @@ object StepTracker {
     fun counter(ts: Long, total: Long) = synchronized(lock) { engine.onCounterReading(ts, total); touch() }
     fun detector(ts: Long) = synchronized(lock) { engine.onDetectorStep(ts); touch() }
     fun accelStep(ts: Long, amp: Double) = synchronized(lock) { engine.onAccelStep(ts, amp); touch() }
-    fun activity(ts: Long, type: ActivityType, enter: Boolean) = synchronized(lock) { engine.onActivity(ts, type, enter); dirty = true; persist(true); notifyJs(true) }
+    fun activity(ts: Long, type: ActivityType, enter: Boolean) {
+        synchronized(lock) { engine.onActivity(ts, type, enter); dirty = true; persist(true); notifyJs(true) }
+        // the service starts or stops asking for location when a trip begins or ends
+        val l = tripListener ?: return
+        Handler(Looper.getMainLooper()).post { try { l() } catch (e: Exception) { } }
+    }
     fun speed(ts: Long, kmh: Double) = synchronized(lock) { engine.onSpeed(ts, kmh); dirty = true }
+    /** Location fix during a trip (tier 2). Only the distance between fixes is kept; see TravelLog. */
+    fun fix(ts: Long, lat: Double, lon: Double, accuracyM: Double) = synchronized(lock) { if (engine.travel.onFix(ts, lat, lon, accuracyM)) dirty = true }
+    fun tripActive(): Boolean = synchronized(lock) { engine.travel.tripActive }
+    fun travelView(): Map<String, TravelView> = synchronized(lock) { engine.tick(System.currentTimeMillis()); engine.travelView(System.currentTimeMillis()) }
     fun tick(now: Long = System.currentTimeMillis()) = synchronized(lock) { engine.tick(now); lastHeartbeat = now; touch(); persist(false) }
 
     private fun touch() { dirty = true; notifyJs(false) }

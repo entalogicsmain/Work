@@ -54,3 +54,12 @@ class MidnightReceiver : BroadcastReceiver() {
         }
     }
 }
+
+/** The phone's time zone changed (travel, automatic update): the midnight alarm was booked for the old zone, so book it again. */
+class TimezoneReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_TIMEZONE_CHANGED) return
+        StepTracker.init(ctx)
+        if (StepTracker.config().enabled) StepTracker.scheduleMidnight(ctx)
+    }
+}

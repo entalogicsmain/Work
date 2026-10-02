@@ -1,0 +1,31 @@
+/* Travel card on Progress (www/js/travel.js). Uses the tokens from app.css. */
+#travelCard[hidden]{display:none}
+.tv-card{margin-bottom:var(--s2)}
+.tv-note{margin:0 0 var(--s3)}
+.tv-note:last-child{margin-bottom:0}
+.tv-act{margin-top:var(--s3)}
+.tv-stats{gap:var(--s2)}
+.tv-stat{background:var(--fill);padding:var(--s3)}
+.tv-stat span{flex-wrap:wrap}
+.tv-stat em{font-style:normal}
+.tv-stat b{font-size:1.25rem}
+.tv-dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--label2)}
+.tv-dot.tv-walk{background:var(--green)}
+.tv-dot.tv-run{background:var(--orange)}
+.tv-dot.tv-bike{background:var(--accent)}
+.tv-dot.tv-vehicle{background:var(--label2)}
+.tv-bars{display:flex;align-items:flex-end;gap:2px;height:5rem;margin-top:var(--s4);border-bottom:1px solid var(--sep)}
+.tv-day{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column-reverse;justify-content:flex-start;gap:1px}
+.tv-day.empty{justify-content:flex-start}
+.tv-seg{display:block;width:100%;min-height:2px;border-radius:2px;flex:none}
+.tv-seg.tv-walk{background:var(--green)}
+.tv-seg.tv-run{background:var(--orange)}
+.tv-seg.tv-bike{background:var(--accent)}
+.tv-seg.tv-vehicle{background:var(--label2)}
+.tv-axis{display:flex;justify-content:space-between;margin-top:var(--s1);font-size:.75rem;color:var(--label2)}
+.tv-summary{margin:var(--s3) 0 0}
+.tv-foot{margin:var(--s2) 0 0}
+.tv-intro{margin:0 var(--s1) var(--s3)}
+.tv-dayhead{margin-top:var(--s4)}
+.tv-trip{text-align:left}
+.tv-trip .row-label{font-variant-numeric:tabular-nums}
