@@ -34,6 +34,13 @@ android {
     }
     kotlinOptions { jvmTarget = '21' }
     testOptions { unitTests.returnDefaultValues = true }
+    lint {
+        // No instrumented tests exist; skipping test sources keeps lint from resolving their libraries.
+        ignoreTestSources = true
+        abortOnError = true
+        warningsAsErrors = true
+        checkReleaseBuilds = false
+    }
     buildTypes {
         release {
             minifyEnabled false

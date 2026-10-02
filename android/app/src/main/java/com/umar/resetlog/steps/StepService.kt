@@ -1,5 +1,6 @@
 package com.umar.resetlog.steps
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -44,6 +45,7 @@ class StepService : Service(), SensorEventListener {
         const val CHANNEL = "step_counting"
         const val NOTIF_ID = 4201
         private const val BATCH_US = 20_000_000
+        private const val WAKE_MS = 60_000L
 
         fun start(ctx: Context, action: String? = null): Boolean = try {
             val i = Intent(ctx, StepService::class.java); if (action != null) i.action = action
@@ -64,7 +66,7 @@ class StepService : Service(), SensorEventListener {
     private var lastText = ""
     private var lastNotifAt = 0L
     private val ticker = object : Runnable {
-        override fun run() { tickOnce(); handler.postDelayed(this, 15_000) }
+        override fun run() { tickOnce(); renewWake(); handler.postDelayed(this, 15_000) }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -81,7 +83,7 @@ class StepService : Service(), SensorEventListener {
         if (!cfg.enabled || !StepTracker.hasActivityPermission(this)) {
             // still must call startForeground within 5 s of startForegroundService
             startInForeground(false)
-            stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY
         }
         startInForeground(cfg.useLocation && StepTracker.hasLocationPermission(this))
         if (!registered) registerAll(cfg)
@@ -116,7 +118,7 @@ class StepService : Service(), SensorEventListener {
                     accelDetector = AccelStepDetector(AccelStepDetector.Sensitivity.of(cfg.sensitivity)) { ts, amp -> StepTracker.accelStep(ts, amp) }
                     sm.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME, 1_000_000)
                     val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-                    wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "resetlog:steps").also { it.acquire() }
+                    wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "resetlog:steps").also { it.setReferenceCounted(false); it.acquire(WAKE_MS) }
                 }
             }
         } catch (e: Exception) { }
@@ -125,6 +127,13 @@ class StepService : Service(), SensorEventListener {
         registered = true
     }
 
+    /** The accelerometer fallback needs the CPU awake; the lock has a short timeout and is renewed by the ticker. */
+    private fun renewWake() {
+        try { wake?.acquire(WAKE_MS) } catch (e: Exception) { }
+    }
+
+    // Guarded by hasActivityPermission(); a revoked permission throws SecurityException, which is caught.
+    @SuppressLint("MissingPermission")
     private fun registerActivityTransitions() {
         if (!StepTracker.playServicesOk(this) || !StepTracker.hasActivityPermission(this)) return   // e.g. Huawei: other layers only
         try {
@@ -189,6 +198,7 @@ class StepService : Service(), SensorEventListener {
             .setPriority(NotificationCompat.PRIORITY_LOW).setCategory(NotificationCompat.CATEGORY_SERVICE).setContentIntent(pi).build()
     }
 
+    @SuppressLint("MissingPermission")
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         try { sm.unregisterListener(this) } catch (e: Exception) { }

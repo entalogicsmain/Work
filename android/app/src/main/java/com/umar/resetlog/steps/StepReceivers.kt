@@ -10,6 +10,7 @@ import com.google.android.gms.location.DetectedActivity
 /** After a reboot or an app update: start counting again. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         StepTracker.init(ctx)
         val cfg = StepTracker.config()
         if (cfg.enabled && StepTracker.hasActivityPermission(ctx)) {

@@ -1,5 +1,6 @@
 package com.umar.resetlog.steps
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
@@ -30,9 +31,12 @@ object DeviceHelper {
     } catch (e: Exception) { false }
 
     private fun launch(a: Activity, i: Intent): Boolean = try {
-        if (i.resolveActivity(a.packageManager) == null) false else { a.startActivity(i); true }
+        // No resolveActivity(): on Android 11+ package visibility hides other apps' screens from it. Starting and catching works.
+        a.startActivity(i); true
     } catch (e: Exception) { false }
 
+    // Sideloaded personal app, not distributed through Google Play, so the Play policy on this permission does not apply.
+    @SuppressLint("BatteryLife")
     fun requestIgnoreBatteryOptimizations(a: Activity): String {
         val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${a.packageName}"))
         if (launch(a, direct)) return "dialog"

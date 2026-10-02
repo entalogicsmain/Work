@@ -38,11 +38,30 @@ jobs:
 
       - name: Step-counting unit tests (simulated sensors)
         working-directory: android
-        run: ./gradlew :app:testDebugUnitTest --no-daemon -Dorg.gradle.internal.repository.max.retries=12 -Dorg.gradle.internal.repository.initial.backoff=4000
+        run: |
+          n=0
+          until ./gradlew :app:testDebugUnitTest --no-daemon -Dorg.gradle.internal.repository.max.retries=12 -Dorg.gradle.internal.repository.initial.backoff=4000; do
+            n=$((n+1)); [ $n -ge 3 ] && exit 1
+            echo "Gradle failed (often Maven Central rate limiting); retrying in 30 s"; sleep 30
+          done
+
+      - name: Android lint
+        working-directory: android
+        run: |
+          n=0
+          until ./gradlew :app:lintDebug --no-daemon -Dorg.gradle.internal.repository.max.retries=12 -Dorg.gradle.internal.repository.initial.backoff=4000; do
+            n=$((n+1)); [ $n -ge 3 ] && exit 1
+            echo "Gradle failed (often Maven Central rate limiting); retrying in 30 s"; sleep 30
+          done
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon -Dorg.gradle.internal.repository.max.retries=12 -Dorg.gradle.internal.repository.initial.backoff=4000
+        run: |
+          n=0
+          until ./gradlew assembleDebug --no-daemon -Dorg.gradle.internal.repository.max.retries=12 -Dorg.gradle.internal.repository.initial.backoff=4000; do
+            n=$((n+1)); [ $n -ge 3 ] && exit 1
+            echo "Gradle failed (often Maven Central rate limiting); retrying in 30 s"; sleep 30
+          done
 
       - name: Name the APK
         run: |

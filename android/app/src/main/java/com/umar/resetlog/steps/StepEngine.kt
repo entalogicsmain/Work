@@ -194,7 +194,7 @@ class StepEngine(
     // ---------- day bookkeeping ----------
     fun dayKey(ts: Long): String {
         val c = Calendar.getInstance(zone); c.timeInMillis = ts
-        return String.format("%04d-%02d-%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
+        return String.format(java.util.Locale.ROOT, "%04d-%02d-%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
     }
     private fun hourOf(ts: Long): Int { val c = Calendar.getInstance(zone); c.timeInMillis = ts; return c.get(Calendar.HOUR_OF_DAY) }
     private fun day(ts: Long) = days.getOrPut(dayKey(ts)) { DayData() }

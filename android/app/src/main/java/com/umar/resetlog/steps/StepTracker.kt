@@ -1,6 +1,7 @@
 package com.umar.resetlog.steps
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
@@ -30,6 +31,8 @@ import java.util.concurrent.TimeUnit
  * WorkManager watchdog and the Capacitor plugin all go through here, so they share one state that is saved
  * to native storage (SharedPreferences), not to the WebView.
  */
+// appCtx is always the application context, so holding it statically does not leak an Activity.
+@SuppressLint("StaticFieldLeak")
 object StepTracker {
     private const val PREFS = "resetlog_steps"
     private const val K_ENGINE = "engine"
