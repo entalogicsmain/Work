@@ -258,7 +258,7 @@ console.log('Browser and libraries');
   ok((await panel(pg)).text.length > 0, 'in a browser (no step plugin) the panel still shows a line');
   await waitClosed(pg);
   const srcs = await pg.evaluate(() => [...document.scripts].map(s => s.getAttribute('src')));
-  ok(srcs.every(s => /^(config\.js|vendor\/(icons|chart\.umd|native)\.js|js\/(core|logic|steps|ui|body|today|plan|settings|app|ptr)\.js)$/.test(s)), 'no animation library: only the app\'s own scripts and Chart.js load', srcs);
+  ok(srcs.every(s => /^(config\.js|vendor\/(icons|chart\.umd|native)\.js|js\/(core|logic|steps|travel|ui|body|today|plan|settings|app|ptr)\.js)$/.test(s)), 'no animation library: only the app\'s own scripts and Chart.js load', srcs);
   const css = fs.readFileSync(root + '/css/app.css', 'utf8');
   ok(/\.ptr\{[^}]*transition:height/.test(css) && /@keyframes ptrpop/.test(css), 'the panel is animated with CSS transitions and keyframes');
   ok(errs.length === 0, 'no JS errors (browser)', errs);

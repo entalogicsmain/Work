@@ -163,8 +163,14 @@ class RhythmGate(var strictness: Strictness) {
 
 class StepEngine(
     var strictness: Strictness = Strictness.BALANCED,
-    private val zone: TimeZone = TimeZone.getDefault()
+    // Read on every use: the phone's time zone can change while the process lives (travel, automatic zone update),
+    // and a zone cached at start-up would keep cutting days at the old midnight.
+    private val zoneOf: () -> TimeZone = { TimeZone.getDefault() }
 ) {
+    constructor(strictness: Strictness, zone: TimeZone) : this(strictness, { zone })
+
+    /** Walking, running, cycling and vehicle minutes and trips, from the same Activity Recognition transitions. */
+    val travel = TravelLog(zoneOf)
     var source: CountSource = CountSource.COUNTER
     val days = HashMap<String, DayData>()
     private val gate = RhythmGate(strictness)
@@ -193,10 +199,10 @@ class StepEngine(
 
     // ---------- day bookkeeping ----------
     fun dayKey(ts: Long): String {
-        val c = Calendar.getInstance(zone); c.timeInMillis = ts
+        val c = Calendar.getInstance(zoneOf()); c.timeInMillis = ts
         return String.format(java.util.Locale.ROOT, "%04d-%02d-%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
     }
-    private fun hourOf(ts: Long): Int { val c = Calendar.getInstance(zone); c.timeInMillis = ts; return c.get(Calendar.HOUR_OF_DAY) }
+    private fun hourOf(ts: Long): Int { val c = Calendar.getInstance(zoneOf()); c.timeInMillis = ts; return c.get(Calendar.HOUR_OF_DAY) }
     private fun day(ts: Long) = days.getOrPut(dayKey(ts)) { DayData() }
     private fun addFiltered(ts: Long, n: Int) { if (n > 0) day(ts).filtered += n }
     private fun commit(ts: Long) { val d = day(ts); d.steps++; d.hourly[hourOf(ts)]++ }
@@ -283,6 +289,7 @@ class StepEngine(
 
     /** Activity Recognition transition. ts is when the transition happened (may be earlier than now). */
     fun onActivity(ts: Long, type: ActivityType, enter: Boolean) {
+        travel.onActivity(ts, type, enter)
         when (type) {
             ActivityType.IN_VEHICLE, ActivityType.ON_BICYCLE -> if (enter) startVehicle(ts) else endVehicle(ts)
             ActivityType.WALKING, ActivityType.RUNNING, ActivityType.STILL -> if (enter) endVehicle(ts)
@@ -339,6 +346,7 @@ class StepEngine(
         val limit = now - strictness.holdMs
         val iter = pending.iterator()
         while (iter.hasNext()) { val p = iter.next(); if (p <= limit) { commit(p); iter.remove() } }
+        travel.tick(now)
         windows.removeAll { it[1] < now - 24 * 3_600_000L }
         if (days.size > KEEP_DAYS) {
             val keep = days.keys.sorted().takeLast(KEEP_DAYS).toSet()
@@ -355,6 +363,7 @@ class StepEngine(
         return out
     }
     fun today(now: Long): DayData = view(now)[dayKey(now)] ?: DayData()
+    fun travelView(now: Long): Map<String, TravelView> = travel.view(now)
 
     // ---------- persistence ----------
     fun toJson(): String {
@@ -368,6 +377,7 @@ class StepEngine(
         o.put("windows", JSONArray(windows.map { JSONArray(listOf(it[0], it[1])) }))
         vehicleSince?.let { o.put("vehicleSince", it) }
         speedVehicleSince?.let { o.put("speedVehicleSince", it) }
+        o.put("travel", travel.toJson())
         return o.toString()
     }
 
@@ -388,5 +398,6 @@ class StepEngine(
         windows.clear(); o.optJSONArray("windows")?.let { for (i in 0 until it.length()) { val w = it.getJSONArray(i); windows.add(longArrayOf(w.getLong(0), w.getLong(1))) } }
         vehicleSince = if (o.has("vehicleSince")) o.getLong("vehicleSince") else null
         speedVehicleSince = if (o.has("speedVehicleSince")) o.getLong("speedVehicleSince") else null
+        travel.loadJson(o.optJSONObject("travel"))
     }
 }

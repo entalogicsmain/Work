@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Only what the Share sheet needs: the backup and CSV copies in Documents/Comeback, and the cache fallback used when
+     Documents cannot be written. FileProvider only ever grants read access for the file being shared. -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
+    <external-path name="comeback_documents" path="Documents/Comeback/" />
     <cache-path name="my_cache_images" path="." />
 </paths>

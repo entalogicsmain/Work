@@ -25,8 +25,14 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <!-- Daily reminder (POST_NOTIFICATIONS, RECEIVE_BOOT_COMPLETED, WAKE_LOCK come from the local-notifications plugin) -->
 
+    <!-- Backup is off on purpose: Android's backup would copy the app's stored data (cloud sign-in tokens, health data and the
+         step counter baseline) to another phone, where the baseline would credit wrong steps. allowBackup=false covers Android 11 and
+         older and cloud backup; on Android 12+ the data extraction rules also exclude phone-to-phone transfer.
+         Settings > Backup (JSON) moves data instead. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/full_backup_content"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -46,7 +52,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Step counting: foreground service (type health), restarts after boot / update, activity transitions, midnight sample -->
+        <!-- Step counting: foreground service (type health; location is added only while a location feature is on), restarts after boot / update, activity transitions, midnight sample -->
         <service
             android:name=".steps.StepService"
             android:exported="false"
@@ -60,6 +66,11 @@
         </receiver>
         <receiver android:name=".steps.ActivityTransitionReceiver" android:exported="false" />
         <receiver android:name=".steps.MidnightReceiver" android:exported="false" />
+        <receiver android:name=".steps.TimezoneReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
