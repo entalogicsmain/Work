@@ -136,6 +136,9 @@ svg.ic.sm{width:1.125rem;height:1.125rem}
 .hcard .hname{font-size:.9375rem;font-weight:600;line-height:1.2;overflow-wrap:anywhere}
 .hcard .hval{font-size:1.375rem;font-weight:700;letter-spacing:-.3px;font-variant-numeric:tabular-nums;line-height:1.15;overflow-wrap:anywhere}
 .hcard .htgt{font-size:.8125rem;color:var(--label2);overflow-wrap:anywhere;margin-top:-2px}
+.hsrc{display:flex;align-items:center;gap:4px;font-size:.75rem;color:var(--label2);margin-top:-2px;overflow-wrap:anywhere}
+.hsrc:empty{display:none}
+.hsrc .ic{width:.875rem;height:.875rem}
 .bar{height:6px;border-radius:3px;background:var(--track);overflow:hidden;margin-top:auto}
 .bar i{display:block;height:100%;width:0;border-radius:3px;background:var(--accent);transition:width .5s var(--ease),background .3s}
 .hcard.met .bar i{background:var(--green)}

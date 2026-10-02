@@ -36,9 +36,13 @@ jobs:
       - name: Bundle plugins and sync web app into Android project
         run: npm run sync
 
+      - name: Step-counting unit tests (simulated sensors)
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --no-daemon -Dorg.gradle.internal.repository.max.retries=12 -Dorg.gradle.internal.repository.initial.backoff=4000
+
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon -Dorg.gradle.internal.repository.max.retries=12 -Dorg.gradle.internal.repository.initial.backoff=4000
 
       - name: Name the APK
         run: |

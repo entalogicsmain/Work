@@ -208,6 +208,7 @@ function numberSheet(o){
   minus.addEventListener('click',()=>set(num()-o.step));plus.addEventListener('click',()=>set(num()+o.step));
   (o.presets||[]).forEach(p=>{const b=h('<button class="preset"></button>');b.textContent=p.label;b.addEventListener('click',()=>set(p.apply?p.apply(num()):p.set));root.querySelector('.presets').appendChild(b)});
   if(!(o.presets||[]).length)root.querySelector('.presets').remove();
+  (o.extras||[]).forEach(x=>{const b=h('<button class="btn secondary" style="margin-bottom:var(--s3)"></button>');b.textContent=x.label;b.addEventListener('click',()=>x.onClick(sheet));root.insertBefore(b,root.querySelector('.keypad'))});
   const kp=root.querySelector('.keypad');
   ['1','2','3','4','5','6','7','8','9','.','0','del'].forEach(k=>{
     const b=h('<button class="key"></button>');
@@ -221,7 +222,7 @@ function numberSheet(o){
     });
     kp.appendChild(b);
   });
-  sheet=openSheet({title:o.title,content:root,onDone:()=>{const v=buf===''||buf==='.'?null:Number(buf);if(o.validate&&o.validate(v))return false;o.onDone(v)}});
+  sheet=openSheet({title:o.title,content:root,onCancel:o.onCancel,onDone:()=>{const v=buf===''||buf==='.'?null:Number(buf);if(o.validate&&o.validate(v))return false;o.onDone(v)}});
   show();
   return sheet;
 }
@@ -275,7 +276,19 @@ function renderToday(inPlace){
     card.querySelector('.hval').textContent=fmt(v);
     card.querySelector('.bar i').style.width=Math.min(100,x.target>0?v/x.target*100:0)+'%';
     card.querySelector('.met-ic').innerHTML=met?icon('circle-check','sm'):'';
-    card.setAttribute('aria-label',x.name+', '+fmt(v)+' of '+fmt(x.target)+' '+x.unit+(met?', target met':'')+'. Tap to edit.');
+    let extra='';
+    const src=card.querySelector('.hsrc');
+    if(x.id==='steps'&&stepsAvailable()){
+      const lab=stepsLabelFor(current);
+      src.innerHTML='';
+      if(lab){
+        src.innerHTML=icon(lab==='counted'?'smartphone':'pencil')+'<span></span>';
+        const km=v>0?' · '+fmtKm(kmFor(v)):'';
+        src.querySelector('span').textContent=(lab==='counted'?'Counted by phone':'Edited manually')+km;
+        extra=', '+(lab==='counted'?'counted by phone':'edited manually')+(v>0?', about '+fmtKm(kmFor(v)):'');
+      }
+    }
+    card.setAttribute('aria-label',x.name+', '+fmt(v)+' of '+fmt(x.target)+' '+x.unit+(met?', target met':'')+extra+'. Tap to edit.');
   });
 
   // rules
@@ -313,7 +326,7 @@ function renderToday(inPlace){
 function buildHabitCards(){
   const list=$('habitList');list.innerHTML='';
   settings.habits.forEach(x=>{
-    const c=h('<button class="hcard"><span class="hcard-top"><span class="hico"></span><span class="met-ic"></span></span><span class="hname"></span><span class="hval num"></span><span class="htgt"></span><span class="bar"><i></i></span></button>');
+    const c=h('<button class="hcard"><span class="hcard-top"><span class="hico"></span><span class="met-ic"></span></span><span class="hname"></span><span class="hval num"></span><span class="htgt"></span><span class="hsrc"></span><span class="bar"><i></i></span></button>');
     c.querySelector('.hico').innerHTML=icon(hIcon(x),'sm');
     c.querySelector('.hname').textContent=x.name;c.querySelector('.htgt').textContent='of '+fmt(x.target)+' '+x.unit;
     c.dataset.id=x.id;
@@ -328,18 +341,26 @@ function buildHabitCards(){
 function curVal(x){const d=days[current];return d&&d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null}
 function habitSheet(x){
   const p=presetsFor(x);
-  numberSheet({title:x.name,value:curVal(x),unitLine:'of '+fmt(x.target)+' '+x.unit,step:stepFor(x),
+  let unitLine='of '+fmt(x.target)+' '+x.unit,extras=[];
+  if(x.id==='steps'&&stepsAvailable()&&dayInAutoRange(current)){
+    const m=days[current]&&days[current].steps_meta;
+    if(m&&m.source==='manual'){
+      unitLine+=' · edited manually';
+      extras=[{label:'Use counted steps ('+fmt(m.counted)+')',onClick:sh=>{sh.close('cancel');commitDay('Using counted steps',d=>{useCountedSteps(d)})}}];
+    }else unitLine+=' · counted by phone. Enter a number to change this day.';
+  }
+  numberSheet({title:x.name,value:curVal(x),unitLine,step:stepFor(x),extras,
     presets:p.map(a=>({label:'+'+fmt(a),apply:v=>v+a})).concat([{label:'Target',set:x.target}]),
-    onDone:v=>{if(v===curVal(x))return;commitDay(x.name+' updated',d=>{if(v==null)delete d.vals[x.id];else d.vals[x.id]=v})}});
+    onDone:v=>{if(v===curVal(x))return;commitDay(x.name+' updated',d=>{setHabitValue(d,x,v)})}});
 }
 function habitPresets(x){
   const p=presetsFor(x),v=Number(curVal(x)||0);
   actionSheet({title:x.name,message:fmt(v)+' of '+fmt(x.target)+' '+x.unit,actions:[
     {label:'Add '+fmt(p[0])+' '+x.unit,value:'a'},{label:'Add '+fmt(p[1])+' '+x.unit,value:'b'},{label:'Set to target ('+fmt(x.target)+')',value:'t'}
   ]}).then(r=>{
-    if(r==='a')commitDay(x.name+' +'+fmt(p[0]),d=>{d.vals[x.id]=r1((d.vals[x.id]||0)+p[0])});
-    else if(r==='b')commitDay(x.name+' +'+fmt(p[1]),d=>{d.vals[x.id]=r1((d.vals[x.id]||0)+p[1])});
-    else if(r==='t')commitDay(x.name+' set to target',d=>{d.vals[x.id]=x.target});
+    if(r==='a')commitDay(x.name+' +'+fmt(p[0]),d=>{setHabitValue(d,x,r1((d.vals[x.id]||0)+p[0]))});
+    else if(r==='b')commitDay(x.name+' +'+fmt(p[1]),d=>{setHabitValue(d,x,r1((d.vals[x.id]||0)+p[1]))});
+    else if(r==='t')commitDay(x.name+' set to target',d=>{setHabitValue(d,x,x.target)});
   });
 }
 function bodySheet(key){
@@ -376,7 +397,7 @@ function metricInfo(m){
   if(m==='weight')return{name:'Weight',unit:'kg',get:d=>d.weight};
   if(m==='waist')return{name:'Waist',unit:'cm',get:d=>d.waist};
   const x=settings.habits.find(q=>'h:'+q.id===m);
-  if(x)return{name:x.name,unit:x.unit,get:d=>d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null,target:x.target};
+  if(x)return{name:x.name,unit:x.unit,get:d=>d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null,target:x.target,note:x.id==='steps'?k=>{const d=days[k];return d&&d.steps_meta?(d.steps_meta.source==='auto'?'Counted by phone':'Edited manually'):'Entered manually'}:null};
   return metricInfo('score');
 }
 function changeIn(keys,key){
@@ -398,6 +419,12 @@ function renderProgress(){
   const wc=changeIn(rk,'weight'),wa=changeIn(rk,'waist');
   $('sWeight').textContent=wc==null?'–':signed(wc,'kg');$('sWeightSub').textContent=wc==null?'Needs 2 entries':'this '+RANGE_NAME[period];
   $('sWaist').textContent=wa==null?'–':signed(wa,'cm');$('sWaistSub').textContent=wa==null?'Needs 2 entries':'this '+RANGE_NAME[period];
+  const withSteps=rk.filter(k=>days[k]&&days[k].vals&&days[k].vals.steps!=null);
+  if(withSteps.length){
+    const avg=Math.round(withSteps.reduce((a,k)=>a+days[k].vals.steps,0)/withSteps.length);
+    $('sAvgSteps').textContent=fmt(avg);$('sAvgStepsSub').textContent='over '+withSteps.length+(withSteps.length===1?' day':' days');
+    $('sAvgDist').textContent=fmtKm(kmFor(avg));$('sAvgDistSub').textContent='a day, at '+meta.steps.heightCm+' cm tall';
+  }else{$('sAvgSteps').textContent='–';$('sAvgStepsSub').textContent='No steps logged yet';$('sAvgDist').textContent='–';$('sAvgDistSub').textContent=''}
   $('streakNote').textContent=st>0?(best>st?'Your best streak was '+best+' days.':'This is your best streak yet.'):(best>0?'Start again today. Your best streak was '+best+' days.':'Log a day to start your streak.');
 
   // metric chips
@@ -409,7 +436,7 @@ function renderProgress(){
     opts.forEach(o=>{const b=h('<button class="chip"></button>');b.textContent=o[1];b.dataset.metric=o[0];b.addEventListener('click',()=>{metric=o[0];haptic('light');renderProgress()});ch.appendChild(b)});
   }
   ch.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.metric===metric)));
-  drawChart();
+  drawChart();drawHoursChart();
 
   // calendar heat map: soft rounded squares, one per day
   const cells=period===7?7:period===30?35:91;
@@ -451,7 +478,7 @@ function setReadout(vals,keys,idx,mi){
   if(i==null){for(let j=vals.length-1;j>=0;j--)if(vals[j]!=null){i=j;break}}
   if(i==null){el.innerHTML='<b>–</b><span>No entries in this '+RANGE_NAME[period]+'</span>';return}
   const b=document.createElement('b'),sp=document.createElement('span');
-  b.textContent=fmt(vals[i])+' '+mi.unit;sp.textContent=(idx==null?'Latest · ':'')+nice(keys[i]);
+  b.textContent=fmt(vals[i])+' '+mi.unit;sp.textContent=(idx==null?'Latest · ':'')+nice(keys[i])+(mi.note?' · '+mi.note(keys[i]):'');
   el.innerHTML='';el.appendChild(b);el.appendChild(sp);
 }
 function drawChart(){
@@ -484,6 +511,26 @@ function drawChart(){
         c.draw();
       }}});
   chart._rlColor=accent;chart._rlLine=sep;
+}
+
+let hoursChart=null;
+function drawHoursChart(){
+  const today=days[todayStr()],m=today&&today.steps_meta;
+  const show=stepsAuto()&&!!m&&m.hourly&&m.hourly.some(v=>v>0);
+  $('hoursHead').hidden=!show;$('hoursCard').hidden=!show;
+  if(!show){if(hoursChart){hoursChart.destroy();hoursChart=null}return}
+  if(!window.Chart||activeTab!=='progress')return;
+  const cs=getComputedStyle(document.documentElement),accent=cs.getPropertyValue('--accent').trim(),muted=cs.getPropertyValue('--label2').trim(),sep=cs.getPropertyValue('--sep').trim();
+  const labels=m.hourly.map((_,i)=>i===0?'12 AM':i===12?'12 PM':i<12?i+' AM':(i-12)+' PM');
+  const best=m.hourly.indexOf(Math.max(...m.hourly));
+  const total=m.hourly.reduce((a,b)=>a+b,0);
+  const summ='Steps counted by your phone today by hour: '+fmt(total)+' in total. Most active hour: '+labels[best]+' with '+fmt(m.hourly[best])+' steps.';
+  $('hoursSummary').textContent=summ;$('chartHours').setAttribute('aria-label',summ);
+  if(hoursChart)hoursChart.destroy();
+  const fnt={family:'Inter, system-ui, sans-serif',size:11};
+  hoursChart=new Chart($('chartHours'),{type:'bar',data:{labels,datasets:[{data:m.hourly,backgroundColor:accent,borderRadius:3,maxBarThickness:14}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:reduced()?false:{duration:400},plugins:{legend:{display:false},tooltip:{callbacks:{title:i=>labels[i[0].dataIndex],label:c=>fmt(c.parsed.y)+' steps'}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:{color:muted,maxRotation:0,autoSkip:false,font:fnt,callback:(v,i)=>i%6===0?labels[i]:''}},y:{grid:{color:sep},border:{display:false},beginAtZero:true,ticks:{color:muted,maxTicksLimit:4,font:fnt}}}}});
 }
 
 function daySheet(k){
@@ -586,6 +633,7 @@ function renderSetup(){
   const sr=$('setRules');sr.innerHTML='';
   settings.rules.forEach(r=>sr.appendChild(swipeRow({id:r.id,icon:'circle-check',label:r.name,onTap:()=>ruleForm(r),onDelete:()=>removeRule(r)})));
   sr.appendChild(addRow('Add rule',()=>ruleForm(null),'addRuleRow'));
+  renderStepGroup();
   $('reorderBtn').textContent=reorderMode?'Done':'Reorder';
   $('reorderBtn').setAttribute('aria-pressed',String(reorderMode));
   $('storeNote').textContent=IS_NATIVE?'Entries are saved on this phone and copied to Documents/ResetLog after every change.':'Entries are saved in this browser only.';
@@ -606,6 +654,7 @@ function formSheet(o){
   o.fields.forEach(f=>{root.querySelector('#'+f.id).value=f.value==null?'':f.value});
   const err=root.querySelector('#fErr');
   root.querySelectorAll('input').forEach(i=>i.addEventListener('input',()=>err.textContent=''));
+  if(o.extraButton){const eb=h('<button class="btn secondary" style="margin-bottom:var(--s3)"></button>');eb.textContent=o.extraButton.label;eb.addEventListener('click',o.extraButton.onClick);root.insertBefore(eb,err)}
   const sh=openSheet({title:o.title,content:root,onDone:()=>{const v={};o.fields.forEach(f=>v[f.id]=root.querySelector('#'+f.id).value.trim());const e=o.validate(v);if(e){err.textContent=e;haptic('light');return false}o.onDone(v)}});
   if(o.remove)root.querySelector('#fRemove').addEventListener('click',async()=>{if(await o.remove.confirm()){sh.close('cancel');o.remove.run()}});
   return sh;
@@ -618,6 +667,7 @@ function habitForm(x){
       if(x){x.name=v.fName;x.target=Number(v.fTarget);x.unit=v.fUnit||x.unit;persistSettings('Target updated')}
       else{settings.habits.push({id:slug(v.fName),name:v.fName,unit:v.fUnit||'times',target:Number(v.fTarget)});persistSettings('Added '+v.fName)}
     },
+    extraButton:x&&x.id==='steps'&&stepsAvailable()?{label:'Source: '+(stepsAuto()?'Automatic (phone sensor)':'Manual')+'  ·  change',onClick:()=>{chooseStepSource()}}:null,
     remove:x?{label:'Remove target',confirm:()=>confirmRemove(x.name),run:()=>{settings.habits=settings.habits.filter(q=>q.id!==x.id);persistSettings('Removed '+x.name)}}:null});
 }
 function ruleForm(r){
@@ -741,7 +791,7 @@ function onResume(){
   if(wasToday)current=t;
   renderToday();renderProgress();
 }
-function onForeground(){onResume();syncOnResume()}
+function onForeground(){onResume();syncOnResume();stepsOnForeground()}
 function initNativeGlue(){
   try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{syncBars();drawChart()})}catch(e){}
   syncBars();
@@ -778,6 +828,7 @@ $('replayIntro').addEventListener('click',showOnboarding);
   if(loadProblem)setMsg('bkMsg',loadProblem,true);
   initReminder();
   initSync();
+  initSteps();
   try{
     if(await prefGet(ONB_KEY)==null){
       if(Object.keys(days).length)await prefSet(ONB_KEY,'1');else showOnboarding();

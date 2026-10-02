@@ -82,6 +82,8 @@
         <div class="stat"><span><svg data-ic="calendar" class="sm"></svg>Days logged</span><b id="sDays">0</b><small id="sDaysSub"></small></div>
         <div class="stat"><span><svg data-ic="activity" class="sm"></svg>Weight change</span><b id="sWeight">–</b><small id="sWeightSub"></small></div>
         <div class="stat"><span><svg data-ic="activity" class="sm"></svg>Waist change</span><b id="sWaist">–</b><small id="sWaistSub"></small></div>
+        <div class="stat"><span><svg data-ic="footprints" class="sm"></svg>Average steps</span><b id="sAvgSteps">–</b><small id="sAvgStepsSub"></small></div>
+        <div class="stat"><span><svg data-ic="map-pin" class="sm"></svg>Average distance</span><b id="sAvgDist">–</b><small id="sAvgDistSub"></small></div>
       </div>
       <p class="note-line" id="streakNote"></p>
 
@@ -91,6 +93,12 @@
         <div class="readout" id="readout" aria-live="polite"></div>
         <div class="chartbox"><canvas id="chart" role="img" aria-label="Chart"></canvas></div>
         <p class="t-foot muted" id="chartSummary" style="margin:12px 0 0"></p>
+      </div>
+
+      <h2 class="sec-head" id="hoursHead" hidden>Steps by hour</h2>
+      <div class="card" id="hoursCard" hidden>
+        <div class="chartbox" style="height:11rem"><canvas id="chartHours" role="img" aria-label="Steps by hour today"></canvas></div>
+        <p class="t-foot muted" id="hoursSummary" style="margin:12px 0 0"></p>
       </div>
 
       <h2 class="sec-head">Calendar</h2>
@@ -113,6 +121,11 @@
     <div class="group-head"><span>Daily targets</span><button class="txtbtn" id="reorderBtn">Reorder</button></div>
     <div class="group ic" id="setHabits"></div>
     <div class="group-foot">Raise targets as you get stronger. Swipe a row left to remove it.</div>
+
+    <div class="group-head" id="stepHead" hidden><span>Step tracking</span></div>
+    <div class="group ic" id="stepGroup" hidden></div>
+    <div class="group-foot" id="stepFoot" hidden></div>
+    <div class="group-foot" id="stMsg" role="status" hidden></div>
 
     <div class="group-head"><span>Rules</span></div>
     <div class="group ic" id="setRules"></div>
@@ -174,6 +187,7 @@
 <script src="vendor/chart.umd.js"></script>
 <script src="vendor/native.js"></script>
 <script src="js/logic.js"></script>
+<script src="js/steps.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

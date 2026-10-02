@@ -5,6 +5,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { MOCK } from '../test/helpers.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'www');
 const OUT = process.argv[2] || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'screenshots');
@@ -142,6 +143,64 @@ for (const scheme of ['light', 'dark']) {
     // celebration + all done
     { const { ctx, pg, errs } = await setup(opts, FULL, true);
       await pg.goto(base); await pg.waitForSelector('#habitList .hcard'); await pg.waitForTimeout(1200); await snap(pg, '34-today-all-done'); if (errs.length) console.log('ERRORS', tag, errs); await ctx.close(); }
+  }
+}
+
+
+// ---------- automatic step tracking (Android app only: uses the mocked native bridge) ----------
+const SEED_NO_STEPS_TODAY = JSON.parse(JSON.stringify(SEED)); delete SEED_NO_STEPS_TODAY.days[ymd(new Date())].vals.steps;
+const HOURLY = Array.from({ length: 24 }, (_, i) => [0, 0, 0, 0, 0, 0, 180, 640, 420, 90, 60, 150, 380, 120, 80, 60, 140, 520, 1240, 610, 220, 90, 0, 0][i]);
+for (const scheme of ['light', 'dark']) {
+  for (const [w, h] of SIZES) {
+    const tag = `${w}x${h}-${scheme}`;
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, deviceScaleFactor: 2 });
+    await ctx.route('**/vendor/native.js', r => r.fulfill({ contentType: 'text/javascript', body: MOCK }));
+    await ctx.addInitScript(d => {
+      if (!localStorage.getItem('__mock')) localStorage.setItem('__mock', JSON.stringify({ prefs: { resetlog_onboarded: '1', resetlog: JSON.stringify(d) }, fs: {}, calls: [], perm: 'prompt', requestResult: 'granted', failWrite: false, shareMode: 'ok', exit: 0,
+        steps: { activityGranted: false, grantOnRequest: false, locationGranted: true, batteryIgnored: false, brand: 'xiaomi', health: 'working', source: 'counter', days: {}, filteredToday: 0, cfg: { enabled: false } } }));
+    }, SEED_NO_STEPS_TODAY);
+    const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
+    const snap = async (_p, name) => { await pg.waitForTimeout(450); await pg.screenshot({ path: path.join(OUT, `${name}-${tag}.png`) }); count++; };
+    const sheetOnly = text => pg.waitForFunction(t => { const a = document.querySelectorAll('.sheet'); return a.length === 1 && a[0].textContent.includes(t) && document.querySelector('.sheet-wrap.in'); }, text, { timeout: 6000 });
+    const btn = label => pg.click(`.sheet .btn:has-text("${label}")`);
+    const pickAction = async label => { await pg.click(`.asheet .ab:has-text("${label}")`); await pg.waitForFunction(() => !document.querySelector('.asheet'), null, { timeout: 4000 }); };
+    const send = (days, health = 'working') => pg.evaluate(([d, hh]) => { window.__mock.steps({ days: d, health: hh }); window.__mock.fire('stepsChanged', { days: d, health: hh }); }, [days, health]);
+    const tk = ymd(new Date());
+    await pg.goto(base); await pg.waitForSelector('#habitList .hcard'); await pg.waitForTimeout(600);
+    await tab(pg, 'setup'); await pg.evaluate(() => document.getElementById('stepHead').scrollIntoView({ block: 'start' })); await pg.evaluate(() => window.scrollBy(0, -70));
+    await snap(pg, '40-plan-step-tracking-manual');
+    // setup flow
+    await pg.click('#stSource'); await snap(pg, '41-action-sheet-steps-source'); await pickAction('Automatic (phone sensor)');
+    await sheetOnly('Count steps automatically'); await snap(pg, '42-sheet-steps-explain'); await btn('Continue');
+    await sheetOnly('Permission needed'); await snap(pg, '43-sheet-steps-permission-needed');
+    await pg.evaluate(() => window.__mock.steps({ activityGranted: true })); await btn('Try again');
+    await sheetOnly('Keep counting all day'); await snap(pg, '44-sheet-steps-battery-xiaomi'); await btn('Skip for now');
+    await sheetOnly('Your height'); await snap(pg, '45-sheet-steps-height'); await pg.click('.sheet .txtbtn.strong');
+    await pg.waitForFunction(() => /Automatic/.test(document.getElementById('stSource').textContent)); await pg.waitForTimeout(500);
+    await pg.evaluate(() => document.getElementById('stepHead').scrollIntoView({ block: 'start' })); await pg.evaluate(() => window.scrollBy(0, -70));
+    await snap(pg, '46-plan-step-tracking-automatic');
+    // counted steps on Today
+    await tab(pg, 'today'); await send({ [tk]: { steps: 5320, filtered: 37, hourly: HOURLY } }); await pg.waitForTimeout(1200);
+    await pg.evaluate(() => window.scrollTo(0, 0)); await snap(pg, '47-today-steps-counted-by-phone');
+    await pg.click('#habitList .hcard:nth-child(1)'); await pg.waitForSelector('.keypad');
+    for (const c of '8000') await pg.click(`.keypad .key[aria-label="${c}"]`);
+    await pg.click('.sheet .txtbtn.strong'); await pg.waitForTimeout(700);
+    await pg.click('#habitList .hcard:nth-child(1)'); await pg.waitForSelector('.keypad'); await snap(pg, '48-sheet-steps-use-counted');
+    await pg.click('.sheet .btn:has-text("Use counted steps")'); await pg.waitForTimeout(800);
+    // health states
+    await tab(pg, 'setup');
+    for (const [k, name] of [['paused_vehicle', '49-plan-health-in-vehicle'], ['paused_battery', '50-plan-health-battery'], ['permission_missing', '51-plan-health-permission']]) {
+      await send({ [tk]: { steps: 5320, filtered: 37, hourly: HOURLY } }, k); await pg.waitForTimeout(400);
+      await pg.evaluate(() => document.getElementById('stHealth').scrollIntoView({ block: 'center' })); await snap(pg, name);
+    }
+    await send({ [tk]: { steps: 5320, filtered: 37, hourly: HOURLY } }, 'working');
+    // progress
+    await tab(pg, 'progress'); await pg.waitForTimeout(900);
+    await pg.click('.chip:has-text("Steps")'); await pg.waitForTimeout(500);
+    await pg.evaluate(() => window.scrollTo(0, 0)); await snap(pg, '52-progress-average-steps');
+    await pg.evaluate(() => document.getElementById('hoursHead').scrollIntoView({ block: 'start' })); await pg.evaluate(() => window.scrollBy(0, -70)); await snap(pg, '53-progress-steps-by-hour');
+    if (errs.length) console.log('ERRORS', tag, errs);
+    await ctx.close();
   }
 }
 

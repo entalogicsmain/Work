@@ -78,6 +78,19 @@ function normalizeSettings(s){
   }).filter(r=>!seenR.has(r.id)&&seenR.add(r.id));
   return{habits,rules};
 }
+/* Optional per-day step-tracking details: { source:'auto'|'manual', counted, distance_km, filtered, hourly:[24] } */
+function normalizeStepsMeta(m,k){
+  if(m==null)return undefined;
+  if(typeof m!=='object'||Array.isArray(m))throw new Error('Day '+k+' has invalid step details.');
+  if(m.source!=='auto'&&m.source!=='manual')throw new Error('Day '+k+' has an unknown step source.');
+  const nn=(v,what)=>{if(v==null)return 0;if(!num(v)||v<0)throw new Error('Day '+k+' has an invalid '+what+'.');return v};
+  let hourly=new Array(24).fill(0);
+  if(m.hourly!=null){
+    if(!Array.isArray(m.hourly)||m.hourly.length!==24||m.hourly.some(v=>!num(v)||v<0))throw new Error('Day '+k+' has invalid hourly steps.');
+    hourly=m.hourly.slice();
+  }
+  return{source:m.source,counted:Math.round(nn(m.counted,'counted steps')),distance_km:nn(m.distance_km,'distance'),filtered:Math.round(nn(m.filtered,'filtered steps')),hourly};
+}
 function normalizeDay(k,d){
   if(!validDateKey(k))throw new Error('"'+String(k).slice(0,30)+'" is not a valid date (expected YYYY-MM-DD).');
   if(!d||typeof d!=='object'||Array.isArray(d))throw new Error('Day '+k+' is not valid.');
@@ -86,7 +99,10 @@ function normalizeDay(k,d){
   if(d.rules!=null){if(typeof d.rules!=='object'||Array.isArray(d.rules))throw new Error('Day '+k+' has invalid rules.');Object.keys(d.rules).forEach(id=>{rl[id]=!!d.rules[id]})}
   if(d.weight!=null&&!num(d.weight))throw new Error('Day '+k+' has an invalid weight.');
   if(d.waist!=null&&!num(d.waist))throw new Error('Day '+k+' has an invalid waist.');
-  return{vals,rules:rl,weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:typeof d.note==='string'?d.note:'',date:k,updatedAt:num(d.updatedAt)?d.updatedAt:0};
+  const out={vals,rules:rl,weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:typeof d.note==='string'?d.note:'',date:k,updatedAt:num(d.updatedAt)?d.updatedAt:0};
+  const sm=normalizeStepsMeta(d.steps_meta,k);
+  if(sm)out.steps_meta=sm;
+  return out;
 }
 /* Throws an Error with a readable message when the object is not a Reset Log backup. */
 function normalizeData(obj){
@@ -114,7 +130,7 @@ function mergeData(local,inc){
 }
 
 /* ---------- storage (Capacitor Preferences) ---------- */
-let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'}};
+let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'},steps:{source:'manual',heightCm:180,strictness:'balanced',sensitivity:'normal',useLocation:false,enabledAt:null,setupFailed:false}};
 let loadProblem='';
 const prefGet=async k=>(await Prefs.get({key:k})).value;
 const prefSet=(k,v)=>Prefs.set({key:k,value:v});
@@ -142,7 +158,7 @@ store={
       }
       if(!loadProblem)await prefSet(MIGRATED_KEY,'1');
     }
-    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
+    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={source:st.source==='auto'?'auto':'manual',heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupFailed:!!st.setupFailed}}if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
     try{const sv=await prefGet(SYNC_KEY);if(sv){const ss=JSON.parse(sv);sync.signedIn=!!ss.signedIn;sync.userId=typeof ss.userId==='string'?ss.userId:null;sync.email=typeof ss.email==='string'?ss.email:'';sync.lastSyncAt=num(ss.lastSyncAt)?ss.lastSyncAt:null;sync.settingsUpdatedAt=num(ss.settingsUpdatedAt)?ss.settingsUpdatedAt:0;sync.pendingDays=Array.isArray(ss.pendingDays)?ss.pendingDays.filter(k=>typeof k==='string'):[];sync.pendingSettings=!!ss.pendingSettings}}catch(e){}
     if(raw==null)return{migrated};
     try{
@@ -220,14 +236,16 @@ function csvCell(v){
   if(typeof v==='string'&&/^[=+\-@\t\r]/.test(s))s="'"+s;
   return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
 }
+/** 'counted' (phone sensor), 'manual', or '' when the day has no steps */
+function stepsSourceOf(d){return d.steps_meta?(d.steps_meta.source==='auto'?'counted':'manual'):(d.vals&&d.vals.steps!=null?'manual':'')}
 function buildCsv(){
-  const head=['Date','Score %'].concat(settings.habits.map(h=>h.name+' ('+h.unit+')'),settings.rules.map(r=>r.name),['Weight (kg)','Waist (cm)','Note']);
+  const head=['Date','Score %'].concat(settings.habits.map(h=>h.name+' ('+h.unit+')'),settings.rules.map(r=>r.name),['Steps source','Distance (km)','Filtered steps','Weight (kg)','Waist (cm)','Note']);
   const rows=Object.keys(days).sort().map(k=>{
     const d=days[k];
     return [k,scoreOf(d)].concat(
       settings.habits.map(h=>d.vals&&d.vals[h.id]!=null?d.vals[h.id]:''),
       settings.rules.map(r=>d.rules&&d.rules[r.id]?'yes':'no'),
-      [d.weight==null?'':d.weight,d.waist==null?'':d.waist,d.note||'']);
+      [stepsSourceOf(d),d.steps_meta?d.steps_meta.distance_km:'',d.steps_meta?d.steps_meta.filtered:'',d.weight==null?'':d.weight,d.waist==null?'':d.waist,d.note||'']);
   });
   return '﻿'+[head].concat(rows).map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n';
 }
@@ -353,7 +371,7 @@ const signedIn=()=>cloudConfigured()&&sync.signedIn;
 const saveSync=()=>prefSet(SYNC_KEY,JSON.stringify(sync));
 const pendingCount=()=>sync.pendingDays.length+(sync.pendingSettings?1:0);
 const isDefaultSettings=()=>JSON.stringify(settings)===JSON.stringify(DEFAULT_SETTINGS);
-const dayData=d=>({vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''});
+const dayData=d=>{const o={vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''};if(d.steps_meta)o.steps_meta=d.steps_meta;return o};
 const isNetErr=e=>!!e&&(e.name==='AuthRetryableFetchError'||e.status===0||/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(String(e.message||e)));
 function syncErrText(e){
   if(isNetErr(e))return 'No internet connection.';

@@ -1,7 +1,7 @@
 // Bundles the Capacitor plugins and supabase-js into www/vendor/native.js and exposes them
 // as window.ResetNative. The app code in www/index.html only talks to this object,
 // so the same page runs in a plain browser (web fallbacks) and inside the APK.
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -11,6 +11,9 @@ import { StatusBar } from '@capacitor/status-bar';
 import { Network } from '@capacitor/network';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { createClient } from '@supabase/supabase-js';
+
+// Local Kotlin plugin (android/app/src/main/java/com/umar/resetlog/steps). Only exists inside the APK.
+const Steps = Capacitor.isNativePlatform() ? registerPlugin('Steps') : null;
 
 window.ResetNative = {
   isNative: Capacitor.isNativePlatform(),
@@ -23,6 +26,7 @@ window.ResetNative = {
   App,
   StatusBar,
   Network,
+  Steps,
   Haptics,
   ImpactStyle,
   NotificationType,

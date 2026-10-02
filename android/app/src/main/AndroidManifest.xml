@@ -25,6 +25,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Step counting: foreground service (type health), restarts after boot / update, activity transitions, midnight sample -->
+        <service
+            android:name=".steps.StepService"
+            android:exported="false"
+            android:foregroundServiceType="health|location" />
+        <receiver android:name=".steps.BootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".steps.ActivityTransitionReceiver" android:exported="false" />
+        <receiver android:name=".steps.MidnightReceiver" android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -37,6 +51,21 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Automatic step counting -->
+    <uses-feature android:name="android.hardware.sensor.stepcounter" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.stepdetector" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Only asked for when "Use location to improve accuracy in vehicles" is switched on -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Backups are written to Documents/ResetLog. Only needed on older Android versions. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />

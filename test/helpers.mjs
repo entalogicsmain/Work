@@ -102,12 +102,14 @@ export const MOCK = `
 (function(){
   var KEY='__mock';
   var st=JSON.parse(localStorage.getItem(KEY)||'null')||{prefs:{resetlog_onboarded:'1'},fs:{},calls:[],perm:'prompt',requestResult:'granted',failWrite:false,shareMode:'ok',exit:0};
+  if(!st.steps)st.steps={activityGranted:true,locationGranted:true,batteryIgnored:false,brand:'xiaomi',health:'working',source:'counter',days:{},filteredToday:0,cfg:{enabled:false}};
   function save(){localStorage.setItem(KEY,JSON.stringify(st))}
   function rec(n,a){st.calls.push({n:n,a:a});save()}
   var listeners={};
   window.__mock={st:function(){return JSON.parse(localStorage.getItem(KEY))},
     fire:function(ev,p){(listeners[ev]||[]).forEach(function(f){f(p||{})})},
-    set:function(k,v){st[k]=v;save()}};
+    set:function(k,v){st[k]=v;save()},
+    steps:function(p){Object.assign(st.steps,p);save()}};
   window.ResetNative={
     isNative:true,
     Preferences:{get:async function(o){return{value:o.key in st.prefs?st.prefs[o.key]:null}},set:async function(o){st.prefs[o.key]=o.value;save()},remove:async function(o){delete st.prefs[o.key];save()}},
@@ -129,6 +131,20 @@ export const MOCK = `
     },
     App:{addListener:async function(ev,f){(listeners[ev]=listeners[ev]||[]).push(f);return{remove:function(){}}},exitApp:async function(){st.exit++;save()}},
     StatusBar:{setStyle:async function(o){rec('statusStyle',o)},setBackgroundColor:async function(o){rec('statusBg',o)}},
+    Steps:(function(){
+      function status(){var c=st.steps.cfg;return{supported:{stepCounter:st.steps.source==='counter',stepDetector:true,accelerometer:true,activityRecognition:true},source:st.steps.source,enabled:!!c.enabled,health:st.steps.health,inVehicle:st.steps.health==='paused_vehicle',activityPermission:st.steps.activityGranted,locationPermission:st.steps.locationGranted,batteryIgnored:st.steps.batteryIgnored,brand:st.steps.brand,manufacturer:'Test',model:'Mock',sdk:35,todaySteps:0,filteredToday:st.steps.filteredToday,config:c}}
+      return{
+        getStatus:async function(){return status()},
+        configure:async function(o){rec('stepsConfigure',o);st.steps.cfg=Object.assign({},st.steps.cfg,o);save();return status()},
+        requestActivityPermission:async function(){rec('reqActivity');if(st.steps.activityGranted===false&&st.steps.grantOnRequest){st.steps.activityGranted=true;st.steps.health='working';save()}return{granted:st.steps.activityGranted!==false}},
+        requestLocationPermission:async function(){rec('reqLocation');return{granted:st.steps.locationGranted!==false}},
+        requestIgnoreBatteryOptimizations:async function(){rec('reqBattery');st.steps.batteryIgnored=true;save();return{result:'dialog'}},
+        openSettings:async function(o){rec('openSettings',o);return{result:'ok'}},
+        getDeviceInfo:async function(){return{brand:st.steps.brand,manufacturer:'Test',model:'Mock',sdk:35,batteryIgnored:st.steps.batteryIgnored}},
+        getDays:async function(){return{days:st.steps.days,health:st.steps.health,inVehicle:st.steps.health==='paused_vehicle'}},
+        addListener:async function(ev,f){(listeners[ev]=listeners[ev]||[]).push(f);return{remove:function(){}}}
+      }
+    })(),
     Haptics:{impact:async function(o){rec('impact',o)},notification:async function(o){rec('notify',o)}},
     ImpactStyle:{Light:'LIGHT',Medium:'MEDIUM'},NotificationType:{Success:'SUCCESS'}
   };

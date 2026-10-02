@@ -295,7 +295,7 @@ const seedDays = (n, scoreAt) => {
   await pg.goto(base); await ready(pg);
   await tab(pg, 'progress'); await pg.waitForTimeout(700);
   ok((await pg.$$('#seg button')).length === 3 && (await pg.getAttribute('#seg button[data-range="30"]', 'aria-selected')) === 'true', 'segmented control: Week / Month / 3 Months (Month selected)');
-  ok((await pg.$$('.stat')).length === 4, 'four stat tiles (streak, days logged, weight change, waist change)');
+  ok((await pg.$$('.stat')).length === 6, 'six stat tiles (streak, days logged, weight, waist, average steps, average distance)');
   ok(/^−?\+?[\d.]+ kg$|^[+−][\d.]+ kg$/.test(await pg.textContent('#sWeight')), 'weight change tile shows a signed value', await pg.textContent('#sWeight'));
   ok((await pg.$$('#heat .hc')).length === 35, 'Month calendar has 35 squares');
   ok(await pg.evaluate(() => !!Chart.getChart('chart')) , 'trend chart is drawn');

@@ -11,7 +11,9 @@
     "test:web": "node test/web-test.mjs",
     "test:sync": "node test/sync-test.mjs",
     "test:real": "node test/real-test.mjs",
-    "test:contrast": "node test/contrast-test.mjs"
+    "test:contrast": "node test/contrast-test.mjs",
+    "test:steps": "node test/steps-test.mjs",
+    "test:android": "cd android && ./gradlew :app:testDebugUnitTest"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
