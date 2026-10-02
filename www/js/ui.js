@@ -45,21 +45,31 @@ function setMsg(id,text,bad){const el=$(id);if(!el)return;el.textContent=text||'
 /* ================= layers: sheets and action sheets ================= */
 const layerEl=$('layer');
 const layers=[];
-let lastFocus=null;
 const modalOpen=()=>layers.length>0;
 function closeTopLayer(){const t=layers[layers.length-1];if(!t)return false;t.close('cancel');return true}
 
+/* While a sheet, action sheet or the onboarding is open, everything behind it is inert: no focus, no taps, hidden from screen readers.
+   A counter handles stacked layers. */
+let bgLocks=0;
+const BG_SEL='#screens,.tabbar,.navbar,#saveError';
+function lockBackground(){bgLocks++;if(bgLocks===1)document.querySelectorAll(BG_SEL).forEach(e=>e.setAttribute('inert',''))}
+function unlockBackground(){bgLocks=Math.max(0,bgLocks-1);if(bgLocks===0)document.querySelectorAll(BG_SEL).forEach(e=>e.removeAttribute('inert'))}
+let layerSeq=0;
 function mountLayer(wrap,api){
-  lastFocus=document.activeElement;
+  api._prevFocus=document.activeElement;
+  const under=layers[layers.length-1];if(under)under.el.setAttribute('inert','');   // a sheet under an action sheet is inert too
+  lockBackground();
   layerEl.appendChild(wrap);layers.push(api);
   layerEl.style.pointerEvents='auto';
   requestAnimationFrame(()=>requestAnimationFrame(()=>wrap.classList.add('in')));
 }
 function unmountLayer(wrap,api){
   const i=layers.indexOf(api);if(i>=0)layers.splice(i,1);
-  wrap.classList.remove('in');
+  const top=layers[layers.length-1];if(top)top.el.removeAttribute('inert');
+  wrap.setAttribute('inert','');wrap.classList.remove('in');
+  unlockBackground();
   setTimeout(()=>{wrap.remove();if(!layers.length)layerEl.style.pointerEvents='none'},reduced()?160:330);
-  try{if(lastFocus&&lastFocus.focus&&document.contains(lastFocus))lastFocus.focus({preventScroll:true})}catch(e){}
+  try{const f=api._prevFocus;if(f&&f.focus&&document.contains(f))f.focus({preventScroll:true})}catch(e){}
 }
 
 /* openSheet({title,left,right,content,onDone,onCancel,leftId}) -> {el,body,close,setDone}
@@ -67,8 +77,9 @@ function unmountLayer(wrap,api){
 function openSheet(o){
   const wrap=h('<div class="sheet-wrap"><div class="scrim"></div><section class="sheet" role="dialog" aria-modal="true"><div class="grab-zone"><div class="grabber"></div><div class="sheet-head"><span class="l"></span><h2></h2><span class="r"></span></div></div><div class="sheet-body"></div></section></div>');
   const sheet=wrap.querySelector('.sheet'),body=wrap.querySelector('.sheet-body');
-  sheet.setAttribute('aria-label',o.title||'Sheet');
-  wrap.querySelector('h2').textContent=o.title||'';
+  const h2=wrap.querySelector('h2');h2.id='sheetTitle'+(++layerSeq);
+  if(o.title)sheet.setAttribute('aria-labelledby',h2.id);else sheet.setAttribute('aria-label','Sheet');
+  h2.textContent=o.title||'';
   let closed=false,doneBtn=null;
   const api={el:wrap,body,
     close(reason){
@@ -100,14 +111,17 @@ function actionSheet(o){
   return new Promise(res=>{
     const wrap=h('<div class="sheet-wrap"><div class="scrim"></div><div class="asheet" role="dialog" aria-modal="true"><div class="ag"></div><div class="ag"><button class="ab cancel"></button></div></div></div>');
     const grp=wrap.querySelector('.ag');
-    wrap.querySelector('.asheet').setAttribute('aria-label',o.title||'Choose an action');
-    if(o.title||o.message){const hd=h('<div class="ah"><b></b><span></span></div>');hd.querySelector('b').textContent=o.title||'';hd.querySelector('span').textContent=o.message||'';if(!o.title)hd.querySelector('b').remove();if(!o.message)hd.querySelector('span').remove();grp.appendChild(hd)}
+    const as=wrap.querySelector('.asheet'),sid=++layerSeq;
+    if(o.title)as.setAttribute('aria-labelledby','asTitle'+sid);else as.setAttribute('aria-label','Choose an action');
+    if(o.message)as.setAttribute('aria-describedby','asMsg'+sid);
+    if(o.title||o.message){const hd=h('<div class="ah"><b></b><span></span></div>');const hb=hd.querySelector('b'),hs=hd.querySelector('span');hb.textContent=o.title||'';hs.textContent=o.message||'';hb.id='asTitle'+sid;hs.id='asMsg'+sid;if(!o.title)hb.remove();if(!o.message)hs.remove();grp.appendChild(hd)}
     let closed=false;
     const api={el:wrap,close(v){if(closed)return;closed=true;unmountLayer(wrap,api);res(v===undefined?'cancel':v)}};
     o.actions.forEach(a=>{const b=h('<button class="ab"></button>');b.textContent=a.label;if(a.destructive)b.classList.add('destructive');b.addEventListener('click',()=>{haptic('light');api.close(a.value)});grp.appendChild(b)});
     const cb=wrap.querySelector('.cancel');cb.textContent=o.cancelLabel||'Cancel';cb.addEventListener('click',()=>api.close('cancel'));
     wrap.querySelector('.scrim').addEventListener('click',()=>api.close('cancel'));
     mountLayer(wrap,api);
+    as.tabIndex=-1;setTimeout(()=>{if(!wrap.contains(document.activeElement))as.focus({preventScroll:true})},60);   // the dialog takes focus (not a button, so Enter can't confirm by accident)
   });
 }
 // logic.js asks its questions through this; it becomes an action sheet
@@ -124,11 +138,25 @@ function toast(msg,o){
   $('toastIc').innerHTML=ICONS[o.icon||'circle-check']||'';
   const u=$('toastUndo');u.hidden=!o.undo;t.classList.toggle('act',!!o.undo);undoFn=o.undo||null;
   t.classList.add('show');clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>{t.classList.remove('show');undoFn=null},o.undo?5000:2200);
+  const len=String(msg||'').length;   // long messages stay up longer; undo gets extra time
+  toastTimer=setTimeout(()=>{t.classList.remove('show');undoFn=null},o.undo?Math.max(8000,60*len):Math.max(4000,60*len));
 }
 $('toastUndo').addEventListener('click',()=>{const f=undoFn;undoFn=null;$('toast').classList.remove('show');if(f)f()});
-let savedTimer=null;
-function flashSaved(){const el=$('savedInd');el.classList.add('on');clearTimeout(savedTimer);savedTimer=setTimeout(()=>el.classList.remove('on'),1600)}
+/* The "Saved" text only exists while it is showing, so a screen reader hears it appear (the indicator is a status region). */
+let savedTimer=null,savedClear=null;
+function flashSaved(){
+  const el=$('savedInd'),tx=$('savedTxt');
+  clearTimeout(savedClear);tx.textContent='Saved';el.classList.add('on');
+  clearTimeout(savedTimer);savedTimer=setTimeout(()=>{el.classList.remove('on');savedClear=setTimeout(()=>{tx.textContent=''},300)},1600);
+}
+/* A save that keeps failing is not a passing toast: show a banner until it works again. */
+function showSaveError(on){
+  const b=$('saveError');if(b)b.hidden=!on;
+}
+$('saveRetry').addEventListener('click',async()=>{
+  if(pendingSave.size){flushSave();return}
+  try{await store.persist();showSaveError(false);flashSaved()}catch(e){}
+});
 
 let saveTimer=null;const pendingSave=new Set();
 function scheduleSave(k){pendingSave.add(k);clearTimeout(saveTimer);saveTimer=setTimeout(flushSave,400)}
@@ -136,8 +164,8 @@ async function flushSave(){
   clearTimeout(saveTimer);
   if(!pendingSave.size)return;
   const keys=[...pendingSave];pendingSave.clear();
-  try{await store.persist();flashSaved();keys.forEach(markDayDirty);autoBackup();syncSoon(false)}
-  catch(e){keys.forEach(k=>pendingSave.add(k));toast("Couldn't save. Trying again.",{icon:'x'});clearTimeout(saveTimer);saveTimer=setTimeout(flushSave,3000)}
+  try{await store.persist();showSaveError(false);flashSaved();keys.forEach(markDayDirty);autoBackup();syncSoon(false)}
+  catch(e){keys.forEach(k=>pendingSave.add(k));showSaveError(true);toast("Couldn't save. Trying again.",{icon:'x'});clearTimeout(saveTimer);saveTimer=setTimeout(flushSave,3000)}
 }
 
 /* ================= day data helpers ================= */
@@ -193,7 +221,7 @@ function celebrate(){
   const ring=$('ring');ring.classList.remove('done');void ring.offsetWidth;ring.classList.add('done');
   if(reduced())return;
   const box=h('<div class="confetti" aria-hidden="true"></div>');
-  const cols=['var(--accent)','var(--green)','var(--orange)','#AF52DE','#FF6482'];
+  const cols=['var(--confetti-1)','var(--confetti-2)','var(--confetti-3)','var(--confetti-4)','var(--confetti-5)'];
   for(let i=0;i<28;i++){const c=document.createElement('i');c.style.left=(5+Math.random()*90)+'%';c.style.background=cols[i%cols.length];c.style.setProperty('--dx',(Math.random()*120-60)+'px');c.style.setProperty('--rot',(Math.random()*720-360)+'deg');c.style.animationDelay=(Math.random()*.25)+'s';box.appendChild(c)}
   document.body.appendChild(box);setTimeout(()=>box.remove(),2200);
 }
@@ -261,8 +289,9 @@ function scoreClass(s){return s>=80?'g':s>=40?'o':'r'}
 function renderProgress(){
   const empty=!Object.keys(days).length;
   $('progEmpty').hidden=!empty;$('progBody').hidden=empty;
-  document.querySelectorAll('#seg button').forEach(b=>b.setAttribute('aria-selected',String(Number(b.dataset.range)===period)));
+  document.querySelectorAll('#seg button').forEach(b=>b.setAttribute('aria-checked',String(Number(b.dataset.range)===period)));
   $('progressSub').textContent=empty?'':'Last '+(period===7?'7 days':period===30?'30 days':'3 months');
+  $('seg').hidden=empty;
   if(empty){if(chart){chart.destroy();chart=null}return}
   const rk=rangeKeys(period),inR=rk.filter(k=>days[k]);
   const st=streak(),best=bestStreak();
@@ -292,7 +321,9 @@ function renderProgress(){
 
   // calendar heat map: soft rounded squares, one per day
   const cells=period===7?7:period===30?35:91;
-  const heat=$('heat');heat.innerHTML='';
+  const heat=$('heat');
+  const hadFocus=heat.contains(document.activeElement)?[...heat.children].indexOf(document.activeElement):-1;
+  heat.innerHTML='';
   const t=todayStr();
   rangeKeys(cells).forEach(k=>{
     const sc=days[k]?scoreOf(days[k]):null;
@@ -301,8 +332,13 @@ function renderProgress(){
     if(sc!=null)c.classList.add(scoreClass(sc));if(k===t)c.classList.add('today');
     c.setAttribute('aria-label',nice(k)+': '+(sc==null?'not logged':sc+' percent'+(sc>=80?', goal met':'')));
     c.addEventListener('click',()=>{haptic('light');daySheet(k)});
+    c.tabIndex=-1;
     heat.appendChild(c);
   });
+  // one tab stop for the whole calendar; arrow keys move between days (see the keydown handler below)
+  const cellsEl=[...heat.children];
+  (cellsEl[hadFocus>=0?hadFocus:cellsEl.length-1]||cellsEl[0]).tabIndex=0;
+  if(hadFocus>=0&&cellsEl[hadFocus])cellsEl[hadFocus].focus({preventScroll:true});
 
   // recent days
   const ll=$('logList');ll.innerHTML='';
@@ -333,22 +369,35 @@ function setReadout(vals,keys,idx,mi){
   b.textContent=fmt(vals[i])+' '+mi.unit;sp.textContent=(idx==null?'Latest · ':'')+nice(keys[i])+(mi.note?' · '+mi.note(keys[i]):'');
   el.innerHTML='';el.appendChild(b);el.appendChild(sp);
 }
+/* Chart look: colours are read fresh from the CSS tokens every time a chart is drawn (so a theme change shows up), and the font follows the root font size (large text). */
+function chartLook(){
+  const cs=getComputedStyle(document.documentElement),px=parseFloat(cs.fontSize)||16;
+  return{accent:cs.getPropertyValue('--accent').trim(),muted:cs.getPropertyValue('--label2').trim(),sep:cs.getPropertyValue('--sep').trim(),
+    font:{family:'Inter, system-ui, sans-serif',size:Math.round(px*.6875*10)/10}};
+}
+let chartKey=null;
 function drawChart(){
   if(!window.Chart||activeTab!=='progress'||!Object.keys(days).length)return;
-  const cs=getComputedStyle(document.documentElement);
-  const accent=cs.getPropertyValue('--accent').trim(),muted=cs.getPropertyValue('--label2').trim(),sep=cs.getPropertyValue('--sep').trim();
+  const L=chartLook(),accent=L.accent,muted=L.muted,sep=L.sep;
   const mi=metricInfo(metric),keys=rangeKeys(period);
   const vals=keys.map(k=>days[k]?mi.get(days[k]):null).map(v=>v==null?null:v);
   const have=vals.filter(v=>v!=null);
   setReadout(vals,keys,null,mi);
-  const ds=[{data:vals,borderColor:accent,borderWidth:2.5,tension:.3,spanGaps:true,pointRadius:have.length<=3?4:0,pointHoverRadius:0,pointBackgroundColor:accent,fill:false}];
+  // a marker on every logged day while there are few enough to tell apart; the line is monotone so it never overshoots the data
+  const ds=[{data:vals,borderColor:accent,borderWidth:2.5,tension:0,cubicInterpolationMode:'monotone',spanGaps:true,pointRadius:have.length<=20?3:0,pointHoverRadius:0,pointBackgroundColor:accent,pointBorderColor:accent,fill:false}];
   if(mi.target!=null)ds.push({data:keys.map(()=>mi.target),borderColor:muted,borderDash:[4,4],borderWidth:1,pointRadius:0,pointHoverRadius:0,fill:false,order:2});
-  // accessible summary
+  const lg=$('chartLegend');lg.hidden=mi.target==null;
+  if(mi.target!=null)lg.querySelector('span').textContent='Target '+fmt(mi.target)+(mi.unit?' '+mi.unit:'');
+  // accessible summary (the canvas itself is hidden from assistive tech)
   const summ=have.length<1?mi.name+': no entries in the last '+RANGE_NAME[period]+'.':mi.name+' over the last '+RANGE_NAME[period]+': '+have.length+(have.length===1?' entry':' entries')+
-    (have.length>1?', from '+fmt(have[0])+' to '+fmt(have[have.length-1])+' '+mi.unit:', '+fmt(have[0])+' '+mi.unit)+'; lowest '+fmt(Math.min(...have))+', highest '+fmt(Math.max(...have))+'.';
-  $('chartSummary').textContent=summ;$('chart').setAttribute('aria-label',summ);
+    (have.length>1?', from '+fmt(have[0])+' to '+fmt(have[have.length-1])+' '+mi.unit:', '+fmt(have[0])+' '+mi.unit)+'; lowest '+fmt(Math.min(...have))+', highest '+fmt(Math.max(...have))+'.'+(mi.target!=null?' Target '+fmt(mi.target)+' '+mi.unit+'.':'');
+  $('chartSummary').textContent=summ;
+  // announce only when the metric or the range changed (not while scrubbing, not on every save)
+  const key=metric+'|'+period;
+  if(chartKey!==null&&chartKey!==key)$('chartAnnounce').textContent=summ;
+  chartKey=key;
   if(chart)chart.destroy();
-  const fnt={family:'Inter, system-ui, sans-serif',size:11};
+  const fnt=L.font;
   chart=new Chart($('chart'),{type:'line',data:{labels:keys.map(k=>parse(k).toLocaleDateString(undefined,{day:'numeric',month:'short'})),datasets:ds},
     plugins:[crosshair],
     options:{responsive:true,maintainAspectRatio:false,animation:reduced()?false:{duration:450},
@@ -480,9 +529,10 @@ function showOnboarding(opts){
     pages.forEach(q=>{q.el.style.width=(100/pages.length)+'%'});
     dotsEl.innerHTML=pages.map((_,i)=>'<i'+(i===page?' class="on"':'')+'></i>').join('');
     track.style.transform='translateX(-'+(page*100/pages.length)+'%)';
+    pages.forEach((q,i)=>{if(i===page)q.el.removeAttribute('inert');else q.el.setAttribute('inert','')});   // pages that slid off screen must not take focus or be read
   }
   const art=(el,name)=>{el.querySelector('.onb-art').innerHTML=icon(name);return el};
-  let page=0,permResult=null,reminderSwitch=null,nextBtn=null;
+  let page=0,permResult=null,reminderSwitch=null,nextBtn=null,bgFree=false;
 
   const targetHabits=()=>settings.habits.filter(x=>!x.hidden&&(x.type==='count'||x.type==='duration'||x.type==='steps'));
   function buildTargets(){
@@ -560,7 +610,9 @@ function showOnboarding(opts){
     if(applyReminder){$('remTime').value=root.querySelector('#onbTime')?root.querySelector('#onbTime').value||'21:00':'21:00';$('remOn').checked=true;await setReminder(true)}
     try{await prefSet(ONB_KEY,'1')}catch(e){}
     refreshAll();
-    root.style.opacity='0';root.style.transition='opacity .25s';setTimeout(()=>{root.remove();onb=null},reduced()?20:260);
+    root.style.opacity='0';root.style.transition='opacity .25s';root.setAttribute('inert','');
+    if(!bgFree){bgFree=true;unlockBackground()}
+    setTimeout(()=>{root.remove();onb=null},reduced()?20:260);
   }
   const btn=(label,id,cls,fn)=>{const b=h('<button class="btn'+(cls?' '+cls:'')+'" id="'+id+'"></button>');b.textContent=label;b.addEventListener('click',fn);foot.appendChild(b);return b};
   /* reads the height box. Returns {ok, cm} where cm is null when it was left empty */
@@ -632,7 +684,7 @@ function showOnboarding(opts){
     else finish(false);
   });
   onb={back(){if(page>0)go(page-1);else finish(false)}};
-  document.body.appendChild(root);go(0);
+  document.body.appendChild(root);lockBackground();go(0);
 }
 
 /* ================= tabs, nav bar, native glue ================= */
@@ -669,7 +721,7 @@ function onResume(){
 }
 function onForeground(){onResume();syncOnResume();stepsOnForeground()}
 function initNativeGlue(){
-  try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{syncBars();drawChart()})}catch(e){}
+  try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{syncBars();redrawCharts()})}catch(e){}
   syncBars();
   try{if(Native.Network)Native.Network.addListener('networkStatusChange',s=>{if(s.connected&&!document.hidden)syncSoon(true)})}catch(e){}
   document.addEventListener('visibilitychange',()=>{if(document.hidden)flushSave();else if(!IS_NATIVE)onForeground()});
@@ -688,5 +740,66 @@ function initNativeGlue(){
   LN().addListener('localNotificationActionPerformed',()=>openToday());
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeTopLayer()});
+
+/* ================= accessibility glue: radio groups, calendar, charts ================= */
+/* Radio groups (role=radiogroup > role=radio, with aria-checked): one tab stop, arrow keys move and select. */
+const radiosOf=g=>[...g.querySelectorAll('[role=radio]')].filter(r=>!r.disabled&&r.closest('[role=radiogroup]')===g);
+function syncRoving(g){
+  const rs=radiosOf(g);if(!rs.length)return;
+  const on=rs.find(r=>r.getAttribute('aria-checked')==='true')||rs[0];
+  rs.forEach(r=>{r.tabIndex=r===on?0:-1});
+}
+(function(){
+  const todo=new Set();let raf=0;
+  const queue=g=>{if(g){todo.add(g);if(!raf)raf=requestAnimationFrame(()=>{raf=0;todo.forEach(x=>{if(x.isConnected)syncRoving(x)});todo.clear()})}};
+  new MutationObserver(ms=>{ms.forEach(m=>{
+    if(m.type==='attributes'){queue(m.target.closest&&m.target.closest('[role=radiogroup]'));return}
+    queue(m.target.closest&&m.target.closest('[role=radiogroup]'));
+    m.addedNodes.forEach(n=>{if(n.nodeType!==1)return;if(n.matches('[role=radiogroup]'))queue(n);n.querySelectorAll('[role=radiogroup]').forEach(queue)});
+  })}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['aria-checked','disabled']});
+  document.querySelectorAll('[role=radiogroup]').forEach(queue);
+})();
+document.addEventListener('keydown',e=>{
+  const r=e.target.closest&&e.target.closest('[role=radio]');if(!r||e.altKey||e.ctrlKey||e.metaKey)return;
+  const g=r.closest('[role=radiogroup]');if(!g)return;
+  const d=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
+  if(!d)return;
+  const rs=radiosOf(g),i=rs.indexOf(r);if(i<0||rs.length<2)return;
+  e.preventDefault();
+  const next=rs[(i+d+rs.length)%rs.length],anchor=g.id||(g.closest('[id]')||{}).id;
+  next.focus();next.click();
+  // choosing a value may redraw the group (Settings does): put focus back on the same position
+  [80,300,700].forEach(ms=>setTimeout(()=>{
+    if(document.activeElement&&document.activeElement!==document.body)return;
+    const A=anchor&&document.getElementById(anchor),G=A&&(A.matches('[role=radiogroup]')?A:A.querySelector('[role=radiogroup]'));
+    const t=G&&radiosOf(G)[(i+d+rs.length)%rs.length];if(t)t.focus({preventScroll:true});
+  },ms));
+});
+/* The calendar is one tab stop; arrows move between days (7 per row). */
+$('heat').addEventListener('keydown',e=>{
+  const c=e.target.closest&&e.target.closest('.hc');if(!c)return;
+  const cs=[...$('heat').children],i=cs.indexOf(c);
+  const n={ArrowRight:i+1,ArrowLeft:i-1,ArrowDown:i+7,ArrowUp:i-7,Home:i-i%7,End:Math.min(cs.length-1,i-i%7+6)}[e.key];
+  if(n==null||n<0||n>=cs.length)return;
+  e.preventDefault();c.tabIndex=-1;cs[n].tabIndex=0;cs[n].focus();
+});
+/* A lone last card in an odd run of cards takes the full row on phones (the CSS only applies it where there are two columns). */
+function markSolo(){
+  document.querySelectorAll('#sections .tsec-body').forEach(b=>{
+    let run=[];const flush=()=>{if(run.length%2===1)run[run.length-1].classList.add('solo');run=[]};
+    [...b.children].forEach(c=>{c.classList.remove('solo');if(c.classList.contains('hcard'))run.push(c);else flush()});
+    flush();
+  });
+}
+(function(){let raf=0;new MutationObserver(()=>{if(!raf)raf=requestAnimationFrame(()=>{raf=0;markSolo()})}).observe($('sections'),{childList:true,subtree:true})})();
+/* Every chart reads its colours from the CSS tokens when drawn, so a theme change just redraws them. */
+function redrawCharts(){
+  drawChart();drawHoursChart();
+  if(typeof redrawBmiChart==='function')redrawBmiChart();
+  try{
+    const cv=document.getElementById('chartStepsSheet'),c=cv&&window.Chart&&Chart.getChart(cv);
+    if(c){const L=chartLook();c.data.datasets[0].backgroundColor=L.accent;c.options.scales.x.ticks.color=L.muted;c.options.scales.y.ticks.color=L.muted;c.options.scales.y.grid.color=L.sep;c.update('none')}
+  }catch(e){}
+}
 $('replayIntro').addEventListener('click',()=>showOnboarding({mode:'replay'}));
 

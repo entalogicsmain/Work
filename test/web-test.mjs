@@ -323,7 +323,7 @@ const seedDays = (n, scoreAt) => {
   const pg = await newPage(ctx, errs);
   await pg.goto(base); await ready(pg);
   await tab(pg, 'progress'); await pg.waitForTimeout(700);
-  ok((await pg.$$('#seg button')).length === 3 && (await pg.getAttribute('#seg button[data-range="30"]', 'aria-selected')) === 'true', 'segmented control: Week / Month / 3 Months (Month selected)');
+  ok((await pg.$$('#seg button')).length === 3 && (await pg.getAttribute('#seg button[data-range="30"]', 'aria-checked')) === 'true', 'segmented control: Week / Month / 3 Months (Month selected)');
   ok((await pg.$$('.stat')).length === 6, 'six stat tiles (streak, days logged, weight, waist, average steps, average distance)');
   ok(/^−?\+?[\d.]+ kg$|^[+−][\d.]+ kg$/.test(await pg.textContent('#sWeight')), 'weight change tile shows a signed value', await pg.textContent('#sWeight'));
   ok((await pg.$$('#heat .hc')).length === 35, 'Month calendar has 35 squares');
@@ -334,7 +334,7 @@ const seedDays = (n, scoreAt) => {
   await pg.click('#seg button[data-range="30"]');
   await pg.click('.chip:has-text("Weight")'); await pg.waitForTimeout(500);
   ok((await pg.getAttribute('.chip:has-text("Weight")', 'aria-pressed')) === 'true' && /kg/.test(await pg.textContent('#readout')), 'metric chips switch the chart (readout shows kg)');
-  ok(/Weight over the last month: \d+ entries/.test(await pg.textContent('#chartSummary')) && (await pg.getAttribute('#chart', 'aria-label')) === (await pg.textContent('#chartSummary')), 'chart has a text summary for screen readers', await pg.textContent('#chartSummary'));
+  ok(/Weight over the last month: \d+ entries/.test(await pg.textContent('#chartSummary')) && (await pg.getAttribute('#chart', 'aria-hidden')) === 'true', 'chart has a text summary for screen readers (the canvas itself is hidden from them)', await pg.textContent('#chartSummary'));
   await pg.evaluate(() => window.scrollTo(0, 380)); await pg.waitForTimeout(250);
   const cb = await (await pg.$('#chart')).boundingBox();
   await pg.mouse.move(cb.x + cb.width * 0.4, cb.y + cb.height / 2); await pg.waitForTimeout(250);

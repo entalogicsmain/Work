@@ -285,12 +285,12 @@ async function setStepLocation(on,box){
 /* ---------- hourly chart (Progress and the Steps detail sheet) ---------- */
 const HOUR_LABEL=i=>i===0?'12 AM':i===12?'12 PM':i<12?i+' AM':(i-12)+' PM';
 function makeHoursChart(canvas,hourly,when){
-  const cs=getComputedStyle(document.documentElement),accent=cs.getPropertyValue('--accent').trim(),muted=cs.getPropertyValue('--label2').trim(),sep=cs.getPropertyValue('--sep').trim();
+  const L=chartLook(),accent=L.accent,muted=L.muted,sep=L.sep;
   const labels=hourly.map((_,i)=>HOUR_LABEL(i));
   const best=hourly.indexOf(Math.max(...hourly)),total=hourly.reduce((a,b)=>a+b,0);
   const summary='Steps counted by your phone '+(when||'today')+' by hour: '+fmt(total)+' in total. Most active hour: '+labels[best]+' with '+fmt(hourly[best])+' steps.';
-  canvas.setAttribute('aria-label',summary);
-  const fnt={family:'Inter, system-ui, sans-serif',size:11};
+  canvas.removeAttribute('role');canvas.removeAttribute('aria-label');canvas.setAttribute('aria-hidden','true');   // the summary text next to the chart says it
+  const fnt=L.font;
   const chart=new Chart(canvas,{type:'bar',data:{labels,datasets:[{data:hourly,backgroundColor:accent,borderRadius:3,maxBarThickness:14}]},
     options:{responsive:true,maintainAspectRatio:false,animation:reduced()?false:{duration:400},plugins:{legend:{display:false},tooltip:{callbacks:{title:i=>labels[i[0].dataIndex],label:c=>fmt(c.parsed.y)+' steps'}}},
       scales:{x:{grid:{display:false},border:{display:false},ticks:{color:muted,maxRotation:0,autoSkip:false,font:fnt,callback:(v,i)=>i%6===0?labels[i]:''}},y:{grid:{color:sep},border:{display:false},beginAtZero:true,ticks:{color:muted,maxTicksLimit:4,font:fnt}}}}});

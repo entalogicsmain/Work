@@ -16,6 +16,9 @@ function renderSetup(){renderPlan();renderSettings()}
 
 /* ---------- swipe rows (swipe left to remove) and reordering inside a section ---------- */
 function attachSwipe(sw,row,del){
+  // row = the sliding wrapper (it holds the row button and the reorder handle side by side)
+  const delBtn=sw.querySelector('.swipe-del');
+  const setOpen=v=>{open=v;sw.classList.toggle('open',v);if(v){delBtn.removeAttribute('aria-hidden');delBtn.tabIndex=0}else{delBtn.setAttribute('aria-hidden','true');delBtn.tabIndex=-1}};
   let sx=0,sy=0,base=0,locked=false,tracking=false,open=false,suppress=false;
   const W=()=>parseFloat(getComputedStyle(document.documentElement).fontSize)*5.5;
   row.addEventListener('pointerdown',e=>{if(reorderMode||e.target.closest('.handle'))return;tracking=true;locked=false;sx=e.clientX;sy=e.clientY;base=open?-W():0});
@@ -26,27 +29,26 @@ function attachSwipe(sw,row,del){
   });
   const end=e=>{
     if(!tracking)return;tracking=false;
-    if(locked){const fin=base+(e.clientX-sx);open=fin<-W()/2;row.style.transform=open?'translateX(-'+W()+'px)':'';sw.classList.remove('drag');suppress=true;setTimeout(()=>suppress=false,60);if(open)haptic('light')}
+    if(locked){const fin=base+(e.clientX-sx);setOpen(fin<-W()/2);row.style.transform=open?'translateX(-'+W()+'px)':'';sw.classList.remove('drag');suppress=true;setTimeout(()=>suppress=false,60);if(open)haptic('light')}
   };
   row.addEventListener('pointerup',end);row.addEventListener('pointercancel',end);
-  row.addEventListener('click',e=>{if(suppress){e.stopImmediatePropagation();e.preventDefault();return}if(open){e.stopImmediatePropagation();open=false;row.style.transform=''}},true);
+  row.addEventListener('click',e=>{if(suppress){e.stopImmediatePropagation();e.preventDefault();return}if(open){e.stopImmediatePropagation();setOpen(false);row.style.transform=''}},true);
   sw.querySelector('.swipe-del').addEventListener('click',()=>{del()});
 }
 function swipeRow(o){
-  const sw=h('<div class="swipe"><button class="swipe-del" aria-label="Remove"></button><div class="row" role="button" tabindex="0"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="row-val"></span><svg data-ic="chevron-right" class="chev"></svg><span class="handle" role="button"></span></div></div>');
+  const sw=h('<div class="swipe"><button class="swipe-del" aria-label="Remove" aria-hidden="true" tabindex="-1"></button><div class="swipe-slide"><button class="row"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="row-val"></span><svg data-ic="chevron-right" class="chev"></svg></button><button class="handle"></button></div></div>');
   sw.dataset.id=o.id;
   sw.querySelector('.swipe-del').innerHTML=icon('trash-2','sm')+'<span>Remove</span>';
-  const row=sw.querySelector('.row');
+  const slide=sw.querySelector('.swipe-slide'),row=sw.querySelector('.row');
   row.querySelector('.row-ic').innerHTML=icon(o.icon);row.querySelector('.row-label').textContent=o.label;
   const sb=row.querySelector('.row-sub');if(o.sub)sb.textContent=o.sub;else sb.remove();
   const v=row.querySelector('.row-val');if(o.val)v.textContent=o.val;else v.remove();
-  const hd=row.querySelector('.handle');hd.innerHTML=icon('grip-vertical');hd.setAttribute('aria-label','Reorder '+o.label);
+  const hd=slide.querySelector('.handle');hd.innerHTML=icon('grip-vertical');hd.setAttribute('aria-label','Reorder '+o.label);
   if(!o.reorder)hd.remove();
   row.setAttribute('aria-label',o.label+(o.val?', '+o.val:'')+(o.sub?', '+o.sub:'')+'. Tap to edit.');
   row.addEventListener('click',()=>{if(!reorderMode)o.onTap()});
-  row.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!reorderMode){e.preventDefault();o.onTap()}});
   if(o.hidden)sw.classList.add('is-hidden');
-  attachSwipe(sw,row,o.onDelete);
+  attachSwipe(sw,slide,o.onDelete);
   if(o.reorder)attachReorder(sw,hd);
   return sw;
 }
@@ -114,7 +116,7 @@ function renderPlan(){
   settings.sections.forEach(sec=>{
     const hs=settings.habits.filter(x=>x.section===sec.id);
     if(!hs.length)return;
-    const head=h('<div class="group-head plan-sec-head"><span></span></div>');head.querySelector('span').textContent=sec.name;
+    const head=h('<div class="group-head plan-sec-head"><span role="heading" aria-level="2"></span></div>');head.querySelector('span').textContent=sec.name;
     const g=h('<div class="group ic plan-group" data-sec=""></div>');g.dataset.sec=sec.id;g.classList.toggle('reorder',reorderMode);
     hs.forEach(x=>g.appendChild(swipeRow({id:x.id,icon:x.icon,label:x.name,sub:habitSummary(x)+(x.hidden?' · Hidden from Today':''),val:habitVal(x),hidden:x.hidden,reorder:true,onTap:()=>habitFormSheet(x),onDelete:()=>removeHabit(x)})));
     root.appendChild(head);root.appendChild(g);
@@ -176,7 +178,7 @@ function openLibrary(opts){
     Core.LIB_CATEGORIES.forEach(cat=>{
       const items=found.filter(l=>l.category===cat);
       if(!items.length)return;
-      const hd=h('<div class="group-head lib-head"><span></span></div>');hd.querySelector('span').textContent=cat;list.appendChild(hd);
+      const hd=h('<div class="group-head lib-head"><span role="heading" aria-level="2"></span></div>');hd.querySelector('span').textContent=cat;list.appendChild(hd);
       const g=h('<div class="group ic lib-group"></div>');
       items.forEach(l=>{
         const have=Core.libHabitIn(settings,l);

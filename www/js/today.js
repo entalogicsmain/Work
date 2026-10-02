@@ -301,11 +301,13 @@ function sectionEl(sec,items){
   const met=scorable.filter(x=>Core.isMet(x,d)).length;
   const collapsed=isBody&&!editing&&sec.collapsed===true;
   if(isBody){
-    const t=h('<button class="tsec-title-btn tsec-toggle" aria-expanded="true"><span class="tsec-titles"><h2 class="tsec-title"></h2><span class="tsec-sum"></span></span><svg data-ic="chevron-down" class="chev"></svg></button>');
-    t.querySelector('h2').textContent=sec.name;t.querySelector('.tsec-sum').textContent=collapsed?bodySummary():'';
-    t.setAttribute('aria-expanded',String(!collapsed));
-    t.classList.toggle('closed',collapsed);
-    t.addEventListener('click',async()=>{if(editing)return;if(collapsed)delete sec.collapsed;else sec.collapsed=true;haptic('light');await saveSettingsQuiet();renderSections()});
+    // the heading wraps the button (a heading must not sit inside a button); the summary sits under it and describes the button
+    const t=h('<span class="tsec-titles"><h2 class="tsec-title"><button class="tsec-title-btn tsec-toggle" aria-expanded="true" aria-describedby="bodySecSum"><span class="tsec-name"></span><svg data-ic="chevron-down" class="chev"></svg></button></h2><span class="tsec-sum" id="bodySecSum"></span></span>');
+    const tb=t.querySelector('.tsec-toggle');
+    tb.querySelector('.tsec-name').textContent=sec.name;t.querySelector('.tsec-sum').textContent=collapsed?bodySummary():'';
+    tb.setAttribute('aria-expanded',String(!collapsed));
+    tb.classList.toggle('closed',collapsed);
+    tb.addEventListener('click',async()=>{if(editing)return;if(collapsed)delete sec.collapsed;else sec.collapsed=true;haptic('light');await saveSettingsQuiet();renderSections()});
     head.appendChild(t);hydrate(head);
   }else{
     const t=h('<span class="tsec-titles"><h2 class="tsec-title"></h2></span>');t.querySelector('h2').textContent=sec.name;head.appendChild(t);
