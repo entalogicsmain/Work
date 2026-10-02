@@ -21,6 +21,7 @@
     "test:permissions": "node test/permissions-test.mjs",
     "test:refresh": "node test/refresh-test.mjs",
     "test:core": "node test/core-test.mjs",
+    "test:dates": "node test/dates-test.mjs",
     "test:structure": "node test/structure-test.mjs"
   },
   "dependencies": {

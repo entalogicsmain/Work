@@ -30,7 +30,7 @@ function contextualNudges(){
   if(m.hTotal>0&&m.hMet===m.hTotal)out.push({text:'Strong day. Your comeback is on track.',icon:'trophy',top:true});
   const sx=stepsHabit();
   if(sx&&stepsAuto()){
-    const v=Number((d&&d.vals&&d.vals.steps)||0);
+    const v=Number(Core.hv(sx,d)||0);
     if(v<sx.target)out.push({text:fmt(sx.target-v)+' steps to today\'s goal',icon:'footprints'});
   }
   settings.habits.filter(x=>x.id!=='steps'&&x.target>0&&!(d&&d.vals&&Number(d.vals[x.id])>0)).forEach(x=>out.push({text:x.name+' not logged yet today',icon:'circle-plus'}));

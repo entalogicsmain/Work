@@ -27,6 +27,7 @@ console.log('Dates');
   eq(C.daysLeftInWeek(SUN), 1, 'Sunday has 1 day left');
   eq(C.addDays('2026-12-31', 1), '2027-01-01', 'adding days crosses the year');
   eq(C.dow(SUN), 0, 'Sunday is 0');
+  eq([C.daysBetween(MON, SUN), C.daysBetween(SUN, MON), C.daysBetween('2026-12-31', '2027-01-01'), C.daysBetween(MON, MON)], [6, -6, 1, 0], 'whole days between two dates');
 }
 
 console.log('Migration from the current structure');
@@ -170,6 +171,155 @@ console.log('Scores and streaks count only due habits');
   eq(C.currentStreak(S([H('push')]), { [MON]: day(MON, { push: 10 }) }, WED), 0, 'a missed day with a due habit ends it');
   eq(C.bestStreak(st, { [MON]: day(MON, { push: 10, mwf: 10 }), [TUE]: day(TUE, { push: 10 }), [WED]: day(WED, { push: 0, mwf: 0 }), [THU]: day(THU, { push: 10 }) }, THU), 2, 'the best streak is the longest run');
   eq(C.currentStreak(st, {}, FRI), 0, 'no entries, no streak');
+}
+
+console.log('The streak never drops during an open day');
+{
+  const st = S([H('push', { target: 10 }), H('pull', { target: 10 })]);
+  const full = k => day(k, { push: 10, pull: 10 });
+  let days = { [MON]: full(MON), [TUE]: full(TUE), [WED]: full(WED) };
+  eq(C.currentStreak(st, days, THU), 3, 'today not started: the streak is still 3');
+  days[THU] = day(THU, { push: 3 });          // 15% so far
+  eq(C.currentStreak(st, days, THU), 3, 'today started but under 50%: the streak stays 3 (it used to read 0)');
+  eq(C.bestStreak(st, days, THU), 3, 'and the best streak is still 3');
+  days[THU] = day(THU, { push: 10 });         // 50%
+  eq(C.currentStreak(st, days, THU), 4, 'today at 50%: it counts, the streak is 4');
+  days[THU] = day(THU, { push: 10, pull: 10 });
+  eq(C.currentStreak(st, days, THU), 4, 'today complete: still 4');
+  eq(C.bestStreak(st, days, THU), 4, 'best is 4');
+  // a really broken streak stays broken
+  days = { [MON]: full(MON), [TUE]: day(TUE, { push: 1 }), [WED]: full(WED), [THU]: day(THU, { push: 2 }) };
+  eq(C.currentStreak(st, days, THU), 1, 'yesterday good, the day before missed, today open: 1');
+  eq(C.currentStreak(st, days, FRI), 0, 'a day after a low day (Thu under 50%) is not a streak');
+  // yesterday missed and today open: broken, 0
+  days = { [MON]: full(MON), [TUE]: full(TUE), [WED]: day(WED, { push: 2 }), [THU]: day(THU, { push: 1 }) };
+  eq([C.currentStreak(st, days, THU), C.bestStreak(st, days, THU)], [0, 2], 'yesterday under 50% with today open: current 0, best 2');
+  // rest days
+  const rest = S([H('mwf', { target: 10, schedule: { kind: 'days', days: [1, 3, 5] } })]);
+  days = { [MON]: day(MON, { mwf: 10 }), [WED]: day(WED, { mwf: 10 }) };
+  eq(C.currentStreak(rest, days, THU), 2, 'a rest day today does not drop it');
+  days[FRI] = day(FRI, { mwf: 2 });
+  eq(C.currentStreak(rest, days, FRI), 2, 'a due-but-open Friday does not drop it either');
+  eq(C.streakStatus(rest, days, FRI), { current: 2, best: 2, todayScore: 20, todayRecord: true, todayKept: false, open: true }, 'streakStatus says today is still open');
+  eq(C.streakStatus(rest, days, THU).open, false, 'on a rest day nothing is open');
+}
+
+console.log('Blank day records are not logged days');
+{
+  const st = S([H('push', { target: 10 })]);
+  const blank = k => day(k);
+  ok(!C.hasRecord(blank(MON)) && !C.hasRecord(null) && !C.hasRecord(day(MON, { push: 0 }, { r: false }, { note: '  ' })), 'an empty record, null, zeros, unticked rules and a blank note are not a record');
+  ok(C.hasRecord(day(MON, { push: 1 })) && C.hasRecord(day(MON, {}, { r: true })) && C.hasRecord(day(MON, {}, {}, { weight: 80 })) && C.hasRecord(day(MON, {}, {}, { waist: 90 })) && C.hasRecord(day(MON, {}, {}, { note: 'hi' })), 'values, ticks, weight, waist and a note are');
+  const days = { [MON]: day(MON, { push: 10 }), [TUE]: day(TUE, { push: 10 }), [WED]: day(WED, { push: 10 }), [THU]: blank(THU) };
+  eq(C.currentStreak(st, days, THU), 3, 'a blank record for today (undo of the first edit) does not break the streak');
+  eq(C.loggedKeys(days), [MON, TUE, WED], 'loggedKeys leaves the blank day out');
+  eq(C.loggedKeys({}), [], 'no days, no logged keys');
+  eq(C.currentStreak(st, { [MON]: blank(MON), [TUE]: blank(TUE) }, TUE), 0, 'only blank records: no streak');
+  eq(C.bestStreak(st, { [MON]: blank(MON) }, MON), 0, 'only blank records: no best streak');
+  eq(C.dayScore(st, days, THU), 0, 'a blank day scores 0 like a missing one');
+}
+
+console.log('Days kept');
+{
+  const st = S([H('push', { target: 10 })]);
+  const days = {};
+  // 10 days, 2026-09-21 .. 2026-09-30: 8 kept, 2 missed
+  const keys = []; for (let i = 0; i < 10; i++) keys.push(C.addDays('2026-09-21', i));
+  keys.forEach((k, i) => { days[k] = day(k, { push: i === 3 || i === 6 ? 2 : 10 }); });
+  eq(C.daysKept(st, days, '2026-09-30', 35), { kept: 8, due: 10 }, '8 of 10 days kept (the window starts at the first log)');
+  eq(C.daysKept(st, days, '2026-09-30', 5), { kept: 4, due: 5 }, 'a 5 day window');
+  days['2026-10-01'] = day('2026-10-01', { push: 2 });
+  eq(C.daysKept(st, days, '2026-10-01', 35), { kept: 8, due: 10 }, 'an open (under 50%) today is not counted as missed');
+  days['2026-10-01'] = day('2026-10-01', { push: 9 });
+  eq(C.daysKept(st, days, '2026-10-01', 35), { kept: 9, due: 11 }, 'a kept today counts');
+  const rest = S([H('mwf', { target: 10, schedule: { kind: 'days', days: [1, 3, 5] } })]);
+  eq(C.daysKept(rest, { [MON]: day(MON, { mwf: 10 }), [WED]: day(WED, { mwf: 10 }) }, THU, 35), { kept: 2, due: 2 }, 'rest days are not due days');
+  eq(C.daysKept(st, {}, FRI, 35), { kept: 0, due: 0 }, 'no data, nothing due');
+  eq(C.daysKept(st, { [MON]: day(MON) }, FRI, 35), { kept: 0, due: 0 }, 'blank records do not start the window');
+}
+
+console.log('Streak line text');
+{
+  const st = S([H('push', { target: 10 }), H('pull', { target: 10 })]);
+  const full = k => day(k, { push: 10, pull: 10 });
+  const line = (days, today) => C.streakLine(st, days, today);
+  eq(line({}, FRI), 'Log a day to start a streak', 'a new user is invited, never scolded');
+  let days = { [WED]: full(WED), [THU]: full(THU) };
+  eq(line(days, FRI), '2-day streak · today still open', 'a running streak with today untouched');
+  days[FRI] = day(FRI, { push: 3 });
+  eq(line(days, FRI), '2-day streak · today still open', 'and with today under 50%');
+  days[FRI] = day(FRI, { push: 10 });
+  eq(line(days, FRI), '3-day streak', 'once today reaches 50% it is just the streak');
+  days = { [MON]: full(MON), [WED]: day(WED, { push: 1 }) };
+  eq(line(days, FRI), 'Start again today', 'broken and nothing logged: start again today');
+  days[FRI] = day(FRI, { push: 3 });
+  const t = line(days, FRI);
+  ok(!/Start again/.test(t) && /50%/.test(t), 'broken but today has activity: never "Start again today"', t);
+  days[FRI] = day(FRI);
+  eq(line(days, FRI), 'Start again today', 'a blank record for today counts as nothing logged');
+  eq(line({ [MON]: day(MON, { push: 10, pull: 10 }) }, FRI), 'Start again today', 'a streak that ended days ago is broken');
+}
+
+console.log('Streak caching');
+{
+  const st = S([H('push', { target: 10 })]);
+  const days = { [MON]: day(MON, { push: 10 }), [TUE]: day(TUE, { push: 10 }) };
+  eq(C.currentStreak(st, days, TUE), 2, 'streak is 2');
+  eq(C.currentStreak(st, days, TUE), 2, 'asking again gives the same answer');
+  days[WED] = day(WED, { push: 10 });
+  eq(C.currentStreak(st, days, WED), 3, 'a new day is seen without any invalidation');
+  days[WED].vals.push = 1;
+  eq(C.currentStreak(st, days, WED), 2, 'an in-place edit is seen');
+  days[TUE] = day(TUE, { push: 1 });
+  eq(C.currentStreak(st, days, WED), 0, 'an edit that keeps the same updatedAt is seen too');
+  days[TUE].vals.push = 10; days[WED].vals.push = 10;
+  C.invalidate();
+  eq([C.currentStreak(st, days, WED), C.bestStreak(st, days, WED)], [3, 3], 'invalidate() forces a recount');
+  st.habits[0].target = 30;
+  eq(C.currentStreak(st, days, WED), 0, 'changing a target changes the streak (settings are part of the cache key)');
+  st.habits[0].target = 10;
+  eq(C.currentStreak(st, days, WED), 3, 'and changing it back');
+  const other = { [MON]: day(MON, { push: 10 }) };
+  eq(C.currentStreak(st, other, MON), 1, 'a different days object is never confused with the cached one');
+  // many days stay fast and correct
+  const big = {}; let k = '2020-01-01'; for (let i = 0; i < 2000; i++) { big[k] = day(k, { push: 10 }); k = C.addDays(k, 1); }
+  const last = C.addDays('2020-01-01', 1999), t0 = Date.now();
+  const bs = S([H('push', { target: 10 }), H('e', { target: 10, schedule: { kind: 'everyN', weeks: 6 } })]);
+  const r = [C.currentStreak(bs, big, last), C.bestStreak(bs, big, last), C.currentStreak(bs, big, last), C.bestStreak(bs, big, last)];
+  eq(r, [2000, 2000, 2000, 2000], '2000 days with an every-6-weeks habit counts right');
+  ok(Date.now() - t0 < 3000, 'and it does not take long', Date.now() - t0);
+}
+
+console.log('Steps is always the habit with id "steps"');
+{
+  const mig = x => C.migrateSettings(x);
+  eq(mig({ habits: [{ id: 'walksteps', name: 'Walk steps', unit: 'steps', target: 6000 }], rules: [] }).settings.habits.find(h => h.id === 'walksteps').type, 'count', 'an old habit that only has the unit "steps" becomes a Count, not the Steps habit');
+  eq(mig(JSON.parse(JSON.stringify(C.LEGACY_DEFAULT))).settings.habits.find(h => h.id === 'steps').type, 'steps', 'the habit with id "steps" is the Steps habit');
+  const v2 = habits => ({ v: 2, habits, sections: C.DEFAULT_SECTIONS.map(s => Object.assign({}, s)) });
+  // another id with type steps is renamed, day data follows
+  let r = mig(v2([H('mysteps', { type: 'steps', unit: 'steps', target: 9000, name: 'My steps' }), H('push')]));
+  const hs = r.settings.habits.filter(h => h.type === 'steps');
+  ok(hs.length === 1 && hs[0].id === 'steps' && hs[0].name === 'My steps' && hs[0].target === 9000, 'a steps-type habit with another id is renamed to "steps"', r.settings.habits.map(h => h.id));
+  const dd = { [MON]: day(MON, { mysteps: 5000, push: 3 }), [TUE]: day(TUE, { push: 1 }) };
+  ok(C.applyIdMap(dd, r.idMap) === 1 && dd[MON].vals.steps === 5000 && !('mysteps' in dd[MON].vals) && dd[MON].vals.push === 3 && dd[TUE].vals.push === 1, 'the day data follows the rename through the id map', dd);
+  eq(C.applyIdMap(dd, r.idMap), 0, 'applying it twice does nothing more');
+  eq(mig(JSON.parse(JSON.stringify(r.settings))).settings, r.settings, 'migrating again changes nothing');
+  eq(Object.keys(r.idMap), [], 'the rule id map is not polluted by habit renames');
+  // two steps habits: the one with id "steps" wins, the other becomes a Count
+  r = mig(v2([H('a', { type: 'steps', unit: 'steps', target: 1000 }), H('steps', { type: 'steps', unit: 'steps', target: 8000 })]));
+  eq(r.settings.habits.filter(h => h.type === 'steps').map(h => h.id), ['steps'], 'only one Steps habit survives');
+  eq(r.settings.habits.find(h => h.id === 'a').type, 'count', 'the extra one is a Count');
+  // another habit already owns the id "steps": the steps-type one cannot take it, so it becomes a Count
+  r = mig(v2([H('steps', { type: 'count', unit: 'times', target: 3 }), H('x', { type: 'steps', unit: 'steps', target: 1000 })]));
+  eq([r.settings.habits.filter(h => h.type === 'steps').length, r.settings.habits.find(h => h.id === 'steps').type, r.settings.habits.find(h => h.id === 'x').type], [0, 'count', 'count'], 'no rename onto an id that is taken');
+  // a rule with the same id as the Steps habit keeps its ticks
+  r = mig({ habits: [{ id: 'steps', name: 'Steps', unit: 'steps', target: 8000 }], rules: [{ id: 'steps', name: 'Step rule' }] });
+  ok(r.settings.habits.filter(h => h.type === 'steps').length === 1 && r.idMap.steps && r.settings.habits.some(h => h.id === r.idMap.steps && h.type === 'yesno'), 'a rule called "steps" is renamed instead of the Steps habit');
+  const lib = C.libEntry('steps');
+  ok(lib.id === 'steps' && lib.type === 'steps', 'the library entry keeps id "steps"');
+  eq(C.addFromLibrary(C.defaultSettings(), lib).id, 'steps', 'adding it from the library gives id "steps"');
+  const ds = C.defaultSettings(); ds.habits = ds.habits.filter(h => h.id !== 'steps');
+  eq(C.addFromLibrary(ds, lib).id, 'steps', 'and again after it was removed');
 }
 
 console.log('Smart target suggestions');

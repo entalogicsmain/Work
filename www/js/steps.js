@@ -15,7 +15,6 @@ const kmFor=n=>Math.round(n*strideCm()/100000*100)/100;
 const fmtKm=k=>(Math.round(k*10)/10).toLocaleString(undefined,{maximumFractionDigits:1})+'\u00A0km'; // non-breaking so "4 km" never splits across lines
 const stepsEnabledDay=()=>meta.steps.enabledAt?ymd(new Date(meta.steps.enabledAt)):null;
 const newStepsMeta=()=>({source:'auto',counted:0,distance_km:0,filtered:0,hourly:new Array(24).fill(0)});
-const blankDayFor=k=>({vals:{},rules:{},weight:null,waist:null,note:'',date:k,updatedAt:0});
 let stepStatus=null;      // last Steps.getStatus()
 let stepHealthKey='off';
 const saveStepMeta=()=>store.saveMeta();
@@ -51,7 +50,7 @@ function applyNativeDays(res){
     const d=days[k];
     if(!d&&steps<=0&&filtered<=0)return;
     const before=d?JSON.stringify([d.vals&&d.vals.steps,d.steps_meta]):'';
-    const nd=d?clone(d):blankDayFor(k);
+    const nd=d?clone(d):Core.blankDay(k);
     let m=nd.steps_meta;
     if(!m){
       m=newStepsMeta();
@@ -65,7 +64,7 @@ function applyNativeDays(res){
     nd.steps_meta=m;
     if(JSON.stringify([nd.vals.steps,nd.steps_meta])!==before){nd.updatedAt=Date.now();days[k]=nd;changed.push(k)}
   });
-  if(changed.length){autoPersist(changed);return true}
+  if(changed.length){Core.invalidate();autoPersist(changed);return true}
   return false;
 }
 
@@ -110,7 +109,7 @@ function refreshAfterStepsChange(){renderToday(true);if(activeTab==='progress')r
 function startStepsLoop(){
   stopStepsLoop();
   if(!stepsAuto()||document.hidden)return;
-  stepsLoop=setInterval(()=>{if(!document.hidden)refreshSteps()},60_000);
+  stepsLoop=setInterval(()=>{if(!document.hidden){onResume();refreshSteps()}},60_000);   // midnight rollover first, so the new day's steps land on the new day
 }
 function stopStepsLoop(){if(stepsLoop){clearInterval(stepsLoop);stepsLoop=null}}
 function stepsOnForeground(){if(stepsAuto()){startStepsLoop();refreshSteps()}}

@@ -5,10 +5,7 @@
 function dayMetrics(d,k){
   k=k||(d&&d.date)||current;
   const all=d&&days[k]!==d?Object.assign({},days,{[k]:d}):days;
-  const parts=Core.dayParts(settings,all,k);
-  const tg=parts.filter(p=>p.h.type!=='yesno'),rl=parts.filter(p=>p.h.type==='yesno');
-  const score=parts.length?Math.round(parts.reduce((a,p)=>a+p.frac,0)/parts.length*100):0;
-  return{score,hMet:tg.filter(p=>p.met).length,hTotal:tg.length,rKept:rl.filter(p=>p.met).length,rTotal:rl.length,full:parts.length>0&&parts.every(p=>p.met)};
+  return Core.dayMetrics(settings,all,k);
 }
 const streak=()=>Core.currentStreak(settings,days,todayStr());
 const bestStreak=()=>Core.bestStreak(settings,days,todayStr());
@@ -23,7 +20,7 @@ function dayTitle(k){
 }
 function relLabel(k){
   const t=todayStr();if(k===t)return'Today';
-  const y=ymd(new Date(Date.now()-864e5));if(k===y)return'Yesterday';
+  if(k===Core.addDays(t,-1))return'Yesterday';
   return nice(k);
 }
 const habitById=id=>settings.habits.find(x=>x.id===id);
@@ -50,11 +47,11 @@ const lastBar={};                  // last drawn bar width per habit, so a chang
 
 /* ---------- Today header: title, ring, chips, hint ---------- */
 function renderToday(inPlace){
-  const d=days[current],isToday=current===todayStr(),m=dayMetrics(d,current);
+  const d=days[current],isToday=current===todayStr(),m=dayMetrics(d,current),logged=Core.hasRecord(d);
   const tt=dayTitle(current);
   $('todayTitle').textContent=tt.h1;
   const cd=comebackDay(current);
-  $('todaySub').textContent=cd>0?'Day '+cd+' of your comeback'+(isToday?'':' · '+tt.weekday):tt.weekday+(d?'':' · Not logged');
+  $('todaySub').textContent=cd>0?'Day '+cd+' of your comeback'+(isToday?'':' · '+tt.weekday):tt.weekday+(logged?'':' · Not logged');
   $('dayLabelText').textContent=relLabel(current);
   $('nextDay').disabled=current>=todayStr();
   if(activeTab==='today')$('navTitle').textContent=tt.h1;
@@ -71,9 +68,9 @@ function renderToday(inPlace){
   const ct=$('chipTargets');ct.classList.toggle('ok',m.hTotal>0&&m.hMet===m.hTotal);ct.querySelector('span').textContent=m.hMet+' of '+m.hTotal+' targets';
   const cr=$('chipRules');cr.classList.toggle('ok',m.rTotal>0&&m.rKept===m.rTotal);cr.querySelector('span').textContent=m.rKept+' of '+m.rTotal+' rules';
   const st=streak(),best=bestStreak();
-  $('streakLine').querySelector('span').textContent=st>0?st+'-day streak':(best>0?'Start again today':'Log a day to start a streak');
+  $('streakLine').querySelector('span').textContent=Core.streakLine(settings,days,todayStr());
   const restDay=Core.dayParts(settings,days,current).length===0&&settings.habits.some(x=>!x.hidden&&x.type!=='measure');
-  $('todayHint').textContent=!d?(isToday?(restDay?'Nothing is due today. Enjoy the rest.':st===0&&best>0?GENTLE_RESTART:'Nothing logged yet. Tap a target to start.'):'This day was not logged. You can fill it in now.'):(m.full?'Strong day. Your comeback is on track.':'');
+  $('todayHint').textContent=!logged?(isToday?(restDay?'Nothing is due today. Enjoy the rest.':st===0&&best>0?GENTLE_RESTART:'Nothing logged yet. Tap a target to start.'):'This day was not logged. You can fill it in now.'):(m.full?'Strong day. Your comeback is on track.':'');
   $('todayHint').hidden=!$('todayHint').textContent;
 
   renderSuggestion();

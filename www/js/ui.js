@@ -141,40 +141,32 @@ async function flushSave(){
 }
 
 /* ================= day data helpers ================= */
-function blankDay(){return{vals:{},rules:{},weight:null,waist:null,note:'',date:current,updatedAt:0}}
 /* The comeback starts with the first day that has anything logged. */
-function firstLogKey(){
-  let first=null;
-  Object.keys(days).forEach(k=>{
-    const d=days[k];if(!d)return;
-    const any=Object.keys(d.vals||{}).some(i=>Number(d.vals[i])>0)||Object.keys(d.rules||{}).some(i=>d.rules[i])||d.weight!=null||d.waist!=null||(d.note&&d.note.trim());
-    if(any&&(first===null||k<first))first=k;
-  });
-  return first;
-}
+function firstLogKey(){return Core.loggedKeys(days)[0]||null}
 function comebackDay(k){
   const f=firstLogKey()||todayStr();
   if(k<f)return 0;
-  return Math.round((parse(k)-parse(f))/864e5)+1;
+  return Core.daysBetween(f,k)+1;
 }
 const GENTLE_RESTART='Every comeback has restarts. Start again today.';
 /* One change = one auto-saved write, one undo step, and (maybe) a small celebration. */
 function commitDay(label,mutate,quiet,forKey){
+  onResume();      // midnight may have passed while the screen stayed on: roll "today" forward first
   const k=forKey||current;
   const prev=days[k]?clone(days[k]):null;
   const before=dayMetrics(prev,k),streakBefore=streak();
-  const d=prev?clone(prev):Object.assign(blankDay(),{date:k});
+  const d=prev?clone(prev):Core.blankDay(k);
   mutate(d);
   d.date=k;d.updatedAt=Date.now();
-  days[k]=d;
+  days[k]=d;Core.invalidate();
   scheduleSave(k);
   const after=dayMetrics(d,k),streakAfter=streak();
   renderToday(true);renderProgress();
   const undo=()=>{
     if(prev){days[k]=Object.assign(clone(prev),{updatedAt:Date.now()})}
-    else if(signedIn()){days[k]=Object.assign(blankDay(),{date:k,updatedAt:Date.now()})}
+    else if(signedIn()){days[k]=Object.assign(Core.blankDay(k),{updatedAt:Date.now()})}   // an empty record syncs the removal; it is not a logged day (Core.hasRecord)
     else delete days[k];
-    scheduleSave(k);renderToday();renderProgress();haptic('light');toast('Change undone',{icon:'check'});
+    Core.invalidate();scheduleSave(k);renderToday();renderProgress();haptic('light');toast('Change undone',{icon:'check'});
   };
   let msg=label,ic='circle-check',ok=false;
   if(after.full&&!before.full){msg='Strong day. Your comeback is on track.';ic='sparkles';ok=true;celebrate()}
@@ -235,8 +227,8 @@ function numberSheet(o){
   return sheet;
 }
 
-$('prevDay').addEventListener('click',()=>{const d=parse(current);d.setDate(d.getDate()-1);goTo(ymd(d));haptic('light')});
-$('nextDay').addEventListener('click',()=>{const d=parse(current);d.setDate(d.getDate()+1);if(ymd(d)<=todayStr()){goTo(ymd(d));haptic('light')}});
+$('prevDay').addEventListener('click',()=>{goTo(addDays(current,-1));haptic('light')});
+$('nextDay').addEventListener('click',()=>{const n=addDays(current,1);if(n<=todayStr()){goTo(n);haptic('light')}});
 
 /* ================= Progress ================= */
 let period=30,metric='score',chart=null;
@@ -259,25 +251,26 @@ function changeIn(keys,key){
 const signed=(n,u)=>(n>0?'+':n<0?'−':'')+fmt(Math.abs(n))+' '+u;
 function scoreClass(s){return s>=80?'g':s>=40?'o':'r'}
 function renderProgress(){
-  const empty=!Object.keys(days).length;
+  const logged=Core.loggedKeys(days),isLogged=k=>Core.hasRecord(days[k]),empty=!logged.length;
   $('progEmpty').hidden=!empty;$('progBody').hidden=empty;
   document.querySelectorAll('#seg button').forEach(b=>b.setAttribute('aria-selected',String(Number(b.dataset.range)===period)));
   $('progressSub').textContent=empty?'':'Last '+(period===7?'7 days':period===30?'30 days':'3 months');
   if(empty){if(chart){chart.destroy();chart=null}return}
-  const rk=rangeKeys(period),inR=rk.filter(k=>days[k]);
+  const rk=rangeKeys(period),inR=rk.filter(isLogged);
   const st=streak(),best=bestStreak();
   $('sStreak').textContent=st+(st===1?' day':' days');
   $('sDays').textContent=inR.length;$('sDaysSub').textContent='in the last '+RANGE_NAME[period];
   const wc=changeIn(rk,'weight'),wa=changeIn(rk,'waist');
   $('sWeight').textContent=wc==null?'–':signed(wc,wUnit());$('sWeightSub').textContent=wc==null?'Needs 2 entries':'this '+RANGE_NAME[period];
   $('sWaist').textContent=wa==null?'–':signed(wa,lUnit());$('sWaistSub').textContent=wa==null?'Needs 2 entries':'this '+RANGE_NAME[period];
-  const withSteps=rk.filter(k=>days[k]&&days[k].vals&&days[k].vals.steps!=null);
+  const withSteps=rk.filter(k=>days[k]&&days[k].vals&&days[k].vals.steps!=null);   // Steps is always the habit with id "steps" (Core.migrateSettings)
   if(withSteps.length){
     const avg=Math.round(withSteps.reduce((a,k)=>a+days[k].vals.steps,0)/withSteps.length);
     $('sAvgSteps').textContent=fmt(avg);$('sAvgStepsSub').textContent='over '+withSteps.length+(withSteps.length===1?' day':' days');
     $('sAvgDist').textContent=fmtKm(kmFor(avg));$('sAvgDistSub').textContent='a day, at '+fmtHeight(stepHeightCm())+' tall';
   }else{$('sAvgSteps').textContent='–';$('sAvgStepsSub').textContent='No steps logged yet';$('sAvgDist').textContent='–';$('sAvgDistSub').textContent=''}
-  $('streakNote').textContent=st>0?(best>st?'Your best streak was '+best+' days.':'This is your best streak yet.'):(best>0?GENTLE_RESTART+' Your best streak was '+best+' days.':'Log a day to start your streak.');
+  const ss=Core.streakStatus(settings,days,todayStr()),dk=Core.daysKept(settings,days,todayStr(),35);
+  $('streakNote').textContent=(st>0?(best>st?'Your best streak was '+best+' days.':'This is your best streak yet.'):(best>0?(ss.todayRecord&&ss.open?'Reach 50% today to start a new streak.':GENTLE_RESTART)+' Your best streak was '+best+' days.':'Log a day to start your streak.'))+(dk.due>=3?' Kept '+dk.kept+' of '+dk.due+' due days in the last 5 weeks.':'');
 
   // metric chips
   const opts=[['score','Score'],['weight','Weight'],['waist','Waist']].concat(settings.habits.filter(x=>x.type==='count'||x.type==='duration'||x.type==='steps').map(x=>['h:'+x.id,x.name]));
@@ -295,7 +288,7 @@ function renderProgress(){
   const heat=$('heat');heat.innerHTML='';
   const t=todayStr();
   rangeKeys(cells).forEach(k=>{
-    const sc=days[k]?scoreOf(days[k]):null;
+    const sc=isLogged(k)?scoreOf(days[k]):null;
     const c=h('<button class="hc"><i></i></button>');
     c.querySelector('i').textContent=parse(k).getDate();
     if(sc!=null)c.classList.add(scoreClass(sc));if(k===t)c.classList.add('today');
@@ -306,7 +299,7 @@ function renderProgress(){
 
   // recent days
   const ll=$('logList');ll.innerHTML='';
-  Object.keys(days).sort().slice(-10).reverse().forEach(k=>{
+  logged.slice(-10).reverse().forEach(k=>{
     const sc=scoreOf(days[k]),d=days[k];
     const row=h('<button class="row"><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="pill"></span><svg data-ic="chevron-right" class="chev"></svg></button>');
     row.querySelector('.row-label').textContent=nice(k);
@@ -334,11 +327,11 @@ function setReadout(vals,keys,idx,mi){
   el.innerHTML='';el.appendChild(b);el.appendChild(sp);
 }
 function drawChart(){
-  if(!window.Chart||activeTab!=='progress'||!Object.keys(days).length)return;
+  if(!window.Chart||activeTab!=='progress'||!Core.loggedKeys(days).length)return;
   const cs=getComputedStyle(document.documentElement);
   const accent=cs.getPropertyValue('--accent').trim(),muted=cs.getPropertyValue('--label2').trim(),sep=cs.getPropertyValue('--sep').trim();
   const mi=metricInfo(metric),keys=rangeKeys(period);
-  const vals=keys.map(k=>days[k]?mi.get(days[k]):null).map(v=>v==null?null:v);
+  const vals=keys.map(k=>Core.hasRecord(days[k])?mi.get(days[k]):null).map(v=>v==null?null:v);
   const have=vals.filter(v=>v!=null);
   setReadout(vals,keys,null,mi);
   const ds=[{data:vals,borderColor:accent,borderWidth:2.5,tension:.3,spanGaps:true,pointRadius:have.length<=3?4:0,pointHoverRadius:0,pointBackgroundColor:accent,fill:false}];
@@ -378,7 +371,7 @@ function drawHoursChart(){
 }
 
 function daySheet(k){
-  const d=days[k],root=h('<div></div>');
+  const d=Core.hasRecord(days[k])?days[k]:null,root=h('<div></div>');
   const sc=d?scoreOf(d):null;
   if(!d){
     root.appendChild(h('<div class="empty"><svg data-ic="calendar"></svg><p>Not logged. Start again whenever you are ready.</p></div>'));
@@ -661,12 +654,16 @@ window.addEventListener('scroll',updateNav,{passive:true});
 function openToday(){closeAllLayers();showTab('today');if(current!==todayStr()){current=todayStr();renderToday()}}
 function closeAllLayers(){while(layers.length)layers[layers.length-1].close('cancel')}
 let lastToday=null;
+/** Has the calendar day changed since the screen last looked? Then "today" moves on (and the screen with it, if it was showing today).
+    Called when the app comes back, every minute while it is open (midnight can pass with the screen on), and before every change. */
 function onResume(){
-  const t=todayStr();if(t===lastToday)return;
+  const t=todayStr();if(t===lastToday)return false;
   const wasToday=current===lastToday;lastToday=t;
-  if(wasToday)current=t;
+  if(wasToday){current=t;expandedDone.clear()}
   renderToday();renderProgress();
+  return true;
 }
+setInterval(()=>{if(!document.hidden)onResume()},60_000);
 function onForeground(){onResume();syncOnResume();stepsOnForeground()}
 function initNativeGlue(){
   try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{syncBars();drawChart()})}catch(e){}

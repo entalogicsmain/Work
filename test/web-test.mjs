@@ -398,7 +398,7 @@ console.log('Positive reinforcement');
   await setHabit(p4, 2, 30); await p4.waitForTimeout(150);
   ok(/Brisk walk goal hit/.test(await p4.textContent('#toastMsg')), 'reaching a target says "<item> goal hit"', await p4.textContent('#toastMsg'));
   { const html4 = (await p4.content()).replace(/<script[\s\S]*?<\/script>/g, ''); ok(!/\bmiss(ed|ing)?\b|fail|bad|lazy|shame/i.test(html4), 'no guilt language anywhere in the page', (() => { const i = html4.search(/\bmiss(ed|ing)?\b|fail|bad|lazy|shame/i); return i < 0 ? '' : html4.slice(Math.max(0, i - 60), i + 60); })()); }
-  ok(/Not logged|Start again|Log a day to start/.test(await p4.textContent('#streakLine')), 'neutral wording for no streak', await p4.textContent('#streakLine'));
+  ok(/Not logged|Start again|Log a day to start|Reach 50% today/.test(await p4.textContent('#streakLine')), 'neutral wording for no streak', await p4.textContent('#streakLine'));
   await ctx4.close();
   ok(errs.length === 0, 'no JS errors (celebrations)', errs);
 }

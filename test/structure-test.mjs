@@ -118,7 +118,7 @@ console.log('Schedules');
   const sc = await pg.evaluate(([a]) => scoreOf(days[a]), [k1]);
   const mondayYesterday = dows[0] === 1;
   ok(sc === (mondayYesterday ? Math.round(2 / 3 * 100) : 100), 'a habit that is not due that day does not pull the score down', [sc, dows]);
-  ok(/^\d+-day streak/.test(await pg.textContent('#streakLine')) || /Log a day|Start again/.test(await pg.textContent('#streakLine')), 'streak line renders');
+  ok(/^\d+-day streak/.test(await pg.textContent('#streakLine')) || /Log a day|Start again|Reach 50%/.test(await pg.textContent('#streakLine')), 'streak line renders');
   ok(await pg.evaluate(() => streak()) >= 2, 'the streak counts the days that were done');
   await ctx.close();
 }
@@ -546,6 +546,74 @@ console.log('12-hour clock');
   ok((await getTime(pg, '#remTime')) === '12:30'.replace('12', '15'), 'picking 3 with PM stores 15:30');
   ok(/\b(am|pm)\b/i.test(await pg.textContent('#lastBackup')) || /never/.test(await pg.textContent('#lastBackup')), 'times elsewhere carry AM/PM');
   ok(errs.length === 0, 'no JS errors (12-hour)', errs);
+  await ctx.close();
+}
+
+/* ================= the streak during an open day, blank records, the Steps habit id ================= */
+console.log('Streak line and blank records');
+{
+  const done = k => day(k, { pushups: 30, pullups: 5, squats: 30, plank: 60, walk: 30, water: 2.5, sleep: 7 }, { nofried: true, nosugar: true, nomaida: true, nolate: true });
+  const base_ = { [daysAgo(2)]: done(daysAgo(2)), [daysAgo(1)]: done(daysAgo(1)) };
+  const data = days => ({ version: 2, settings: Core.defaultSettings(), days });
+  // today untouched
+  let { ctx, pg, errs } = await open({ data: data(base_) });
+  ok(/^2-day streak · today still open$/.test(await txt(pg, '#streakLine')), 'a running streak with today untouched says "today still open"', await txt(pg, '#streakLine'));
+  // start today: a little activity must not reset the streak
+  await pg.click(`${cardSel('pushups')} .cbtn.plus`); await pg.click(`${cardSel('pushups')} .cbtn.plus`);
+  ok(/^2-day streak · today still open$/.test(await txt(pg, '#streakLine')), 'a little activity today keeps the streak (it used to read "Start again today")', await txt(pg, '#streakLine'));
+  ok(!/Start again/.test(await txt(pg, '#todayHint')), 'and the hint does not say start again');
+  ok(await pg.evaluate(() => streak()) === 2, 'streak() is 2 while today is open');
+  // reaching 50% makes today count
+  for (const id of ['pullups', 'squats', 'plank', 'walk', 'water', 'sleep']) { await pg.evaluate(i => { const x = habitById(i); commitDay('x', d => { d.vals[i] = x.target }, true); }, id); }
+  ok(/^3-day streak$/.test(await txt(pg, '#streakLine')), 'once today is above 50% it counts: "3-day streak"', await txt(pg, '#streakLine'));
+  await tab(pg, 'progress');
+  ok(/3 days/.test(await pg.textContent('#sStreak')) && /Kept \d+ of \d+ due days in the last 5 weeks/.test(await pg.textContent('#streakNote')), 'Progress shows the streak and "kept X of Y due days"', await pg.textContent('#streakNote'));
+  ok(errs.length === 0, 'no JS errors (open-day streak)', errs);
+  await ctx.close();
+}
+{
+  // a streak that really broke, with a little activity today, is not told to "start again"
+  const done = k => day(k, { pushups: 30, pullups: 5, squats: 30, plank: 60, walk: 30, water: 2.5, sleep: 7 }, { nofried: true, nosugar: true, nomaida: true, nolate: true });
+  const days = { [daysAgo(4)]: done(daysAgo(4)), [daysAgo(3)]: done(daysAgo(3)), [daysAgo(1)]: day(daysAgo(1), { pushups: 2 }), [tk]: day(tk, { pushups: 4 }) };
+  const { ctx, pg, errs } = await open({ data: { version: 2, settings: Core.defaultSettings(), days } });
+  const t = await txt(pg, '#streakLine');
+  ok(!/Start again/.test(t) && /50%/.test(t), 'broken streak, activity today: "Reach 50% today to start a streak", never "Start again today"', t);
+  await tab(pg, 'progress');
+  ok(!/Start again today/.test(await pg.textContent('#streakNote')) && /best streak was 2 days/.test(await pg.textContent('#streakNote')), 'Progress says the same, gently', await pg.textContent('#streakNote'));
+  await ctx.close();
+}
+{
+  // a blank record (what undo leaves behind while signed in, or a pulled empty day) is not a logged day
+  const done = k => day(k, { pushups: 30, pullups: 5, squats: 30, plank: 60, walk: 30, water: 2.5, sleep: 7 }, { nofried: true, nosugar: true, nomaida: true, nolate: true });
+  const days = { [daysAgo(2)]: done(daysAgo(2)), [daysAgo(1)]: done(daysAgo(1)), [tk]: day(tk) };
+  const { ctx, pg, errs } = await open({ data: { version: 2, settings: Core.defaultSettings(), days } });
+  ok(/^2-day streak · today still open$/.test(await txt(pg, '#streakLine')), 'a blank record for today does not break the streak', await txt(pg, '#streakLine'));
+  ok(/Nothing logged yet/.test(await txt(pg, '#todayHint')), 'and today still reads "Nothing logged yet"', await txt(pg, '#todayHint'));
+  await tab(pg, 'progress');
+  ok((await pg.textContent('#sDays')) === '2', 'Progress counts 2 logged days, not 3', await pg.textContent('#sDays'));
+  ok(await pg.$$eval('#logList .row', r => r.length) === 2, 'the recent days list leaves the blank one out');
+  ok(await pg.evaluate(() => Core.loggedKeys(days).length) === 2, 'Core.loggedKeys sees two');
+  ok(errs.length === 0, 'no JS errors (blank record)', errs);
+  await ctx.close();
+  // only a blank record: Progress is empty, like a new install
+  const o2 = await open({ data: { version: 2, settings: Core.defaultSettings(), days: { [tk]: day(tk) } } });
+  await tab(o2.pg, 'progress');
+  ok(await o2.pg.isVisible('#progEmpty'), 'with only a blank record Progress shows its empty state');
+  await o2.ctx.close();
+}
+console.log('The Steps habit id');
+{
+  // an old plan whose steps-type habit has another id: it is renamed to "steps" and its numbers follow
+  const s = Core.defaultSettings();
+  const st = s.habits.find(h => h.id === 'steps'); st.id = 'mysteps';
+  const days = { [daysAgo(1)]: day(daysAgo(1), { mysteps: 7000, pushups: 10 }) };
+  const { ctx, pg, errs } = await open({ data: { version: 2, settings: s, days } });
+  ok(await pg.evaluate(() => settings.habits.filter(h => h.type === 'steps').map(h => h.id).join()) === 'steps', 'the Steps habit has id "steps" after loading');
+  const dk = daysAgo(1);
+  ok(await pg.evaluate(k => days[k].vals.steps === 7000 && !('mysteps' in days[k].vals) && days[k].vals.pushups === 10, dk), 'its numbers moved with it');
+  await tab(pg, 'progress');
+  ok(/7,000/.test(await pg.textContent('#sAvgSteps')), 'Progress averages read the renamed numbers', await pg.textContent('#sAvgSteps'));
+  ok(errs.length === 0, 'no JS errors (steps id)', errs);
   await ctx.close();
 }
 

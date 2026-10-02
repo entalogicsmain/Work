@@ -10,6 +10,9 @@ const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const parse=s=>{const p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2])};
 const addDays=(k,n)=>{const d=parse(k);d.setDate(d.getDate()+n);return ymd(d)};
+/** Whole calendar days from a to b (negative when b is earlier). Exact across clock changes: it never divides a time difference. */
+const daysBetween=(a,b)=>{const u=s=>{const p=s.split('-').map(Number);return Date.UTC(p[0],p[1]-1,p[2])/864e5};return Math.round(u(b)-u(a))};
+const blankDay=k=>({vals:{},rules:{},weight:null,waist:null,note:'',date:k,updatedAt:0});
 const dow=k=>parse(k).getDay();                                   // 0 = Sunday
 const weekStart=k=>{const d=parse(k);d.setDate(d.getDate()-((d.getDay()+6)%7));return ymd(d)};   // weeks run Monday to Sunday
 const daysLeftInWeek=k=>7-((parse(k).getDay()+6)%7);              // counting k itself
@@ -63,8 +66,9 @@ const KNOWN={   // icon and section for the habits every earlier version shipped
   squats:['dumbbell','workout'],plank:['timer','workout'],water:['droplets','health'],sleep:['moon','health']
 };
 const isDurationUnit=u=>/^(min|mins|minutes?|sec|secs|seconds?)$/i.test(u||'');
+/** Steps is only ever the habit with the id "steps" (the app reads steps by that id); anything else with a steps unit is a plain Count. */
 function guessType(h){
-  if(h.id==='steps'||h.unit==='steps')return'steps';
+  if(h.id==='steps')return'steps';
   return isDurationUnit(h.unit)?'duration':'count';
 }
 function guessSection(h,type){
@@ -100,7 +104,7 @@ function uniqueId(base,taken){
   taken.add(id);return id;
 }
 
-function normalizeHabit(h,i,legacy){
+function normalizeHabit(h,i){
   if(!h||typeof h.id!=='string'||!ID_RE.test(h.id)||typeof h.name!=='string'||!h.name.trim())throw new Error('Habit #'+(i+1)+' in the backup is not valid.');
   let type=TYPES.includes(h.type)?h.type:guessType(h);
   const isYes=type==='yesno',isMeasure=type==='measure';
@@ -138,9 +142,17 @@ function migrateSettings(s){
   const taken=new Set(),habits=[],idMap={};
   const seen=new Set();
   s.habits.forEach((h,i)=>{
-    const n=normalizeHabit(h,i,wasLegacy);
+    const n=normalizeHabit(h,i);
     if(seen.has(n.id))return;seen.add(n.id);taken.add(n.id);habits.push(n);
   });
+  // at most one Steps habit, and its id is "steps": the extra ones become Counts, a lone one with another id is renamed (its day data follows)
+  const valsMap={};
+  const stepsHs=habits.filter(h=>h.type==='steps');
+  if(stepsHs.length){
+    const keep=stepsHs.find(h=>h.id==='steps')||(taken.has('steps')?null:stepsHs[0]);
+    stepsHs.forEach(h=>{if(h!==keep){h.type='count';if(/^steps?$/i.test(h.unit)&&!h.step)h.step=500}});
+    if(keep&&keep.id!=='steps'){valsMap[keep.id]='steps';taken.delete(keep.id);taken.add('steps');keep.id='steps'}
+  }
   if(wasLegacy){
     // rules become Yes/No habits (their ticks stay where they were, in each day's "rules")
     const seenR=new Set();
@@ -163,12 +175,22 @@ function migrateSettings(s){
   habits.forEach(h=>{if(!secIds.has(h.section)){const d=DEFAULT_SECTIONS.find(x=>x.id===h.section);if(d)addSec(d.id,d.name,d.collapsed);else addSec(h.section,h.section.charAt(0).toUpperCase()+h.section.slice(1).replace(/[-_]+/g,' '))}});
   if(wasLegacy||!sections.length)DEFAULT_SECTIONS.forEach(d=>addSec(d.id,d.name,d.collapsed));
   const out={v:2,habits,sections,body:normalizeBody(s.body),units:normalizeUnits(s.units),prefs:normalizePrefs(s.prefs)};
+  if(Object.keys(valsMap).length)idMap[VALS_MAP]=valsMap;
   return{settings:out,idMap,wasLegacy};
 }
+/* idMap moves old rule ids to new ones (in a day's "rules"). A hidden entry under VALS_MAP does the same for renamed habits (in "vals"),
+   so callers that already pass the id map to applyIdMap move both. */
+const VALS_MAP=Symbol('valsMap');
 function applyIdMap(days,idMap){
-  const keys=Object.keys(idMap||{});let n=0;
-  if(!keys.length)return 0;
-  Object.keys(days).forEach(k=>{const r=days[k]&&days[k].rules;if(!r)return;keys.forEach(o=>{if(o in r){if(!(idMap[o] in r))r[idMap[o]]=r[o];delete r[o];n++}})});
+  const keys=Object.keys(idMap||{}),vm=(idMap&&idMap[VALS_MAP])||{},vkeys=Object.keys(vm);let n=0;
+  if(!keys.length&&!vkeys.length)return 0;
+  Object.keys(days).forEach(k=>{
+    const d=days[k];if(!d)return;
+    const r=d.rules;
+    if(r)keys.forEach(o=>{if(o in r){if(!(idMap[o] in r))r[idMap[o]]=r[o];delete r[o];n++}});
+    const v=d.vals;
+    if(v)vkeys.forEach(o=>{if(o in v){if(!(vm[o] in v))v[vm[o]]=v[o];delete v[o];n++}});
+  });
   return n;
 }
 const defaultSettings=()=>migrateSettings(JSON.parse(JSON.stringify(LEGACY_DEFAULT))).settings;
@@ -238,34 +260,119 @@ function dayParts(settings,days,k){
   });
   return parts;
 }
+const scoreOfParts=p=>p.length?Math.round(p.reduce((a,b)=>a+b.frac,0)/p.length*100):null;
 /** 0-100, or null when nothing was due (a rest day). */
-function dayScore(settings,days,k){
-  const p=dayParts(settings,days,k);
-  if(!p.length)return null;
-  return Math.round(p.reduce((a,b)=>a+b.frac,0)/p.length*100);
+function dayScore(settings,days,k){return scoreOfParts(dayParts(settings,days,k))}
+/** What Today's ring and chips show: the score (0 on a rest day), targets met, rules kept, and whether everything due is done. */
+function dayMetrics(settings,days,k){
+  const parts=dayParts(settings,days,k);
+  const tg=parts.filter(p=>p.h.type!=='yesno'),rl=parts.filter(p=>p.h.type==='yesno');
+  return{score:scoreOfParts(parts)||0,hMet:tg.filter(p=>p.met).length,hTotal:tg.length,rKept:rl.filter(p=>p.met).length,rTotal:rl.length,full:parts.length>0&&parts.every(p=>p.met)};
 }
-function earliestKey(days){return Object.keys(days).sort()[0]||null}
-/** Days in a row with a score of 50 or more, counted back from today (or yesterday if today is empty). Rest days are skipped. */
-function currentStreak(settings,days,today){
-  const first=earliestKey(days);if(!first)return 0;
-  let n=0,k=days[today]?today:addDays(today,-1);
-  for(let i=0;i<4000&&k>=first;i++,k=addDays(k,-1)){
-    const sc=dayScore(settings,days,k);
-    if(sc===null)continue;
-    if(days[k]&&sc>=50)n++;else break;
+
+/* ---------- logged days, streaks ---------- */
+/** Does the day record hold anything? An empty record (what undo leaves behind while signed in) is not a logged day. */
+function hasRecord(d){
+  if(!d)return false;
+  if(d.weight!=null||d.waist!=null)return true;
+  if(typeof d.note==='string'&&d.note.trim())return true;
+  if(d.vals)for(const i in d.vals)if(Number(d.vals[i])>0)return true;
+  if(d.rules)for(const i in d.rules)if(d.rules[i])return true;
+  return false;
+}
+/** The days that hold something, oldest first. */
+const loggedKeys=days=>Object.keys(days).filter(k=>hasRecord(days[k])).sort();
+
+/* Scores are cached per day until the days or the plan change. The key is the days object itself, the plan's scoring fields, and a cheap
+   fingerprint of every day (count, updatedAt, values, ticks, measurements), so even an edit made in place is noticed. Code that changes
+   days in some other way can call invalidate(). */
+let cacheRev=0;
+const cache={days:null,hs:'',ds:'',rev:-1,scores:new Map(),memo:new Map(),first:undefined};
+function invalidate(){cacheRev++}
+function habitSig(settings){return settings.habits.map(h=>h.id+':'+h.type+':'+h.target+':'+(h.hidden?1:0)+':'+(h.measure||'')+':'+JSON.stringify(h.schedule)).join('|')}
+function daysSig(days){
+  let n=0,sum=0;
+  for(const k in days){
+    const d=days[k];if(!d)continue;
+    n++;sum+=(d.updatedAt||0)+(d.weight||0)*3+(d.waist||0)*7+(d.note?d.note.length*11:0);
+    if(d.vals)for(const i in d.vals)sum+=(Number(d.vals[i])||0)*5+1;
+    if(d.rules)for(const i in d.rules)if(d.rules[i])sum+=13;
   }
-  return n;
+  return n+':'+sum;
+}
+function fresh(settings,days){
+  const hs=habitSig(settings),ds=daysSig(days);
+  if(cache.days===days&&cache.rev===cacheRev&&cache.hs===hs&&cache.ds===ds)return;
+  cache.days=days;cache.rev=cacheRev;cache.hs=hs;cache.ds=ds;cache.scores=new Map();cache.memo=new Map();cache.first=undefined;
+}
+function scoreAt(settings,days,k){
+  let v=cache.scores.get(k);
+  if(v===undefined){v=dayScore(settings,days,k);cache.scores.set(k,v)}
+  return v;
+}
+function firstKey(days){
+  if(cache.first===undefined)cache.first=loggedKeys(days)[0]||null;
+  return cache.first;
+}
+const kept=(settings,days,k)=>{const sc=scoreAt(settings,days,k);return sc!==null&&sc>=50&&hasRecord(days[k])};
+/** Days in a row with a score of 50 or more. Today counts once it is at 50; until then the count runs from yesterday, so the streak
+    never drops during an open day. Rest days (nothing due) are skipped. */
+function currentStreak(settings,days,today){
+  fresh(settings,days);
+  const mk='cur:'+today;if(cache.memo.has(mk))return cache.memo.get(mk);
+  const first=firstKey(days);let n=0;
+  if(first){
+    let k=kept(settings,days,today)?today:addDays(today,-1);
+    for(let i=0;i<4000&&k>=first;i++,k=addDays(k,-1)){
+      const sc=scoreAt(settings,days,k);
+      if(sc===null)continue;
+      if(kept(settings,days,k))n++;else break;
+    }
+  }
+  cache.memo.set(mk,n);return n;
 }
 function bestStreak(settings,days,today){
-  const first=earliestKey(days);if(!first)return 0;
-  let best=0,run=0;
-  for(let k=first;k<=today;k=addDays(k,1)){
-    const sc=dayScore(settings,days,k);
+  fresh(settings,days);
+  const mk='best:'+today;if(cache.memo.has(mk))return cache.memo.get(mk);
+  const first=firstKey(days);let best=0,run=0;
+  if(first)for(let k=first;k<=today;k=addDays(k,1)){
+    const sc=scoreAt(settings,days,k);
     if(sc===null)continue;
-    if(days[k]&&sc>=50){run++;if(run>best)best=run}
-    else if(k!==today||days[k])run=0;
+    if(kept(settings,days,k)){run++;if(run>best)best=run}
+    else if(k!==today)run=0;          // today is still open: it can only add to a run
   }
-  return best;
+  cache.memo.set(mk,best);return best;
+}
+/** "31 of the last 35 days kept": days with a score of 50 or more among the days that were due, from the first logged day on.
+    Today counts only once it is kept. */
+function daysKept(settings,days,today,n){
+  fresh(settings,days);
+  const first=firstKey(days);if(!first)return{kept:0,due:0};
+  let start=addDays(today,-((n||35)-1));if(start<first)start=first;
+  let got=0,due=0;
+  for(let k=start;k<=today;k=addDays(k,1)){
+    const sc=scoreAt(settings,days,k);
+    if(sc===null)continue;
+    const ok=kept(settings,days,k);
+    if(k===today&&!ok)continue;
+    due++;if(ok)got++;
+  }
+  return{kept:got,due};
+}
+/** Everything the streak texts need in one go. */
+function streakStatus(settings,days,today){
+  fresh(settings,days);
+  const sc=scoreAt(settings,days,today),todayKept=kept(settings,days,today);
+  return{current:currentStreak(settings,days,today),best:bestStreak(settings,days,today),todayScore:sc,todayRecord:hasRecord(days[today]),todayKept,open:sc!==null&&!todayKept};
+}
+/** The line under the ring on Today. Gentle: it never says "start again" while today is still being worked on. */
+function streakLine(settings,days,today){
+  const s=streakStatus(settings,days,today);
+  if(s.current>0)return s.current+'-day streak'+(s.open?' · today still open':'');
+  if(s.todayRecord&&s.open)return'Reach 50% today to start a streak';
+  if(s.best>0&&s.todayScore!==null)return'Start again today';
+  if(s.best>0)return'Rest day today';
+  return'Log a day to start a streak';
 }
 
 /* ---------- smart target suggestions ---------- */
@@ -435,10 +542,10 @@ function cmToFtIn(cm){
 const ftInToCm=(ft,inch)=>(Number(ft)*12+Number(inch||0))*2.54;
 
 return{
-  pad,ymd,parse,addDays,dow,weekStart,daysLeftInWeek,round1,ID_RE,
+  pad,ymd,parse,addDays,daysBetween,blankDay,dow,weekStart,daysLeftInWeek,round1,ID_RE,
   TYPES,WEEKDAYS,WEEK_ORDER,ICONS,DEFAULT_SECTIONS,LEGACY_DEFAULT,LIBRARY,LIB_CATEGORIES,STARTER_PLANS,BMI_SCALES,BMI_CATS,BMI_CAT_NAME,
   normalizeSchedule,scheduleLabel,normalizeHabit,migrateSettings,applyIdMap,defaultSettings,stepFor,uniqueId,
-  hv,isMet,isLogged,isDue,isShown,weekProgress,countsForScore,dayParts,dayScore,currentStreak,bestStreak,
+  hv,isMet,isLogged,isDue,isShown,weekProgress,countsForScore,dayParts,dayScore,dayMetrics,hasRecord,loggedKeys,invalidate,currentStreak,bestStreak,daysKept,streakStatus,streakLine,
   suggestTarget,metStreak,suggestionFor,libEntry,searchLibrary,libHabitIn,habitFromLibrary,addFromLibrary,applyStarterPlan,ensureSection,
   bmi,bmiRound,bmiCategory,healthyRange,distanceToRange,whtr,kgToLb,lbToKg,cmToIn,inToCm,cmToFtIn,ftInToCm
 };
