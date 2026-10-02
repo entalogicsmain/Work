@@ -136,7 +136,7 @@ function editControls(x){
 }
 function scheduleNote(x,k){
   const wp=Core.weekProgress(x,k,days);
-  if(wp)return wp.done+' of '+wp.of+' this week';
+  if(wp)return Math.min(wp.done,wp.of)+' of '+wp.of+' this week';
   const s=Core.normalizeSchedule(x.schedule);
   if(s.kind==='days'||s.kind==='everyN')return Core.scheduleLabel(s);
   return '';
@@ -264,7 +264,7 @@ function bmiRow(){
   if(st.state==='ok'){
     val.innerHTML='<span class="num"></span> <span class="pill"></span>';val.querySelector('.num').textContent=st.rounded.toFixed(1);
     const pl=val.querySelector('.pill');pl.textContent=catName(st.cat);pl.classList.add(catPill(st.cat));
-    sub.textContent='From '+fmtWeight(st.kg)+' · '+scaleName();
+    sub.textContent='From '+fmtWeight(st.kg);
     row.setAttribute('aria-label','BMI '+st.rounded.toFixed(1)+', '+catName(st.cat)+'. Tap for details.');
   }else{
     sub.remove();val.textContent=st.state==='no-height'?'Set your height':'Log your weight to see your BMI';

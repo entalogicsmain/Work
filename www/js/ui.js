@@ -451,6 +451,7 @@ function showOnboarding(opts){
   const edits={};
   let chosenScale=settings.body.scale||'standard',chosenHeight=null,chosenPlan=null;
   const root=h('<div class="onb" role="dialog" aria-modal="true" aria-label="'+(intro?'Welcome to Comeback':'Set up step counting')+'"><div class="onb-top"><button class="txtbtn" id="onbSkip">Skip</button></div><div class="onb-pages"><div class="onb-track" id="onbTrack"></div></div><div class="dots" id="onbDots" aria-hidden="true"></div><div class="onb-foot" id="onbFoot"></div></div>');
+  root.querySelector('.onb-pages').addEventListener('scroll',e=>{e.target.scrollLeft=0});   // focusing an input on a page that is still sliding in must not shift the pages
   const track=root.querySelector('#onbTrack'),foot=root.querySelector('#onbFoot'),dotsEl=root.querySelector('#onbDots');
   const pages=[];   // [{id,el}]
   const addPage=(id,el,at)=>{const rec={id,el};if(at==null)pages.push(rec);else pages.splice(at,0,rec);track.innerHTML='';pages.forEach(q=>track.appendChild(q.el));layout()};

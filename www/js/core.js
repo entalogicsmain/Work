@@ -353,7 +353,9 @@ function libHabitIn(settings,lib){
 }
 function ensureSection(settings,id,name){
   if(settings.sections.some(s=>s.id===id))return;
-  settings.sections.push({id,name:name||SECTION_NAMES[id]||id});
+  const sec={id,name:name||SECTION_NAMES[id]||id};
+  const b=settings.sections.findIndex(x=>x.id==='body');      // new sections go above "Body and notes", which stays last
+  if(b>=0&&id!=='body')settings.sections.splice(b,0,sec);else settings.sections.push(sec);
 }
 /** A new habit from a library item (not yet added to the settings). */
 function habitFromLibrary(settings,lib,over){

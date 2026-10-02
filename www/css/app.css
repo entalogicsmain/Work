@@ -134,7 +134,7 @@ svg.ic.sm{width:1.125rem;height:1.125rem}
 .chiprow .ic{color:var(--label2)}
 .chiprow.ok .ic{color:var(--green)}
 .streakline{display:flex;align-items:center;gap:6px;font-size:.8125rem;color:var(--label2)}
-.hint{margin:var(--s3) 0 0;font-size:.9375rem;color:var(--label2)}
+.hint{margin:var(--s3) 0 var(--s3);font-size:.9375rem;color:var(--label2)}
 .habits{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3)}
 .hcard{position:relative;display:flex;flex-direction:column;gap:6px;min-height:6.5rem;padding:var(--s3) 14px 14px;background:var(--card);border-radius:var(--r-m);text-align:left;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:transform .15s var(--ease),background .2s}
 .hcard:active{transform:scale(.975)}
@@ -223,7 +223,8 @@ button.row:active,label.row:active{background:var(--fill)}
 .btn.small{width:auto;min-height:44px}
 
 /* ---------- swipe rows + reorder ---------- */
-.swipe{position:relative;overflow:hidden;background:var(--red)}
+.swipe{position:relative;overflow:hidden;background:var(--solid)}
+.swipe.drag{background:var(--red)}
 .swipe .swipe-del{position:absolute;right:0;top:0;bottom:0;width:5.5rem;display:flex;align-items:center;justify-content:center;gap:4px;color:#fff;font-weight:600;font-size:.9375rem;background:var(--red)}
 .swipe .row{background:var(--solid);transition:transform .28s var(--ease);will-change:transform;touch-action:pan-y}
 .swipe.drag .row{transition:none}
