@@ -1,7 +1,7 @@
 // Web-side tests for phone-only step counting, with a fake "Steps" plugin (the Kotlin plugin cannot run here).
 // The counting logic itself is tested with simulated sensors in android/app/src/test (npm run test:android).
 // Run: npm run test:steps
-import { serve, launch, counter, newPage, tab, ready, sheetGone, settle, setHabit, actionChoose, MOCK, todayKey, daysAgo } from './helpers.mjs';
+import { serve, launch, counter, newPage, tab, gear, ready, sheetGone, settle, setHabit, actionChoose, MOCK, todayKey, daysAgo } from './helpers.mjs';
 
 const { srv, base } = serve();
 const T = counter(); const ok = T.ok;
@@ -35,8 +35,13 @@ const settleAuto = pg => pg.waitForTimeout(1400); // automatic updates are saved
 const km = (steps, h = 180) => Math.round(steps * h * 0.415 / 100000 * 100) / 100;
 
 
-const stepsCard = '#habitList .hcard[data-id="steps"]';
-const cardText = (pg, sel) => pg.textContent(`${stepsCard} ${sel}`);
+const stepsCard = '#sections .hcard[data-id="steps"]';
+const cardText = async (pg, sel) => {
+  // a card that reached its target shrinks to one line; open it to read the details
+  const done = '#sections .drow[data-id="steps"]';
+  if (await pg.$(done)) await pg.click(done);
+  return pg.textContent(`${stepsCard} ${sel}`);
+};
 const waitCounting = pg => pg.waitForFunction(() => window.__mock.st().calls.some(c => c.n === 'stepsConfigure' && c.a.enabled));
 
 /* ---------- existing users: counting switches on by itself when the permission is already allowed ---------- */
@@ -69,11 +74,11 @@ console.log('Steps card is read-only');
   const { ctx, pg, errs } = await open();
   await waitCounting(pg);
   await sendDays(pg, { [tk]: { steps: 4320, filtered: 37, hourly: HOURLY } });
-  await pg.waitForFunction(() => document.querySelector('#habitList .hcard[data-id="steps"] .hval').textContent === '4,320');
+  await pg.waitForFunction(() => document.querySelector('#sections .hcard[data-id="steps"] .hval').textContent === '4,320');
   ok(/Counted by phone/.test(await cardText(pg, '.hsrc')), 'the card shows the phone\'s count and says "Counted by phone"');
   ok((await cardText(pg, '.hsrc')).replace(/ /g, ' ').includes(String(Math.round(km(4320) * 10) / 10) + ' km'), 'and the estimated distance (from height)');
   ok(/of 8,000 steps/.test(await cardText(pg, '.htgt')) && (await pg.$eval(`${stepsCard} .bar i`, e => parseFloat(e.style.width))) > 50, 'with the target and a progress bar');
-  ok(/phone/.test(await pg.getAttribute(stepsCard, 'aria-label')) && /Tap for details/.test(await pg.getAttribute(stepsCard, 'aria-label')) && !/Tap to edit/.test(await pg.getAttribute(stepsCard, 'aria-label')), 'its spoken label says details, not edit');
+  ok(/phone/.test(await pg.getAttribute(stepsCard + ' .hc-main', 'aria-label')) && /Tap for details/.test(await pg.getAttribute(stepsCard + ' .hc-main', 'aria-label')) && !/Tap to edit/.test(await pg.getAttribute(stepsCard + ' .hc-main', 'aria-label')), 'its spoken label says details, not edit');
   ok((await pg.textContent('#headScore')) !== '0%', 'the ring counts the phone\'s steps');
   // tapping opens a read-only sheet
   await pg.click(stepsCard); await waitSheet(pg, 'Steps today');
@@ -86,16 +91,19 @@ console.log('Steps card is read-only');
   ok(await pg.evaluate(() => !Chart.getChart('chartStepsSheet')), 'the chart is cleaned up when the sheet closes');
   // long press does nothing
   await pg.dispatchEvent(stepsCard, 'pointerdown'); await pg.waitForTimeout(800);
-  ok(!(await pg.$('.asheet')), 'long-press opens no quick-add presets on Steps');
+  ok(!(await pg.$('.asheet')), 'long-press opens no quick-add presets on Steps (it starts editing Today instead)');
+  ok(await pg.isVisible('#editBar'), 'long-pressing a card starts edit mode');
+  await pg.click('#editDone'); await pg.waitForFunction(() => document.getElementById('editBar').hidden);
   // other habits are still manual
-  await pg.click('#habitList .hcard:nth-child(3)'); await pg.waitForSelector('.keypad');
+  await pg.click('#sections .hcard[data-id="pushups"] .hc-main'); await pg.waitForSelector('.keypad');
   ok(true, 'other targets (pushups etc.) still open the number pad');
   await pg.click('.sheet .txtbtn:has-text("Cancel")'); await sheetGone(pg);
   // Plan: no source setting, target still editable
-  await tab(pg, 'setup');
-  ok(!(await pg.$('#stSource')), 'Plan has no Automatic/Manual source setting');
+  await gear(pg);
+  ok(!(await pg.$('#stSource')), 'Settings has no Automatic/Manual source setting');
   ok(!/Source|Automatic \(phone sensor\)|Manual/.test(await pg.textContent('#stepGroup')), 'nothing in Step tracking mentions a manual mode', (await pg.textContent('#stepGroup')).slice(0, 120));
-  await pg.click('#setHabits .swipe:nth-child(1) .row'); await pg.waitForSelector('#fTarget');
+  await tab(pg, 'setup');
+  await pg.click('#planSections .swipe[data-id="steps"] .row'); await pg.waitForSelector('#fTarget');
   ok(!/Source/.test(await pg.textContent('.sheet')), 'the Steps target form has no Source button');
   await pg.fill('#fTarget', '9000'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg); await settle(pg);
   ok((await stored(pg)).settings.habits.find(h => h.id === 'steps').target === 9000, 'the daily Steps target is editable in Plan');
@@ -116,12 +124,13 @@ console.log('No manual step entry');
     document.querySelectorAll('button,.row,.ab').forEach(b => { if (/use counted steps|edited manually|Add \d+ steps|steps source|automatic \(phone sensor\)/i.test(b.textContent)) out.push('text:' + b.textContent.trim().slice(0, 40)); });
     return out;
   });
-  for (const t of ['today', 'progress', 'setup']) { await tab(pg, t); await pg.waitForTimeout(300); ok((await find()).length === 0, `no manual step input on ${t}`, await find()); }
+  for (const t of ['today', 'progress', 'setup', 'settings']) { if (t === 'settings') await gear(pg); else await tab(pg, t); await pg.waitForTimeout(300); ok((await find()).length === 0, `no manual step input on ${t}`, await find()); }
   await tab(pg, 'today'); await pg.click(stepsCard); await waitSheet(pg, 'Steps today');
   ok((await find()).length === 0, 'none in the Steps sheet', await find());
   await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg);
-  await pg.click('#habitList .hcard:nth-child(3)', { delay: 700 }); await pg.waitForTimeout(300);
+  await pg.click('#sections .hcard[data-id="pushups"] .hc-main', { delay: 700 }); await pg.waitForTimeout(300);
   await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
+  if (await pg.isVisible('#editDone')) { await pg.click('#editDone'); await pg.waitForTimeout(300); }
   // the day sheet on Progress
   await tab(pg, 'progress'); await pg.waitForTimeout(500);
   ok(errs.length === 0, 'no JS errors (no manual entry)', errs);
@@ -160,11 +169,11 @@ console.log('Old manual days');
   ok(/Entered manually \(old\)/.test(await pg.textContent('.sheet')), 'the day sheet marks it too');
   await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg);
   // CSV: old rows keep "manual", new days are "counted"
-  await tab(pg, 'setup'); await pg.click('#expCsv');
+  await gear(pg); await pg.click('#expCsv');
   await pg.waitForFunction(() => /comeback-.*\.csv/.test(document.getElementById('bkMsg').textContent));
   const csv = (await mock(pg)).fs['DOCUMENTS/Comeback/comeback-' + tk + '.csv'].replace(/^﻿/, '');
   const rows = csv.trim().split('\r\n').slice(1);
-  const src = d => { const c = rows.find(r => r.startsWith(d)).split(','); return c[c.length - 6]; };
+  const src = d => { const c = rows.find(r => r.startsWith(d)).split(','); return c[c.length - 7]; };
   ok(src(OLD) === 'manual' && src(OLD2) === 'manual' && src(tk) === 'counted', 'CSV: old rows keep "manual", today is "counted"', [src(OLD), src(OLD2), src(tk)]);
   ok(errs.length === 0, 'no JS errors (old days)', errs);
   await ctx.close();
@@ -183,8 +192,8 @@ console.log('Permission missing');
   await pg.waitForSelector('#onbStart'); await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'));
   await pg.waitForTimeout(500);
   ok(/Turn on step counting/.test(await cardText(pg, '.hval')), 'denied: the Steps card says "Turn on step counting" instead of a number', await cardText(pg, '.hval'));
-  ok(/Turn on step counting/.test(await pg.getAttribute(stepsCard, 'aria-label')), 'and its spoken label says so');
-  await tab(pg, 'setup');
+  ok(/Turn on step counting/.test(await pg.getAttribute(stepsCard + ' .hc-main', 'aria-label')), 'and its spoken label says so');
+  await gear(pg);
   ok(/Permission missing/.test(await pg.textContent('#stHealth')) && /Allow permission/.test(await pg.textContent('#stFix')), 'Plan > Step tracking health: "Permission missing" with a one-tap fix');
   await setSteps(pg, { grantOnRequest: true });
   const before = (await calls(pg, 'reqActivity')).length;
@@ -207,8 +216,11 @@ console.log('Step tracking settings');
 {
   const { ctx, pg, errs } = await open();
   await waitCounting(pg);
-  await tab(pg, 'setup');
-  ok(await pg.isVisible('#stHeight') && await pg.isVisible('#stStrict') && await pg.isVisible('#stLoc') && await pg.isVisible('#stHealth') && await pg.isVisible('#stFiltered'), 'Plan shows height, detection, location, health and filtered steps');
+  await gear(pg);
+  ok(await pg.isVisible('#stHeight') && await pg.isVisible('#stHealth') && await pg.isVisible('#stFiltered') && await pg.isVisible('#advToggle'), 'Settings shows height, health, filtered steps and the Advanced section');
+  ok(!(await pg.isVisible('#stStrict')) && !(await pg.isVisible('#stLoc')), 'vehicle filter and location are collapsed under Advanced');
+  await pg.click('#advToggle');
+  ok(await pg.isVisible('#stStrict') && await pg.isVisible('#stLoc'), 'Advanced opens to the vehicle filter and the location switch');
   ok(!(await pg.$('#stSens')), 'no sensitivity row on a phone that has the step counter chip');
   await pg.click('#stHeight'); await pg.waitForSelector('.keypad');
   for (const c of ['1', '7', '0']) await pg.click(`.keypad .key[aria-label="${c}"]`);
@@ -220,7 +232,8 @@ console.log('Step tracking settings');
   await pg.click('.sheet .txtbtn:has-text("Cancel")'); await sheetGone(pg);
   await tab(pg, 'today'); await sendDays(pg, { [tk]: { steps: 10000, filtered: 0, hourly: HOURLY } }); await pg.waitForTimeout(400);
   ok((await cardText(pg, '.hsrc')).replace(/ /g, ' ').includes(String(Math.round(km(10000, 170) * 10) / 10) + ' km'), 'distance uses the new height');
-  await tab(pg, 'setup');
+  await gear(pg);
+  if (!(await pg.isVisible('#stStrict'))) await pg.click('#advToggle');
   await pg.click('#stStrict'); await pg.waitForSelector('.asheet');
   ok(/Relaxed/.test(await pg.textContent('.asheet')) && /Balanced/.test(await pg.textContent('.asheet')) && /Strict/.test(await pg.textContent('.asheet')), 'Relaxed / Balanced / Strict are offered');
   await actionChoose(pg, 'Strict');
@@ -242,7 +255,8 @@ console.log('Step tracking settings');
 {
   const { ctx, pg, errs } = await open({ steps: { source: 'accelerometer' } });
   await waitCounting(pg);
-  await tab(pg, 'setup');
+  await gear(pg);
+  await pg.click('#advToggle');
   await pg.waitForSelector('#stSens');
   ok(/Normal/.test(await pg.textContent('#stSens')), 'phones without a step counter chip get a Sensitivity row (Normal by default)');
   await pg.click('#stSens'); await pg.waitForSelector('.asheet');
@@ -258,7 +272,7 @@ console.log('Step tracking health');
 {
   const { ctx, pg, errs } = await open();
   await waitCounting(pg);
-  await tab(pg, 'setup');
+  await gear(pg);
   const health = async (k, extra) => { await setSteps(pg, Object.assign({ health: k }, extra || {})); await pg.evaluate(k2 => window.__mock.fire('stepsChanged', { days: {}, health: k2 }), k); await pg.waitForTimeout(300); };
   await health('paused_vehicle');
   ok(/Steps paused while in vehicle/.test(await pg.textContent('#stHealth')) && !(await pg.$('#stFix')), 'in a vehicle: "Steps paused while in vehicle" (nothing to fix)');
@@ -266,7 +280,7 @@ console.log('Step tracking health');
   ok(/Paused by battery settings/.test(await pg.textContent('#stHealth')) && /Fix battery settings/.test(await pg.textContent('#stFix')), 'battery kill: "Paused by battery settings" with a one-tap fix');
   await pg.click('#stFix'); await waitSheet(pg, 'Keep counting all day');
   ok(true, 'the fix opens the battery help sheet'); await pg.click('.sheet .txtbtn:has-text("Cancel")'); await sheetGone(pg);
-  await tab(pg, 'today'); await sendDays(pg, { [tk]: { steps: 1000, filtered: 37, hourly: HOURLY } }); await tab(pg, 'setup'); await pg.waitForTimeout(300);
+  await tab(pg, 'today'); await sendDays(pg, { [tk]: { steps: 1000, filtered: 37, hourly: HOURLY } }); await gear(pg); await pg.waitForTimeout(300);
   ok((await pg.textContent('#stFiltered')).includes('37'), '"Steps filtered out today" shows the count');
   ok(errs.length === 0, 'no JS errors (health)', errs);
   await ctx.close();
@@ -294,12 +308,12 @@ console.log('Data, sync, export and Progress');
   await pg.evaluate(k => { days[k] = { vals: { steps: 6000 }, rules: {}, weight: null, waist: null, note: '', date: k, updatedAt: Date.now() }; }, daysAgo(1));
   await sendDays(pg, { [tk]: { steps: 4500, filtered: 9, hourly: HOURLY } }); await pg.waitForTimeout(1300);
 
-  await tab(pg, 'setup'); await pg.click('#expCsv');
+  await gear(pg); await pg.click('#expCsv');
   await pg.waitForFunction(() => /comeback-.*\.csv/.test(document.getElementById('bkMsg').textContent));
   const csv = (await mock(pg)).fs['DOCUMENTS/Comeback/comeback-' + tk + '.csv'].replace(/^﻿/, '');
   const [head, ...rows] = csv.trim().split('\r\n');
   ok(head.includes('Steps source,Distance (km),Filtered steps,Weight (kg)'), 'CSV has Steps source, Distance (km) and Filtered steps columns', head);
-  const tail = r => { const c = r.split(','); const n = c.length; return { source: c[n - 6], dist: c[n - 5], filt: c[n - 4] }; };
+  const tail = r => { const c = r.split(','); const n = c.length; return { source: c[n - 7], dist: c[n - 6], filt: c[n - 5] }; };
   const todayRow = tail(rows.find(r => r.startsWith(tk))), yRow = tail(rows.find(r => r.startsWith(daysAgo(1))));
   ok(todayRow.source === 'counted' && Number(todayRow.dist) === km(4500) && todayRow.filt === '9', 'CSV row: counted / distance / filtered', todayRow);
   ok(yRow.source === 'manual', 'CSV: a day typed before steps became phone-only keeps "manual"', yRow);
@@ -356,7 +370,7 @@ console.log('Background behaviour of the page');
   const ctx = await browser.newContext({ viewport: { width: 400, height: 900 } });
   await ctx.addInitScript(() => { localStorage.setItem('CapacitorStorage.comeback_onboarded', '1'); });
   const pg = await newPage(ctx, errs); await pg.goto(base); await ready(pg);
-  await tab(pg, 'setup');
+  await gear(pg);
   ok(!(await pg.isVisible('#stepGroup')), 'no Step tracking section in a plain browser (Android app only)');
   await tab(pg, 'today');
   ok(/Counted in the Android app/.test(await cardText(pg, '.hsrc')) && (await cardText(pg, '.hval')) === '–', 'the Steps card says steps are counted in the Android app');

@@ -2,7 +2,7 @@
 // For every size: no sideways scrolling, nothing sticks out of the screen, the right navigation (bottom pill or side rail),
 // the last item can scroll clear of the bars, big tap targets, sheets fit on screen, and 130% text still fits.
 // Run: npm run test:responsive
-import { serve, launch, counter, newPage, tab, ready, sheetGone, todayKey } from './helpers.mjs';
+import { serve, launch, counter, newPage, tab, gear, ready, sheetGone, todayKey } from './helpers.mjs';
 
 const { srv, base } = serve();
 const T = counter(); const ok = T.ok;
@@ -54,15 +54,16 @@ for (const scheme of ['light', 'dark']) {
     const nav = await pg.evaluate(() => { const r = document.querySelector('.tabbar-in').getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height, vh: innerHeight, vw: innerWidth }; });
     if (w >= 840) ok(nav.l < 130 && nav.h > nav.w * 0.9 || nav.h > 120, `${name}: navigation is a side rail`, nav);
     else ok(nav.t > nav.vh / 2 && nav.w <= nav.vw, `${name}: navigation is a floating bar at the bottom`, nav);
-    for (const t of ['today', 'progress', 'setup']) {
-      await tab(pg, t); await pg.waitForTimeout(450);
+    for (const t of ['today', 'progress', 'setup', 'settings']) {
+      if (t === 'settings') await gear(pg); else await tab(pg, t);
+      await pg.waitForTimeout(450);
       const o = await overflow(pg);
       ok(o.sw <= o.vw && o.out.length === 0, `${name}: ${t} has no sideways overflow`, o);
       // scroll to the bottom: the last thing must clear the bars
       await pg.evaluate(() => window.scrollTo(0, 1e6)); await pg.waitForTimeout(250);
       const clear = await pg.evaluate(() => {
         const tb = document.querySelector('.tabbar-in').getBoundingClientRect();
-        const items = [...document.querySelectorAll('.screen.on .group, .screen.on .group-foot, .screen.on .card, .screen.on .hcard')].filter(e => e.offsetParent !== null && e.getBoundingClientRect().height > 0);
+        const items = [...document.querySelectorAll('.screen.on .group, .screen.on .group-foot, .screen.on .card, .screen.on .hcard, .screen.on .yrow, .screen.on .drow, .screen.on .mrow, .screen.on .today-foot')].filter(e => e.offsetParent !== null && e.getBoundingClientRect().height > 0);
         const last = items.map(e => e.getBoundingClientRect().bottom).sort((a, b) => b - a)[0];
         const railed = tb.height > tb.width;
         return { last, barTop: tb.top, railed, vh: innerHeight };
@@ -72,10 +73,10 @@ for (const scheme of ['light', 'dark']) {
     }
     // tap targets on Today
     await tab(pg, 'today'); await pg.waitForTimeout(300);
-    const small = await pg.evaluate(() => [...document.querySelectorAll('.tab,.hcard,.iconbtn,.daypill,.txtbtn')].filter(e => e.offsetParent !== null).map(e => { const r = e.getBoundingClientRect(); return { n: (e.className || e.tagName).toString().slice(0, 20), w: Math.round(r.width), h: Math.round(r.height) }; }).filter(x => x.w < 44 || x.h < 44));
+    const small = await pg.evaluate(() => [...document.querySelectorAll('.tab,.hcard,.hc-main,.cbtn,.drow,.iconbtn,.daypill,.txtbtn')].filter(e => e.offsetParent !== null).map(e => { const r = e.getBoundingClientRect(); return { n: (e.className || e.tagName).toString().slice(0, 20), w: Math.round(r.width), h: Math.round(r.height) }; }).filter(x => x.w < 44 || x.h < 44));
     ok(small.length === 0, `${name}: tap targets are at least 44 px`, small.slice(0, 4));
     // a sheet fits on screen and its Done button can be reached
-    await pg.click('#habitList .hcard:nth-child(3)'); await pg.waitForSelector('.keypad'); await pg.waitForTimeout(600);
+    await pg.click('#sections .hcard[data-id="pushups"] .hc-main'); await pg.waitForSelector('.keypad'); await pg.waitForTimeout(600);
     const sh = await pg.evaluate(() => { const s = document.querySelector('.sheet').getBoundingClientRect(); const d = document.querySelector('.sheet .txtbtn.strong').getBoundingClientRect(); return { top: Math.round(s.top), bottom: Math.round(s.bottom), left: Math.round(s.left), right: Math.round(s.right), vh: innerHeight, vw: innerWidth, doneTop: Math.round(d.top), doneBottom: Math.round(d.bottom) }; });
     ok(sh.top >= 0 && sh.bottom <= sh.vh + 1 && sh.left >= -1 && sh.right <= sh.vw + 1 && sh.doneTop >= 0 && sh.doneBottom <= sh.vh, `${name}: the number sheet fits on screen`, sh);
     const reach = await pg.evaluate(() => { const k = document.querySelector('.keypad .key[aria-label="0"]'); k.scrollIntoView({ block: 'nearest' }); const r = k.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!hit && (hit === k || k.contains(hit)) && r.bottom <= innerHeight + 1; });
@@ -91,7 +92,7 @@ for (const [w, h] of [[320, 568], [360, 800], [412, 915]]) for (const scale of [
   const { ctx, pg } = await open(w, h, 'light');
   await pg.addStyleTag({ content: `html{font-size:${scale}% !important}` }); await pg.waitForTimeout(300);
   let bad = [];
-  for (const t of ['today', 'progress', 'setup']) { await tab(pg, t); await pg.waitForTimeout(350); const o = await overflow(pg); if (o.sw > o.vw || o.out.length) bad.push([t, o]); }
+  for (const t of ['today', 'progress', 'setup', 'settings']) { if (t === 'settings') await gear(pg); else await tab(pg, t); await pg.waitForTimeout(350); const o = await overflow(pg); if (o.sw > o.vw || o.out.length) bad.push([t, o]); }
   ok(bad.length === 0, `${w}x${h} at ${scale}% text: nothing overflows sideways`, bad);
   await ctx.close();
 }

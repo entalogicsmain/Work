@@ -528,7 +528,7 @@ function showOnboarding(opts){
   hydrate(root);
 
   async function finish(applyReminder){
-    let changed=false;
+    let changed=!!chosenPlan;
     const ch=Object.keys(edits).filter(id=>edits[id]>0&&settings.habits.find(x=>x.id===id&&x.target!==edits[id]));
     if(ch.length){ch.forEach(id=>{settings.habits.find(x=>x.id===id).target=edits[id]});changed=true}
     if(full){

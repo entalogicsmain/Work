@@ -63,7 +63,7 @@ function initPullToRefresh(){
   const showLine=n=>{line=n;textEl.textContent=n.text;icEl.innerHTML=icon(n.icon,'sm')};
   const wantLine=()=>{if(!linePromise)linePromise=chooseNudge().then(n=>{showLine(n);return n})};
   const reset=()=>{ptr.classList.remove('drag','ready','hold','spring');line=null;linePromise=null;armed=false;dragging=false};
-  const canStart=()=>activeTab==='today'&&!layers.length&&!onb&&!busy&&window.scrollY<=0;
+  const canStart=()=>activeTab==='today'&&!layers.length&&!onb&&!busy&&!editing&&window.scrollY<=0;
 
   screen.addEventListener('touchstart',e=>{
     if(e.touches.length!==1||!canStart()){tracking=false;return}

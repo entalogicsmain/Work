@@ -1,7 +1,7 @@
 // Checks for the rename from "Reset Log" to "Comeback": old saved data moves to the new keys, old backup files still restore,
 // the new copy is in place, and no leftover old name or medical wording shows on any screen.
 // Run: npm run test:rename
-import { serve, launch, counter, newPage, tab, ready, sheetGone, settle, actionChoose, MOCK, todayKey, daysAgo, same } from './helpers.mjs';
+import { serve, launch, counter, newPage, tab, gear, openBody, ready, sheetGone, settle, actionChoose, MOCK, todayKey, daysAgo, same } from './helpers.mjs';
 
 const { srv, base } = serve();
 const T = counter(); const ok = T.ok;
@@ -39,7 +39,9 @@ const webKeys = pg => pg.evaluate(() => Object.fromEntries(Object.keys(localStor
   const { ctx, pg, errs } = await open({ native: true, prefs });
   await ready(pg); await settle(pg);
   let p = (await mock(pg)).prefs;
-  ok(same(JSON.parse(p.comeback), OLD_DATA), 'native: old "resetlog" data now lives under "comeback", unchanged');
+  { const mig = JSON.parse(p.comeback);
+    ok(same(mig.days, OLD_DATA.days) && mig.version === 2 && mig.settings.v === 2, 'native: old "resetlog" data now lives under "comeback" (days unchanged, settings moved to the new structure)');
+    ok(['steps', 'water', 'nofried'].every(id => mig.settings.habits.some(h => h.id === id)) && mig.settings.habits.find(h => h.id === 'nofried').type === 'yesno' && mig.settings.habits.find(h => h.id === 'steps').type === 'steps', 'native: the old targets and the old rule became habits (steps, water, and the rule as Yes/No)'); }
   ok(same(JSON.parse(p.comeback_meta).reminder, OLD_META.reminder) && JSON.parse(p.comeback_meta).lastBackup === OLD_META.lastBackup, 'native: settings and reminder moved to comeback_meta');
   ok(p.comeback_migrated === '1' && p.comeback_onboarded === '1' && same(JSON.parse(p.comeback_sync), OLD_SYNC), 'native: migrated flag, onboarding flag and sync state moved');
   ok(p.comeback_unreadable_1700 === '{"broken', 'native: a kept unreadable copy moved too');
@@ -47,12 +49,12 @@ const webKeys = pg => pg.evaluate(() => Object.fromEntries(Object.keys(localStor
   ok(!(await pg.$('.onb')), 'the intro does not show again after the move');
   await tab(pg, 'progress');
   ok((await pg.textContent('#sDays')).trim() === '2', 'both old days show in Progress');
-  await tab(pg, 'setup');
+  await gear(pg);
   ok((await pg.inputValue('#remTime')) === '20:30' && await pg.$eval('#remOn', e => e.checked), 'the old reminder time and switch carried over');
   const before = JSON.stringify((await mock(pg)).prefs);
   await pg.reload(); await ready(pg); await settle(pg);
   const after = JSON.stringify((await mock(pg)).prefs);
-  ok(before === after, 'running the move again changes nothing (safe to repeat)');
+  ok(before === after, 'running the move again changes nothing (safe to repeat)', (() => { const a = JSON.parse(before), b = JSON.parse(after); return Object.keys(a).filter(k => a[k] !== b[k]).map(k => [k, String(a[k]).slice(0, 200), String(b[k]).slice(0, 200)]); })());
   ok(errs.length === 0, 'no page errors during the move', errs);
   await ctx.close();
 }
@@ -75,14 +77,14 @@ const webKeys = pg => pg.evaluate(() => Object.fromEntries(Object.keys(localStor
   const { ctx, pg } = await open({ plain });
   await ready(pg); await settle(pg);
   const k = await webKeys(pg);
-  ok(same(JSON.parse(k.comeback), OLD_DATA) && !Object.keys(k).some(x => x.startsWith('resetlog')), 'browser: old keys moved to comeback and removed');
+  ok(same(JSON.parse(k.comeback).days, OLD_DATA.days) && !Object.keys(k).some(x => x.startsWith('resetlog')), 'browser: old keys moved to comeback and removed');
   await ctx.close();
 }
 
 // ---------- 4. restore still accepts old resetlog-backup files ----------
 {
   const { ctx, pg, errs } = await open({ native: true, prefs: { comeback_onboarded: '1' } });
-  await ready(pg); await tab(pg, 'setup');
+  await ready(pg); await gear(pg);
   const OLD_BACKUP = { version: 1, settings: SETTINGS, days: { '2026-02-03': day('2026-02-03', 7777, 90.2, 'from the old app') } };
   await pg.setInputFiles('#restoreFile', { name: 'resetlog-backup-2026-02-04.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(OLD_BACKUP)) });
   await actionChoose(pg, 'Continue'); await actionChoose(pg, 'Replace everything');
@@ -128,21 +130,27 @@ const webKeys = pg => pg.evaluate(() => Object.fromEntries(Object.keys(localStor
   const texts = [];
   const grab = async () => texts.push(await pg.evaluate(() => document.documentElement.innerText + ' ' + [...document.querySelectorAll('[aria-label],[title],[placeholder]')].map(e => e.getAttribute('aria-label') + ' ' + e.title + ' ' + (e.placeholder || '')).join(' ')));
   await pg.waitForSelector('.onb'); await grab();
-  // walk every onboarding page: welcome, targets, reminder, permissions, brand help, height
-  await pg.click('#onbNext'); await grab(); await pg.click('#onbNext'); await grab(); await pg.click('#onbNext'); await grab();
-  await pg.click('#onbAllow'); await pg.waitForSelector('#onbBrandNext, #onbStart'); await grab();
-  if (await pg.$('#onbBrandNext')) { await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbStart'); await grab(); }
+  // walk every onboarding page: welcome, plan, targets, reminder, permissions, brand help, height, BMI scale
+  await pg.click('#onbNext'); await grab(); await pg.click('#plan-beginner'); await pg.click('#onbNext'); await grab(); await pg.click('#onbNext'); await grab(); await pg.click('#onbNext'); await grab();
+  await pg.click('#onbAllow'); await pg.waitForSelector('#onbBrandNext, #onbNext'); await grab();
+  if (await pg.$('#onbBrandNext')) { await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbNext'); await grab(); }
+  await pg.click('#onbNext'); await pg.waitForSelector('#onbStart'); await grab();
   await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'));
   await pg.waitForTimeout(400);
   for (const t of ['today', 'progress', 'setup']) { await tab(pg, t); await grab(); }
-  // the Steps sheet and the battery help sheet
-  await tab(pg, 'today'); await pg.click('#habitList .hcard[data-id="steps"]'); await pg.waitForSelector('.sheet'); await pg.waitForTimeout(500); await grab();
+  await gear(pg); await grab();
+  // the Steps sheet, the habit library and the BMI sheet
+  await tab(pg, 'today'); await pg.click('#sections .hcard[data-id="steps"] .hc-main'); await pg.waitForSelector('.sheet'); await pg.waitForTimeout(500); await grab();
+  await pg.click('.sheet .txtbtn.strong'); await pg.waitForFunction(() => !document.querySelector('.sheet-wrap'));
+  await tab(pg, 'setup'); await pg.click('#addHabitRow'); await pg.waitForSelector('.library'); await pg.waitForTimeout(400); await grab();
+  await pg.click('.sheet .txtbtn.strong'); await pg.waitForFunction(() => !document.querySelector('.sheet-wrap'));
+  await tab(pg, 'today'); await openBody(pg); await pg.click('#rowBmi'); await pg.waitForSelector('.sheet'); await pg.waitForTimeout(400); await grab();
   await pg.click('.sheet .txtbtn.strong'); await pg.waitForFunction(() => !document.querySelector('.sheet-wrap'));
   const html = await pg.content();
   const all = texts.join('\n') + html;
   ok(!/reset\s*-?\s*log/i.test(all), 'no "Reset Log" text on any screen or in the page', (all.match(/.{20}reset\s*-?\s*log.{20}/i) || [])[0]);
   ok(!/liver|cholesterol|triglycerid|\bALT\b|\bHDL\b|\bLFTs?\b|lipid|fatty/i.test(all), 'no medical wording anywhere in the app');
-  ok(/Welcome to Comeback/.test(texts[0]) && texts.some(t => /About Comeback/.test(t)), 'the app name shows as Comeback (intro and Plan)');
+  ok(/Welcome to Comeback/.test(texts[0]) && texts.some(t => /About Comeback/.test(t)), 'the app name shows as Comeback (intro and Settings)');
   const title = await pg.title();
   ok(title === 'Comeback', 'page title is Comeback', title);
   await ctx.close();

@@ -52,7 +52,7 @@ export const HABIT_IDS = ['steps', 'walk', 'pushups', 'pullups', 'squats', 'plan
 export const RULE_IDS = ['nofried', 'nosugar', 'nomaida', 'nolate'];
 export const hid = i => typeof i === 'number' ? HABIT_IDS[i - 1] : i;
 export const cardSel = i => `#sections .hcard[data-id="${hid(i)}"]`;
-export const ready = pg => pg.waitForSelector('#sections .hcard', { state: 'attached' });
+export const ready = pg => pg.waitForSelector('#sections .titem', { state: 'attached' });
 export const stored = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('CapacitorStorage.comeback')));
 export const sheetGone = pg => pg.waitForFunction(() => !document.querySelector('.sheet-wrap'), null, { timeout: 5000 });
 export const settle = pg => pg.waitForTimeout(750); // auto-save debounce (400ms) + write
@@ -61,6 +61,9 @@ export async function enterNumber(pg, text) {
   for (const ch of String(text)) await pg.click(`.keypad .key[aria-label="${ch === '.' ? 'Decimal point' : ch}"]`);
 }
 export async function setHabit(pg, idx, value) {
+  // a card that already hit its target shrinks to one line; tap it to open it again
+  const done = `#sections .drow[data-id="${hid(idx)}"]`;
+  if (await pg.$(done)) await pg.click(done);
   await pg.click(`${cardSel(idx)} .hc-main`);
   await pg.waitForSelector('.keypad');
   await enterNumber(pg, value);

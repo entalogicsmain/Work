@@ -20,7 +20,8 @@
     "test:responsive": "node test/responsive-test.mjs",
     "test:permissions": "node test/permissions-test.mjs",
     "test:refresh": "node test/refresh-test.mjs",
-    "test:core": "node test/core-test.mjs"
+    "test:core": "node test/core-test.mjs",
+    "test:structure": "node test/structure-test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

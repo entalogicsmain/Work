@@ -433,9 +433,8 @@ function dragMath(item,ev,grab){
 function startItemDrag(e,item){
   if(!editing||!item)return;
   e.preventDefault();e.stopPropagation();
-  const handle=e.currentTarget;try{handle.setPointerCapture(e.pointerId)}catch(x){}
-  const r=item.getBoundingClientRect(),grab={x:e.clientX-r.left,y:e.clientY-r.top};
-  dragState={item};item.classList.add('dragging');item.style.pointerEvents='none';haptic('medium');
+    const r=item.getBoundingClientRect(),grab={x:e.clientX-r.left,y:e.clientY-r.top};
+  dragState={item};item.classList.add('dragging');haptic('medium');
   const move=ev=>{
     const els=document.elementsFromPoint(ev.clientX,ev.clientY);
     const over=els.find(x=>x.classList&&x.classList.contains('titem')&&x!==item);
@@ -452,29 +451,28 @@ function startItemDrag(e,item){
     dragMath(item,ev,grab);
   };
   const up=()=>{
-    handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',up);handle.removeEventListener('pointercancel',up);
-    item.classList.remove('dragging');item.style.pointerEvents='';item.style.transform='';dragState=null;
+    window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);
+    item.classList.remove('dragging');item.style.transform='';dragState=null;
     commitLayoutFromDom();renderToday(true);
   };
-  handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',up);handle.addEventListener('pointercancel',up);
+  window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
 }
 function startSectionDrag(e,secEl){
   if(!editing)return;
   e.preventDefault();e.stopPropagation();
-  const handle=e.currentTarget;try{handle.setPointerCapture(e.pointerId)}catch(x){}
-  const r=secEl.getBoundingClientRect(),grab={x:e.clientX-r.left,y:e.clientY-r.top};
-  dragState={item:secEl};secEl.classList.add('dragging');secEl.style.pointerEvents='none';haptic('medium');
+    const r=secEl.getBoundingClientRect(),grab={x:e.clientX-r.left,y:e.clientY-r.top};
+  dragState={item:secEl};secEl.classList.add('dragging');haptic('medium');
   const move=ev=>{
     const over=document.elementsFromPoint(ev.clientX,ev.clientY).map(x=>x.closest&&x.closest('.tsec')).find(x=>x&&x!==secEl);
     if(over){const rr=over.getBoundingClientRect();const before=ev.clientY<rr.top+rr.height/2;const ref=before?over:over.nextSibling;if(ref!==secEl)over.parentNode.insertBefore(secEl,ref)}
     dragMath(secEl,ev,grab);
   };
   const up=()=>{
-    handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',up);handle.removeEventListener('pointercancel',up);
-    secEl.classList.remove('dragging');secEl.style.pointerEvents='';secEl.style.transform='';dragState=null;
+    window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);
+    secEl.classList.remove('dragging');secEl.style.transform='';dragState=null;
     commitLayoutFromDom();renderToday(true);
   };
-  handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',up);handle.addEventListener('pointercancel',up);
+  window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
 }
 /* keyboard / screen reader alternative to dragging */
 function moveItemByKey(item,dir){

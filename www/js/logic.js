@@ -110,10 +110,12 @@ function mergeData(local,inc){
 }
 
 /* ---------- storage (Capacitor Preferences) ---------- */
-let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'},steps:{heightCm:180,strictness:'balanced',sensitivity:'normal',useLocation:false,enabledAt:null,setupShown:false},nudges:[],suggestSnooze:{}};
+let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'},steps:{heightCm:180,strictness:'balanced',sensitivity:'normal',useLocation:false,enabledAt:null,setupShown:false},nudges:[],suggestSnooze:{},heightChecked:false};
 let loadProblem='';
 /* Height used to live in this phone's step settings. It is now part of the synced settings (and is the BMI height). */
 function adoptDeviceHeight(){
+  if(meta.heightChecked)return false;           // only the first launch after the upgrade looks at the old phone-only height
+  meta.heightChecked=true;store.saveMeta().catch(()=>{});
   if(settings.body.heightCm!=null||meta.steps.enabledAt==null)return false;
   const hh=meta.steps.heightCm;
   if(!(num(hh)&&hh>=100&&hh<=230))return false;
@@ -167,7 +169,7 @@ store={
       }
       if(!loadProblem)await prefSet(MIGRATED_KEY,'1');
     }
-    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupShown:!!st.setupShown}}if(Array.isArray(mm.nudges))meta.nudges=mm.nudges.filter(t=>typeof t==='string').slice(-20);if(mm.suggestSnooze&&typeof mm.suggestSnooze==='object'&&!Array.isArray(mm.suggestSnooze)){const o={};Object.keys(mm.suggestSnooze).forEach(k=>{if(ID_RE.test(k)&&DATE_RE.test(String(mm.suggestSnooze[k])))o[k]=mm.suggestSnooze[k]});meta.suggestSnooze=o}if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
+    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupShown:!!st.setupShown}}if(Array.isArray(mm.nudges))meta.nudges=mm.nudges.filter(t=>typeof t==='string').slice(-20);if(mm.heightChecked===true)meta.heightChecked=true;if(mm.suggestSnooze&&typeof mm.suggestSnooze==='object'&&!Array.isArray(mm.suggestSnooze)){const o={};Object.keys(mm.suggestSnooze).forEach(k=>{if(ID_RE.test(k)&&DATE_RE.test(String(mm.suggestSnooze[k])))o[k]=mm.suggestSnooze[k]});meta.suggestSnooze=o}if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
     try{const sv=await prefGet(SYNC_KEY);if(sv){const ss=JSON.parse(sv);sync.signedIn=!!ss.signedIn;sync.userId=typeof ss.userId==='string'?ss.userId:null;sync.email=typeof ss.email==='string'?ss.email:'';sync.lastSyncAt=num(ss.lastSyncAt)?ss.lastSyncAt:null;sync.settingsUpdatedAt=num(ss.settingsUpdatedAt)?ss.settingsUpdatedAt:0;sync.pendingDays=Array.isArray(ss.pendingDays)?ss.pendingDays.filter(k=>typeof k==='string'):[];sync.pendingSettings=!!ss.pendingSettings}}catch(e){}
     if(raw==null)return{migrated};
     try{

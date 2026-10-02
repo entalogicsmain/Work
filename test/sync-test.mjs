@@ -2,7 +2,7 @@
 // in-memory fake (auth + PostgREST, rows filtered by the caller's user id like RLS does).
 // Run: npm run test:sync
 import crypto from 'crypto';
-import { serve, launch, counter, newPage, skipOnboarding, tab, ready, stored, sheetGone, settle, setHabit, setBody, setNote, goDate, actionChoose, logDay, todayKey } from './helpers.mjs';
+import { serve, launch, counter, newPage, skipOnboarding, tab, gear, ready, stored, sheetGone, settle, setHabit, setBody, setNote, goDate, actionChoose, logDay, todayKey } from './helpers.mjs';
 
 const { srv, base } = serve();
 const API = 'https://fake.supabase.test';
@@ -91,7 +91,7 @@ const waitStatus = (re, t = 8000) => pg.waitForFunction(r => new RegExp(r).test(
 const authMsg = () => pg.$eval('#authMsg', e => ({ t: e.textContent, bad: e.classList.contains('bad') }));
 const authOpen = () => pg.$('#authEmail').then(x => !!x);
 async function auth(mode, email, pw) {
-  if (!(await authOpen())) { await tab(pg, 'setup'); await pg.click('#signInBtn'); await pg.waitForSelector('#authEmail'); }
+  if (!(await authOpen())) { await gear(pg); await pg.click('#signInBtn'); await pg.waitForSelector('#authEmail'); }
   await pg.fill('#authEmail', email); await pg.fill('#authPw', pw);
   await pg.click(mode === 'up' ? '#authUp' : '#authIn');
 }
@@ -104,7 +104,7 @@ const cloud = () => fake.calls.filter(c => c.includes('/rest/')).length;
 /* ---------- 1. works without an account ---------- */
 console.log('Signed out (local only)');
 await pg.goto(base); await ready(pg);
-await tab(pg, 'setup');
+await gear(pg);
 ok(await pg.isVisible('#signInBtn') && !(await pg.isVisible('#signOutBtn')), 'Plan shows "Sign in to sync" when signed out');
 await logDay(pg, { reps: 8000, weight: 87, note: 'local one' });
 await pg.click('#prevDay');
@@ -154,7 +154,7 @@ await authClosed();
 await waitStatus(/Synced at/);
 const uid = [...fake.users.keys()][0];
 ok(fake.days.length === 2 && fake.days.every(r => r.user_id === uid), 'both local days uploaded to the cloud', fake.days.length);
-ok(fake.settings.length === 1 && Array.isArray(fake.settings[0].data.habits) && Array.isArray(fake.settings[0].data.rules), 'settings uploaded');
+ok(fake.settings.length === 1 && Array.isArray(fake.settings[0].data.habits) && fake.settings[0].data.v === 2 && !('rules' in fake.settings[0].data), 'settings uploaded (new structure)');
 const loc = await stored(pg);
 const row = fake.days.find(r => r.log_date === tk);
 ok(row && Object.keys(row.data).sort().join() === 'note,rules,vals,waist,weight' && row.data.note === 'local one' && row.data.vals.pushups === 8000, 'cloud row data has exactly vals/rules/weight/waist/note', row && row.data);
@@ -165,22 +165,22 @@ ok(await pg.isVisible('#signOutBtn') && (await pg.textContent('#acctEmail')) ===
 console.log('Changing data while signed in');
 await goDate(pg, '2026-09-20');
 await logDay(pg, { reps: 9100, weight: 86.1, note: 'third day' });
-await tab(pg, 'setup'); await waitStatus(/Synced at/);
+await gear(pg); await waitStatus(/Synced at/);
 ok(fake.days.some(r => r.log_date === '2026-09-20' && r.data.note === 'third day'), 'a new change is upserted right away (after the auto-save)');
 ok(!fake.days.some(r => r.user_id !== uid), 'every cloud row belongs to the signed-in user');
-await pg.click('#setHabits .swipe:nth-child(1) .row'); await pg.fill('#fTarget', '9999'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg);
+await tab(pg, 'setup'); await pg.click('#planSections .swipe[data-id="steps"] .row'); await pg.fill('#fTarget', '9999'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg); await gear(pg);
 await pg.waitForTimeout(700); await waitStatus(/Synced at/);
 ok(fake.settings[0].data.habits[0].target === 9999, 'changed settings are upserted');
 
 /* ---------- 5. stay logged in; new phone ---------- */
 console.log('Persistent login and new phone');
-await pg.reload(); await ready(pg); await tab(pg, 'setup');
+await pg.reload(); await ready(pg); await gear(pg);
 await waitStatus(/Synced at/);
 ok(await pg.isVisible('#signOutBtn'), 'still signed in after closing and reopening the app (session kept in Preferences)');
 const before = await stored(pg);
 fake.calls.length = 0;
 await pg.evaluate(() => { localStorage.clear(); localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.comeback_onboarded', '1'); });
-await pg.reload(); await ready(pg); await tab(pg, 'setup');
+await pg.reload(); await ready(pg); await gear(pg);
 ok((await pg.textContent('#sDays')) === '0' && await pg.isVisible('#signInBtn'), 'wiped phone: empty and signed out');
 await auth('in', EMAIL, PW);
 await authClosed();
@@ -196,13 +196,13 @@ console.log('Offline queue');
 fake.offline = true; await ctx.setOffline(true);
 await tab(pg, 'today');
 await logDay(pg, { reps: 5000, weight: 85, note: 'saved offline' });
-await tab(pg, 'setup');
+await gear(pg);
 await waitStatus(/1 change is waiting to sync/);
 ok(/Offline|waiting to sync/.test(await status()), 'status says a change is waiting', await status());
 ok(!fake.days.some(r => r.data.note === 'saved offline'), 'nothing reached the cloud while offline');
 ok(await pg.evaluate(() => JSON.parse(localStorage.getItem('CapacitorStorage.comeback_sync')).pendingDays.length === 1), 'pending queue is stored in Preferences');
 await ctx.setOffline(false); // the page itself must load; the cloud stays unreachable
-await pg.reload(); await ready(pg); await tab(pg, 'setup');
+await pg.reload(); await ready(pg); await gear(pg);
 await waitStatus(/1 change is waiting to sync/);
 ok(true, 'queue survives restarting the app while still offline');
 await ctx.setOffline(true); await pg.waitForTimeout(200);
@@ -218,20 +218,20 @@ fake.days[fake.days.indexOf(rowOld)] = { ...rowOld, data: { ...rowOld.data, note
 const rowT = fake.days.find(r => r.log_date === tk);
 const newerLocalAt = cur.days[tk].updatedAt;
 fake.days[fake.days.indexOf(rowT)] = { ...rowT, data: { ...rowT.data, note: 'STALE cloud copy' }, updated_at: new Date(newerLocalAt - 100000).toISOString() };
-await tab(pg, 'setup'); await pg.click('#syncNowBtn');
+await gear(pg); await pg.click('#syncNowBtn');
 await waitStatus(/Synced at/); await pg.waitForTimeout(400);
 const merged = await stored(pg);
 ok(merged.days[kOld].note === 'edited on other phone' && merged.days[kOld].weight === 80, 'newer cloud day replaces the older local day');
 ok(merged.days[tk].note === cur.days[tk].note && fake.days.find(r => r.log_date === tk).data.note === cur.days[tk].note && cur.days[tk].note !== 'STALE cloud copy', 'newer local day replaces the older cloud day');
-fake.settings[0] = { ...fake.settings[0], data: { ...fake.settings[0].data, rules: fake.settings[0].data.rules.slice(0, 2) }, updated_at: new Date(Date.now() + 120000).toISOString() };
+fake.settings[0] = { ...fake.settings[0], data: { ...fake.settings[0].data, habits: fake.settings[0].data.habits.filter(h => h.id !== 'nolate' && h.id !== 'nomaida') }, updated_at: new Date(Date.now() + 120000).toISOString() };
 await pg.click('#syncNowBtn'); await pg.waitForTimeout(700); await waitStatus(/Synced at/);
-ok((await stored(pg)).settings.rules.length === 2, 'newer cloud settings replace local settings');
+ok((await stored(pg)).settings.habits.filter(h => h.type === 'yesno').length === 2, 'newer cloud settings replace local settings');
 await tab(pg, 'today'); await pg.waitForTimeout(200);
-ok((await pg.$$('#ruleList .rule-row')).length === 2, 'the screen refreshes after a cloud change');
+ok((await pg.$$('#sections .yrow')).length === 2, 'the screen refreshes after a cloud change');
 
 /* ---------- 8. restore pushes to the cloud ---------- */
 console.log('Restore while signed in');
-await tab(pg, 'setup');
+await gear(pg);
 const bk = { version: 1, settings: merged.settings, days: { '2025-01-02': { vals: { steps: 1234 }, rules: {}, weight: 90, waist: null, note: 'from old backup', date: '2025-01-02', updatedAt: 5 } } };
 await pg.setInputFiles('#restoreFile', { name: 'old.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bk)) });
 await actionChoose(pg, 'Continue');
@@ -256,7 +256,7 @@ ok(Object.keys((await stored(pg)).days).length === keep && keep >= 4, 'signing o
 await logDay(pg, { reps: 4000, weight: 84, note: 'after sign out' });
 await pg.waitForTimeout(300);
 ok(cloud() === 0 && !fake.days.some(r => r.data.note === 'after sign out'), 'after sign out, changes stay local');
-await pg.reload(); await ready(pg); await tab(pg, 'setup');
+await pg.reload(); await ready(pg); await gear(pg);
 ok(await pg.isVisible('#signInBtn'), 'stays signed out after restart');
 
 /* ---------- 10. different account on the same phone ---------- */

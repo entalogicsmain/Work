@@ -2,7 +2,7 @@
 // Needs E2E_EMAIL / E2E_PASSWORD of an existing confirmed user. Run: npm run test:real
 import fs from 'fs';
 import { chromium } from 'playwright';
-import { serve, counter, newPage, skipOnboarding, tab, ready, stored, logDay, goDate, daysAgo, todayKey } from './helpers.mjs';
+import { serve, counter, newPage, skipOnboarding, tab, gear, ready, stored, logDay, goDate, daysAgo, todayKey } from './helpers.mjs';
 
 const { srv, base } = serve();
 const T = counter(); const ok = T.ok;
@@ -26,7 +26,7 @@ const status = () => pg.textContent('#syncStatus');
 const waitStatus = (re, t = 25000) => pg.waitForFunction(r => new RegExp(r).test(document.getElementById('syncStatus').textContent), re.source, { timeout: t }).catch(async e => { console.log('  (status was: ' + (await status()) + ')'); throw e; });
 const authMsg = () => pg.$eval('#authMsg', e => ({ t: e.textContent, bad: e.classList.contains('bad') }));
 async function signIn(email, pw, mode = 'in') {
-  if (!(await pg.$('#authEmail'))) { await tab(pg, 'setup'); await pg.click('#signInBtn'); await pg.waitForSelector('#authEmail'); }
+  if (!(await pg.$('#authEmail'))) { await gear(pg); await pg.click('#signInBtn'); await pg.waitForSelector('#authEmail'); }
   await pg.fill('#authEmail', email); await pg.fill('#authPw', pw);
   await pg.click(mode === 'up' ? '#authUp' : '#authIn');
 }
@@ -36,7 +36,7 @@ const RUN = Date.now() % 900; // unique values each run so the offline change is
 
 console.log('Real Supabase: account sheet');
 await pg.goto(base); await ready(pg);
-await tab(pg, 'setup');
+await gear(pg);
 ok(await pg.isVisible('#signInBtn'), 'app is configured: "Sign in to sync" is offered');
 await logDay(pg, { steps: 8000, weight: 87, note: 'e2e local one' });
 await pg.click('#prevDay');
@@ -66,15 +66,15 @@ ok(await pg.isVisible('#signOutBtn') && (await pg.textContent('#acctEmail')) ===
 console.log('Real Supabase: change, wipe, sign in again');
 await goDate(pg, D3);
 await logDay(pg, { steps: 9100, weight: 86.1, note: 'e2e third day' });
-await tab(pg, 'setup'); await waitStatus(/Synced at/);
-await pg.click('#setHabits .swipe:nth-child(1) .row'); await pg.fill('#fTarget', '9999'); await pg.click('.sheet .txtbtn.strong');
+await gear(pg); await waitStatus(/Synced at/);
+await tab(pg, 'setup'); await pg.click('#planSections .swipe[data-id="steps"] .row'); await pg.fill('#fTarget', '9999'); await pg.click('.sheet .txtbtn.strong');
 await pg.waitForTimeout(900); await waitStatus(/Synced at/);
 const before = await stored(pg);
-await pg.reload(); await ready(pg); await tab(pg, 'setup');
+await pg.reload(); await ready(pg); await gear(pg);
 await waitStatus(/Synced at/);
 ok(await pg.isVisible('#signOutBtn'), 'login survives an app restart');
 await pg.evaluate(() => { localStorage.clear(); localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.comeback_onboarded', '1'); });
-await pg.reload(); await ready(pg); await tab(pg, 'setup');
+await pg.reload(); await ready(pg); await gear(pg);
 ok((await pg.textContent('#sDays')) === '0' && await pg.isVisible('#signInBtn'), 'wiped: local data gone and signed out');
 await signIn(EMAIL, PW);
 await authClosed();
@@ -88,10 +88,10 @@ console.log('Real Supabase: offline queue');
 blocked = true; await ctx.setOffline(true);
 await goDate(pg, D4);
 await logDay(pg, { steps: 5000 + RUN, weight: 80 + (RUN % 100) / 10, note: 'e2e saved offline ' + RUN });
-await tab(pg, 'setup'); await waitStatus(/1 change is waiting to sync/);
+await gear(pg); await waitStatus(/1 change is waiting to sync/);
 ok(true, 'offline change is queued ("1 change is waiting to sync")');
 await ctx.setOffline(false);
-await pg.reload(); await ready(pg); await tab(pg, 'setup');
+await pg.reload(); await ready(pg); await gear(pg);
 await waitStatus(/1 change is waiting to sync/);
 ok(true, 'queue survives an app restart while offline');
 await ctx.setOffline(true); await pg.waitForTimeout(200);
