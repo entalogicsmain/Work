@@ -350,7 +350,7 @@ function stepsSourceOf(d){return d.steps_meta?(d.steps_meta.source==='auto'?'cou
 function buildCsv(){
   const cols=settings.habits.filter(h=>h.type!=='measure');
   const head=['Date','Score %'].concat(cols.map(h=>h.type==='yesno'?h.name:h.name+' ('+h.unit+')'),['Steps source','Distance (km)','Filtered steps','Weight (kg)','Waist (cm)','BMI','Note']);
-  const rows=Object.keys(days).sort().map(k=>{
+  const rows=Core.loggedKeys(days).sort().map(k=>{
     const d=days[k],b=Core.bmi(d.weight,settings.body.heightCm);
     return [k,scoreOf(d)].concat(
       cols.map(h=>h.type==='yesno'?(d.rules&&d.rules[h.id]?'yes':'no'):(d.vals&&d.vals[h.id]!=null?d.vals[h.id]:'')),
@@ -381,7 +381,7 @@ async function restoreFromFile(file){
     try{obj=JSON.parse(await readText(file))}catch(e){throw new Error("That file isn't valid JSON, so it can't be a Comeback backup.")}
     inc=file.salvage?salvageData(obj):normalizeData(obj);
   }catch(e){setMsg('bkMsg',"Couldn't restore: "+errText(e),true);return}
-  const n=Object.keys(inc.days).length;
+  const n=Core.loggedKeys(inc.days).length;
   const body=(file.name||'This file')+' has '+n+' logged '+(n===1?'day':'days')+(n?' ('+range(Object.keys(inc.days))+')':'')+', '+inc.settings.habits.filter(h=>h.type!=='measure').length+' habits and rules. This phone has '+Object.keys(days).length+' logged days.'+(inc.salvaged?' '+inc.salvaged:'');
   if(await askModal('Restore this backup?',body,[{label:'Continue',value:'go'},{label:'Cancel',value:'cancel'}])!=='go')return;
   const mode=await askModal('How should it be restored?','Merge keeps what is on this phone and adds the backup. If a day is in both, the newer save wins. Replace everything deletes what is on this phone and uses only the backup.'+(signedIn()?' The restored data is also sent to your cloud copy; days that exist only in the cloud will come back on the next sync.':''),[{label:'Merge',value:'merge'},{label:'Replace everything',value:'replace',cls:'danger'},{label:'Cancel',value:'cancel'}]);
