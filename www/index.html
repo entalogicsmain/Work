@@ -739,6 +739,8 @@ function authErrText(e){
   if(c==='weak_password'||/password should|password is too/i.test(m))return 'That password is too weak. '+m;
   if(/rate.?limit|too many|security purposes/i.test(c+' '+m))return 'Too many attempts. Wait a few minutes and try again.';
   if(c==='signup_disabled')return 'New sign ups are turned off for this project.';
+  if(c==='email_address_not_authorized'||/not authorized|not part of the project/i.test(m))return "Sign up emails can't be sent to this address yet because the app's email service isn't fully set up. Please contact the app owner.";
+  if(c==='email_address_invalid'||/email address .* is invalid/i.test(m))return "That email address isn't accepted. Use a real address that can receive mail.";
   if(isNetErr(e))return 'No internet connection. Check your connection and try again.';
   return m;
 }

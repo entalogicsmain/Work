@@ -46,6 +46,7 @@ async function handler(route) {
   const byEmail = e => [...fake.users.values()].find(u => u.email === e);
 
   if (p === '/auth/v1/signup') {
+    if (fake.signupError) return send(400, fake.signupError);
     const ex = byEmail(body.email);
     if (ex) return send(200, { ...userObj(ex), identities: [] }); // what Supabase returns when confirmation is on
     const u = { id: crypto.randomUUID(), email: body.email, password: body.password, confirmed: !fake.confirmEmail };
@@ -144,6 +145,15 @@ await auth('up', 'not-an-email', PW);
 ok((await authMsg()).bad && /valid email/.test((await authMsg()).t), 'invalid email is rejected');
 await auth('up', EMAIL, '123');
 ok(/at least 6/.test((await authMsg()).t), 'short password is rejected');
+fake.signupError = { code: 400, error_code: 'email_address_not_authorized', msg: 'Email address "tester@example.com" cannot be used as it is not authorized' };
+await auth('up', EMAIL, PW);
+await pg.waitForFunction(() => /email service/.test(document.getElementById('authMsg').textContent));
+ok((await authMsg()).bad && /contact the app owner/.test((await authMsg()).t), 'default-SMTP "email not authorized" error is explained clearly');
+fake.signupError = { code: 400, error_code: 'email_address_invalid', msg: 'Email address "tester@example.com" is invalid' };
+await auth('up', EMAIL, PW);
+await pg.waitForFunction(() => /isn't accepted/.test(document.getElementById('authMsg').textContent));
+ok((await authMsg()).bad, 'invalid-domain error is explained clearly');
+fake.signupError = null;
 fake.offline = true;
 await auth('up', EMAIL, PW);
 await pg.waitForFunction(() => /No internet/.test(document.getElementById('authMsg').textContent));

@@ -39,6 +39,15 @@ The app works fully without an account. If you want your log on more than one ph
 - The queue is sent automatically when you open the app, when you return to it, and when the connection comes back. The queue survives closing the app.
 - If two phones edited the same day while one was offline, the later save wins when the offline one reconnects.
 
+**Letting anyone register (owner setup, one time)**
+
+By default a new Supabase project only sends sign up emails to people on your Supabase team (and only a few per hour), and it links to a "Site URL" of `localhost`. So out of the box only you could register. Pick one of these in the Supabase dashboard for the `reset-log` project:
+
+- **Simplest: no confirmation email.** Authentication > Sign In / Providers > Email > turn **off** "Confirm email" > Save. Anyone can then create an account in the app and is signed in straight away. No email is sent. The downside is that addresses aren't verified, and you can't send password resets.
+- **Keep the confirmation email.** Project Settings > Authentication > SMTP Settings > turn on **Custom SMTP** and enter the details from an email service (for example Resend, Brevo or Postmark). Then set Authentication > URL Configuration > Site URL to a page you control, because the link in the email opens a browser, not the app.
+
+Either way every account gets its own rows. Row Level Security means one user can never read or change another user's entries.
+
 **Privacy.** Your data is stored in a Supabase database with Row Level Security: your account can only read and write its own rows. The app only contains the project's publishable key (`www/config.js`), never an admin key. The auto backup and export files described below still work the same, signed in or not.
 
 ## Where backups are stored
