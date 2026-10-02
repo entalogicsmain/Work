@@ -1,7 +1,7 @@
 // First-launch permission flow: one screen, one button, the system dialogs in order, brand help, height, then counting starts.
 // Covers everything granted, everything denied, partial answers, every brand, the web build, and "Show intro again".
 // Run: npm run test:permissions
-import { serve, launch, counter, newPage, tab, gear, ready, setHabit, MOCK, todayKey } from './helpers.mjs';
+import { serve, launch, counter, newPage, tab, gear, ready, setHabit, setTime, MOCK, todayKey } from './helpers.mjs';
 
 const { srv, base } = serve();
 const T = counter(); const ok = T.ok;
@@ -48,7 +48,7 @@ console.log('All allowed');
   ok(!(await names(pg)).some(n => /req/.test(n)), 'nothing is asked for on the welcome screens');
   await toReminder(pg);
   ok(/Daily reminder/.test(await pageText(pg)) && await pg.isChecked('#onbRemOn'), 'the reminder page has a switch (on by default) and a time');
-  await pg.fill('#onbTime', '20:15'); await pg.click('#onbNext'); await pg.waitForSelector('#onbAllow');
+  await setTime(pg, '#onbTime', '20:15'); await pg.click('#onbNext'); await pg.waitForSelector('#onbAllow');
   const t = await pageText(pg);
   ok(/Let Comeback track for you/.test(t), 'one screen titled "Let Comeback track for you"');
   ok(/Physical activity/.test(t) && /To count steps and pause counting in vehicles\./.test(t), 'explains Physical activity in one line');

@@ -3,7 +3,7 @@
 // Run: npm run test:structure
 import fs from 'fs';
 import { createRequire } from 'module';
-import { serve, launch, counter, same, newPage, skipOnboarding, tab, gear, ready, stored, sheetGone, settle, setHabit, setBody, setNote, toggleRule, openBody, actionChoose, cardSel, MOCK, todayKey, daysAgo, ymd } from './helpers.mjs';
+import { serve, launch, counter, same, newPage, skipOnboarding, tab, gear, ready, stored, sheetGone, settle, setHabit, setBody, setNote, toggleRule, openBody, actionChoose, cardSel, getTime, setTime, MOCK, todayKey, daysAgo, ymd } from './helpers.mjs';
 
 const Core = createRequire(import.meta.url)('../www/js/core.js');
 const { srv, base } = serve();
@@ -525,6 +525,27 @@ console.log('Migration');
   const exported = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
   ok(exported.version === 2 && exported.settings.habits.length === d.settings.habits.length && same(exported.days, d.days), 'a new backup carries the whole structure and every day');
   ok(errs.length === 0, 'no JS errors (old backup)', errs);
+  await ctx.close();
+}
+
+/* ================= 12-hour clock everywhere ================= */
+console.log('12-hour clock');
+{
+  // a phone set to a 24-hour locale must still see AM/PM
+  const errs = [];
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 900 }, locale: 'en-GB', acceptDownloads: true });
+  await skipOnboarding(ctx);
+  const pg = await newPage(ctx, errs);
+  await pg.goto(base); await ready(pg); await gear(pg);
+  ok(!(await pg.$('input[type=time]')), 'there is no system time input (it would follow the phone\'s 24-hour setting)');
+  ok((await pg.$$('#remTime select')).length === 3 && await pg.$eval('#remTime .t12-p', e => [...e.options].map(o => o.value).join() === 'AM,PM') && (await pg.$$eval('#remTime .t12-h option', o => o.map(x => x.textContent).join())) === '1,2,3,4,5,6,7,8,9,10,11,12', 'the reminder time is hour 1 to 12, minute and AM/PM');
+  ok((await getTime(pg, '#remTime')) === '21:00' && (await pg.$eval('#remTime .t12-h', e => e.value)) === '9' && (await pg.$eval('#remTime .t12-p', e => e.value)) === 'PM', '21:00 is shown as 9 : 00 PM');
+  await setTime(pg, '#remTime', '00:05'); ok((await pg.$eval('#remTime .t12-h', e => e.value)) === '12' && (await pg.$eval('#remTime .t12-p', e => e.value)) === 'AM', 'midnight is 12:05 AM');
+  await setTime(pg, '#remTime', '12:30'); ok((await pg.$eval('#remTime .t12-h', e => e.value)) === '12' && (await pg.$eval('#remTime .t12-p', e => e.value)) === 'PM', 'noon is 12:30 PM');
+  await pg.$eval('#remTime .t12-h', e => { e.value = '3'; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  ok((await getTime(pg, '#remTime')) === '12:30'.replace('12', '15'), 'picking 3 with PM stores 15:30');
+  ok(/\b(am|pm)\b/i.test(await pg.textContent('#lastBackup')) || /never/.test(await pg.textContent('#lastBackup')), 'times elsewhere carry AM/PM');
+  ok(errs.length === 0, 'no JS errors (12-hour)', errs);
   await ctx.close();
 }
 

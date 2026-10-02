@@ -1,7 +1,7 @@
 // Checks for the rename from "Reset Log" to "Comeback": old saved data moves to the new keys, old backup files still restore,
 // the new copy is in place, and no leftover old name or medical wording shows on any screen.
 // Run: npm run test:rename
-import { serve, launch, counter, newPage, tab, gear, openBody, ready, sheetGone, settle, actionChoose, MOCK, todayKey, daysAgo, same } from './helpers.mjs';
+import { serve, launch, counter, newPage, tab, gear, getTime, openBody, ready, sheetGone, settle, actionChoose, MOCK, todayKey, daysAgo, same } from './helpers.mjs';
 
 const { srv, base } = serve();
 const T = counter(); const ok = T.ok;
@@ -50,7 +50,7 @@ const webKeys = pg => pg.evaluate(() => Object.fromEntries(Object.keys(localStor
   await tab(pg, 'progress');
   ok((await pg.textContent('#sDays')).trim() === '2', 'both old days show in Progress');
   await gear(pg);
-  ok((await pg.inputValue('#remTime')) === '20:30' && await pg.$eval('#remOn', e => e.checked), 'the old reminder time and switch carried over');
+  ok((await getTime(pg, '#remTime')) === '20:30' && await pg.$eval('#remOn', e => e.checked), 'the old reminder time and switch carried over');
   const before = JSON.stringify((await mock(pg)).prefs);
   await pg.reload(); await ready(pg); await settle(pg);
   const after = JSON.stringify((await mock(pg)).prefs);

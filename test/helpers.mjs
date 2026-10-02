@@ -168,3 +168,7 @@ export const MOCK = `
     ImpactStyle:{Light:'LIGHT',Medium:'MEDIUM'},NotificationType:{Success:'SUCCESS'}
   };
 })();`;
+
+// The reminder time is a 12-hour picker (hour, minute, AM/PM); .value is still "HH:MM"
+export const getTime = (pg, sel) => pg.$eval(sel, e => e.value);
+export const setTime = (pg, sel, hhmm) => pg.$eval(sel, (e, v) => { e.value = v; e.querySelector('select').dispatchEvent(new Event('change', { bubbles: true })); }, hhmm);

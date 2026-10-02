@@ -641,3 +641,11 @@ button.row:active,label.row:active{background:var(--fill)}
   .ptr-in{transition:opacity .15s linear!important;transform:none!important}
   .ptr.ready .ptr-ic,.ptr.hold .ptr-ic{animation:none}
 }
+
+/* 12-hour time picker */
+.time12{display:inline-flex;align-items:center;gap:4px;flex:none}
+.time12 select{min-height:44px;padding:0 8px;border:0;border-radius:var(--r-s);background:var(--fill);color:var(--label);font-size:1rem;text-align:center;font-variant-numeric:tabular-nums;cursor:pointer}
+.time12 select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.row:has(>.time12){flex-wrap:wrap;row-gap:var(--s2)}
+.row:has(>.time12) .row-body,.row:has(>.time12)>.row-label{flex:1 1 4rem}
+.time12{margin-left:auto;max-width:100%}

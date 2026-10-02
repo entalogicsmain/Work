@@ -188,7 +188,7 @@ store={
 
 /* ---------- files: export, auto backup ---------- */
 const DIR='Comeback';
-const fmtWhen=t=>new Date(t).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'});
+const fmtWhen=t=>new Date(t).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
 function showLastBackup(){$('lastBackup').textContent='Last backup: '+(meta.lastBackup?fmtWhen(meta.lastBackup):'never')}
 async function markBackup(){meta.lastBackup=Date.now();showLastBackup();try{await store.saveMeta()}catch(e){}}
 
@@ -349,7 +349,7 @@ async function setReminder(on){
     setMsg('remMsg',"Couldn't "+(on?'set':'turn off')+' the reminder: '+errText(e),true);
   }
 }
-const fmtTime=t=>{const [h,m]=t.split(':').map(Number);return new Date(2000,0,1,h,m).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})};
+const fmtTime=t=>{const [h,m]=t.split(':').map(Number);return new Date(2000,0,1,h,m).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',hour12:true})};
 async function onRemTimeChange(e){
   const t=e.target.value;
   if(!/^\d{2}:\d{2}$/.test(t)){e.target.value=meta.reminder.time;return}

@@ -13,6 +13,25 @@ const fmt=n=>Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 let activeTab='today';
 
+/* A 12-hour time picker (hour, minute, AM/PM). The phone's own time input follows the system 24-hour setting, so the app draws its own.
+   The element behaves like an input: .value is "HH:MM" (24-hour, for storage) and it fires "change". */
+function initTime12(el,label){
+  if(!el||el._t12)return el;
+  el._t12=true;
+  el.classList.add('time12');el.setAttribute('role','group');if(label)el.setAttribute('aria-label',label);
+  const mk=(cls,name,opts)=>{const sel=document.createElement('select');sel.className=cls;sel.setAttribute('aria-label',(label?label+' ':'')+name);opts.forEach(o=>{const op=document.createElement('option');op.value=o[0];op.textContent=o[1];sel.appendChild(op)});el.appendChild(sel);return sel};
+  const hh=mk('t12-h','hour',Array.from({length:12},(_,i)=>[String(i+1),String(i+1)]));
+  const mm=mk('t12-m','minute',Array.from({length:60},(_,i)=>[String(i),String(i).padStart(2,'0')]));
+  const ap=mk('t12-p','AM or PM',[['AM','AM'],['PM','PM']]);
+  const get=()=>{let h=Number(hh.value)%12;if(ap.value==='PM')h+=12;return String(h).padStart(2,'0')+':'+String(Number(mm.value)).padStart(2,'0')};
+  const set=v=>{const m=/^(\d{1,2}):(\d{2})$/.exec(v||'');if(!m)return;const h=Number(m[1])%24;hh.value=String(h%12===0?12:h%12);mm.value=String(Number(m[2]));ap.value=h>=12?'PM':'AM'};
+  Object.defineProperty(el,'value',{get,set,configurable:true});
+  [hh,mm,ap].forEach(x=>x.addEventListener('change',e=>{e.stopPropagation();el.dispatchEvent(new Event('change',{bubbles:true}))}));
+  set('21:00');
+  return el;
+}
+initTime12($('remTime'),'Reminder time');
+
 function haptic(kind){
   if(!IS_NATIVE||!Native.Haptics)return;
   try{
@@ -405,7 +424,7 @@ function renderSyncStatus(){
   else if(syncError){t='Sync problem: '+syncError+(waiting?' ('+waiting+')':'');bad=true}
   else if(syncOffline&&n)t='Offline. '+waiting+'.';
   else if(n)t=waiting.charAt(0).toUpperCase()+waiting.slice(1)+'.';
-  else if(sync.lastSyncAt)t='Synced at '+new Date(sync.lastSyncAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  else if(sync.lastSyncAt)t='Synced at '+new Date(sync.lastSyncAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',hour12:true});
   else t='Not synced yet.';
   el.textContent=t;el.style.color=bad?'var(--red)':'';
   $('syncNowBtn').disabled=!!syncRunning;
@@ -498,8 +517,9 @@ function showOnboarding(opts){
     addPage('plan',pl);
     const p2=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Set your targets</h2><p>These are a starting point. Change a number now or later in Plan.</p><div class="group" id="onbTargets"></div></div>'),'target');
     addPage('targets',p2);
-    const p3=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Never miss a day</h2><p>Get one gentle reminder a day. Pick the time that suits you. You can change it any time in Settings.</p><div class="group"><label class="row"><span class="row-label">Daily reminder</span><input type="checkbox" class="switch" role="switch" id="onbRemOn" aria-label="Daily reminder" checked></label><label class="row"><span class="row-label">Reminder time</span><input type="time" id="onbTime" value="21:00" aria-label="Reminder time"></label></div></div>'),'bell');
+    const p3=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Never miss a day</h2><p>Get one gentle reminder a day. Pick the time that suits you. You can change it any time in Settings.</p><div class="group"><label class="row"><span class="row-label">Daily reminder</span><input type="checkbox" class="switch" role="switch" id="onbRemOn" aria-label="Daily reminder" checked></label><label class="row"><span class="row-label">Reminder time</span><span id="onbTime"></span></label></div></div>'),'bell');
     reminderSwitch=p3.querySelector('#onbRemOn');
+    initTime12(p3.querySelector('#onbTime'),'Reminder time');
     addPage('reminder',p3);
   }
   if(stepFlow){

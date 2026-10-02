@@ -4,7 +4,7 @@
 //  Part B: same pages with a mocked native bridge: auto backup + rotation, share flow, reminder, back button, haptics.
 // Run: npm run test:web
 import fs from 'fs';
-import { serve, launch, counter, same, newPage, skipOnboarding, tab, ready, stored, sheetGone, settle, setHabit, setBody, setNote, toggleRule, goDate, actionChoose, logDay, cardSel, openBody, gear, MOCK, todayKey, daysAgo, ymd } from './helpers.mjs';
+import { serve, launch, counter, same, newPage, skipOnboarding, tab, ready, stored, sheetGone, settle, setHabit, setBody, setNote, toggleRule, goDate, actionChoose, logDay, cardSel, openBody, gear, getTime, setTime, MOCK, todayKey, daysAgo, ymd } from './helpers.mjs';
 
 const { srv, base } = serve();
 const T = counter();
@@ -560,17 +560,17 @@ console.log('Part B: mocked native bridge');
   const r1 = await pg.$eval('#remMsg', e => ({ t: e.textContent, bad: e.classList.contains('bad') }));
   ok(r1.bad && /blocked/i.test(r1.t) && !(await pg.isChecked('#remOn')) && (await calls('schedule')).length === 0, 'denied permission: switch reverts and a message is shown', r1);
   await pg.evaluate(() => { window.__mock.set('requestResult', 'granted'); window.__mock.set('perm', 'prompt'); });
-  ok((await pg.inputValue('#remTime')) === '21:00', 'default reminder time is 9:00 PM');
+  ok((await getTime(pg, '#remTime')) === '21:00' && (await pg.$eval('#remTime .t12-p', e => e.value)) === 'PM' && (await pg.$eval('#remTime .t12-h', e => e.value)) === '9', 'default reminder time is 9:00 PM');
   await pg.check('#remOn'); await pg.waitForFunction(() => /Reminder set/.test(document.getElementById('remMsg').textContent));
   let sch = (await calls('schedule')).pop().a.notifications[0];
   ok(sch.schedule.on.hour === 21 && sch.schedule.on.minute === 0 && sch.body === 'Time to log today. How did your comeback go?' && sch.title === 'Comeback', 'daily repeating schedule at 21:00 with the requested text', sch);
   ok(sch.isExactNotification === false && sch.schedule.allowWhileIdle === true && sch.channelId === 'daily-reminder', 'inexact, doze-friendly, own channel');
-  await pg.fill('#remTime', '07:30'); await pg.waitForFunction(() => /moved to/i.test(document.getElementById('remMsg').textContent));
+  await setTime(pg, '#remTime', '07:30'); await pg.waitForFunction(() => /moved to/i.test(document.getElementById('remMsg').textContent));
   sch = (await calls('schedule')).pop().a.notifications[0];
   ok(sch.schedule.on.hour === 7 && sch.schedule.on.minute === 30, 'changing the time reschedules', sch.schedule);
   const nBefore = (await calls('schedule')).length;
   await pg.reload(); await ready(pg); await gear(pg); await pg.waitForTimeout(400);
-  ok((await pg.isChecked('#remOn')) && (await pg.inputValue('#remTime')) === '07:30' && (await calls('schedule')).length === nBefore + 1, 'reminder settings survive a restart and are re-armed');
+  ok((await pg.isChecked('#remOn')) && (await getTime(pg, '#remTime')) === '07:30' && (await calls('schedule')).length === nBefore + 1, 'reminder settings survive a restart and are re-armed');
   await pg.uncheck('#remOn'); await pg.waitForFunction(() => /off/i.test(document.getElementById('remMsg').textContent));
   ok(!JSON.parse((await mock()).prefs.comeback_meta).reminder.enabled, 'turning the reminder off cancels it');
 
