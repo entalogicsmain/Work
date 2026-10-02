@@ -287,9 +287,12 @@ function habitFormSheet(x,opts){
     }
     const sched=Core.normalizeSchedule(st.sched);
     if(x){
-      x.name=name;x.icon=st.icon;x.section=secId;x.schedule=sched;
-      if(needNum){x.target=target;if(x.type!=='steps')x.unit=q('#fUnit').value.trim()||x.unit}
-      if(st.show)delete x.hidden;else x.hidden=true;
+      // look the habit up again: a cloud sync while this sheet was open may have replaced the settings (or removed the habit)
+      let t=settings.habits.find(z=>z.id===x.id);
+      if(!t){settings.habits.push(x);t=x}
+      t.name=name;t.icon=st.icon;t.section=secId;t.schedule=sched;
+      if(needNum){t.target=target;if(t.type!=='steps')t.unit=q('#fUnit').value.trim()||t.unit}
+      if(st.show)delete t.hidden;else t.hidden=true;
       persistSettings('Habit updated');
     }else{
       const unit=q('#fUnit').value.trim()||(st.type==='duration'?'min':st.type==='count'?'times':'');

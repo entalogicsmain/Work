@@ -81,25 +81,76 @@ function normalizeDay(k,d){
   if(sm)out.steps_meta=sm;
   return out;
 }
-/* Throws an Error with a readable message when the object is not a Comeback backup. */
-function normalizeData(obj){
+/* Throws an Error with a readable message when the object is not a Comeback backup. Restoring from a file is strict: one bad day
+   refuses the whole file. Loading the phone's own saved copy is lenient (lenient=true): a bad day is set aside on its own
+   (returned in "skipped", keyed by date, with its raw record) and every other day still loads. */
+function normalizeData(obj,lenient){
   if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error("This isn't a Comeback backup (expected a JSON object).");
   if(obj.version!=null&&obj.version!==1&&obj.version!==2)throw new Error(typeof obj.version==='number'&&obj.version>2?'This backup was made by a newer version of Comeback (version '+obj.version+'). Update the app first.':'Unknown backup version: '+esc(String(obj.version)).slice(0,20)+'.');
   const mig=Core.migrateSettings(obj.settings);
   if(!obj.days||typeof obj.days!=='object'||Array.isArray(obj.days))throw new Error("The backup is missing its 'days' section.");
-  const outDays={};
-  Object.keys(obj.days).forEach(k=>{outDays[k]=normalizeDay(k,obj.days[k])});
+  const outDays={},skipped={};
+  Object.keys(obj.days).forEach(k=>{
+    if(!lenient){outDays[k]=normalizeDay(k,obj.days[k]);return}
+    try{outDays[k]=normalizeDay(k,obj.days[k])}catch(e){skipped[k]={raw:obj.days[k],error:errText(e)}}
+  });
   Core.applyIdMap(outDays,mig.idMap);
-  return{version:2,settings:mig.settings,days:outDays};
+  const out={version:2,settings:mig.settings,days:outDays};
+  if(lenient)out.skipped=skipped;
+  return out;
+}
+
+/* ---------- merging a day that two places changed ----------
+   Timestamps are phone clocks, so one phone with a wrong clock must not win forever: any timestamp is read as at most 5 minutes
+   ahead of now. A timestamp of 0 or none means "unknown" (an old backup, a day made before saving began). */
+const SKEW_MS=5*60*1000;
+const clampTs=(t,now)=>num(t)&&t>0?Math.min(t,(now==null?Date.now():now)+SKEW_MS):0;
+const canonJson=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.keys(x).sort().reduce((o,q)=>{o[q]=x[q];return o},{}):x);
+const sameDay=(a,b)=>canonJson(dayData(a))===canonJson(dayData(b));
+/* How much step detail a day has: the count first, then the hourly buckets. */
+const metaWeight=m=>m?[m.counted||0,(m.hourly||[]).reduce((x,y)=>x+y,0)]:[-1,-1];
+/* Merge two records of the same day key by key: the union of values and rules (where both have a key, the side with the newer day
+   timestamp wins), the higher step count with the richer step details, and the newer weight, waist and note unless it is empty. */
+function mergeDayRecords(a,b,now){
+  const ta=clampTs(a.updatedAt,now),tb=clampTs(b.updatedAt,now);
+  const nw=tb>ta?b:a,od=nw===a?b:a;
+  const out={vals:Object.assign({},od.vals,nw.vals),rules:Object.assign({},od.rules,nw.rules),
+    weight:nw.weight!=null?nw.weight:od.weight,waist:nw.waist!=null?nw.waist:od.waist,note:nw.note?nw.note:(od.note||''),date:a.date||b.date,updatedAt:Math.max(ta,tb)};
+  const sa=a.vals&&a.vals.steps,sb=b.vals&&b.vals.steps;
+  if(num(sa)&&num(sb))out.vals.steps=Math.max(sa,sb);
+  const ma=a.steps_meta,mb=b.steps_meta;
+  if(ma||mb){
+    const wa=metaWeight(ma),wb=metaWeight(mb);
+    const aWins=!mb||(ma&&(wa[0]>wb[0]||(wa[0]===wb[0]&&(wa[1]>wb[1]||(wa[1]===wb[1]&&nw===a)))));
+    out.steps_meta=clone(aWins?ma:mb);
+  }
+  return out;
+}
+
+/* Best effort for the copy kept when the phone's saved data couldn't be read: every day that is fine is taken; if the plan itself is
+   what is broken, the default plan stands in for it (Merge keeps the plan that is on this phone). inc.salvaged says what was left out. */
+function salvageData(obj){
+  let inc,planLost=false;
+  try{inc=normalizeData(obj,true)}
+  catch(e){
+    if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error("That copy isn't a Comeback backup.");
+    planLost=true;
+    inc=normalizeData(Object.assign({},obj,{version:2,settings:clone(DEFAULT_SETTINGS)}),true);
+  }
+  const bad=Object.keys(inc.skipped||{}).length,notes=[];
+  if(planLost)notes.push("Its plan couldn't be read, so the default plan is used (Merge keeps the plan on this phone).");
+  if(bad)notes.push(bad+(bad===1?' day':' days')+" couldn't be read and "+(bad===1?'is':'are')+' left out.');
+  inc.salvaged=notes.join(' ');
+  return inc;
 }
 
 function mergeData(local,inc){
   const outDays=Object.assign({},local.days);let added=0,updated=0,kept=0;
   Object.keys(inc.days).forEach(k=>{
     const cur=outDays[k],d=inc.days[k];
-    if(!cur){outDays[k]=d;added++}
-    else if((d.updatedAt||0)>(cur.updatedAt||0)){outDays[k]=d;updated++}
-    else kept++;
+    if(!cur){outDays[k]=d;added++;return}
+    const m=mergeDayRecords(cur,d);
+    if(sameDay(m,cur))kept++;else{outDays[k]=m;updated++}
   });
   // habits and sections the backup has and this phone lacks are added; what is here (order, targets, schedules, units) wins
   const ls=local.settings,merged=clone(ls);
@@ -145,16 +196,49 @@ async function migrateLegacyKeys(){
   return moved;
 }
 
+/* When the saved copy couldn't be read at all (loadProblem), the app must not write over it, and must not replace the files of the
+   automatic backup with an empty copy. While "dataLocked", new work is saved under SAFE_KEY (it comes back on the next start) and
+   the automatic backup is paused until the data is restored (see recoverUnreadable and restoreFromFile). */
+let dataLocked=false;
+const SAFE_KEY='comeback_safe',UNREAD_PREFIX='comeback_unreadable_',QUAR_PREFIX='comeback_quarantine_',KEEP_COPIES=3;
+/* Keeps only the newest KEEP_COPIES keys that start with prefix (their suffix is the time they were made). */
+async function capKeys(prefix){
+  try{
+    const ks=((await Prefs.keys()).keys||[]).filter(k=>k.indexOf(prefix)===0).sort((a,b)=>(Number(b.slice(prefix.length))||0)-(Number(a.slice(prefix.length))||0));
+    for(const k of ks.slice(KEEP_COPIES))await Prefs.remove({key:k});
+  }catch(e){}
+}
+/* Writes a kept copy under prefix+time, unless the newest one is identical already (so restarting doesn't pile up copies). */
+async function keepCopy(prefix,text){
+  try{
+    const ks=((await Prefs.keys()).keys||[]).filter(k=>k.indexOf(prefix)===0);
+    for(const k of ks)if(await prefGet(k)===text)return k;
+    const key=prefix+Date.now();
+    await prefSet(key,text);
+    await capKeys(prefix);
+    return key;
+  }catch(e){return null}
+}
+async function newestUnreadable(){
+  try{
+    const ks=((await Prefs.keys()).keys||[]).filter(k=>k.indexOf(UNREAD_PREFIX)===0).sort((a,b)=>(Number(b.slice(UNREAD_PREFIX.length))||0)-(Number(a.slice(UNREAD_PREFIX.length))||0));
+    return ks.length?await prefGet(ks[0]):null;
+  }catch(e){return null}
+}
+let loadNotice='';
+
 store={
   queue:Promise.resolve(),
   persist(){
     const json=JSON.stringify(buildData());
-    const p=this.queue.then(()=>prefSet(DATA_KEY,json));
+    const key=dataLocked?SAFE_KEY:DATA_KEY;
+    const p=this.queue.then(()=>prefSet(key,json));
     this.queue=p.catch(()=>{});
     return p;
   },
   async load(){
     await migrateLegacyKeys();
+    await capKeys(UNREAD_PREFIX);await capKeys(QUAR_PREFIX);
     let raw=await prefGet(DATA_KEY),migrated=0;
     if(await prefGet(MIGRATED_KEY)==null){
       // one-time move of the old browser copy (localStorage "resetlog", from before Preferences was used) into Preferences
@@ -170,16 +254,28 @@ store={
       if(!loadProblem)await prefSet(MIGRATED_KEY,'1');
     }
     try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupShown:!!st.setupShown}}if(Array.isArray(mm.nudges))meta.nudges=mm.nudges.filter(t=>typeof t==='string').slice(-20);if(mm.heightChecked===true)meta.heightChecked=true;if(mm.suggestSnooze&&typeof mm.suggestSnooze==='object'&&!Array.isArray(mm.suggestSnooze)){const o={};Object.keys(mm.suggestSnooze).forEach(k=>{if(ID_RE.test(k)&&DATE_RE.test(String(mm.suggestSnooze[k])))o[k]=mm.suggestSnooze[k]});meta.suggestSnooze=o}if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
-    try{const sv=await prefGet(SYNC_KEY);if(sv){const ss=JSON.parse(sv);sync.signedIn=!!ss.signedIn;sync.userId=typeof ss.userId==='string'?ss.userId:null;sync.email=typeof ss.email==='string'?ss.email:'';sync.lastSyncAt=num(ss.lastSyncAt)?ss.lastSyncAt:null;sync.settingsUpdatedAt=num(ss.settingsUpdatedAt)?ss.settingsUpdatedAt:0;sync.pendingDays=Array.isArray(ss.pendingDays)?ss.pendingDays.filter(k=>typeof k==='string'):[];sync.pendingSettings=!!ss.pendingSettings}}catch(e){}
+    try{const sv=await prefGet(SYNC_KEY);if(sv){const ss=JSON.parse(sv);sync.signedIn=!!ss.signedIn;sync.userId=typeof ss.userId==='string'?ss.userId:null;sync.email=typeof ss.email==='string'?ss.email:'';sync.lastSyncAt=num(ss.lastSyncAt)?ss.lastSyncAt:null;sync.settingsUpdatedAt=num(ss.settingsUpdatedAt)?ss.settingsUpdatedAt:0;sync.pendingDays=Array.isArray(ss.pendingDays)?ss.pendingDays.filter(k=>typeof k==='string'):[];sync.pendingSettings=!!ss.pendingSettings;sync.seen={};if(ss.seen&&typeof ss.seen==='object'&&!Array.isArray(ss.seen))Object.keys(ss.seen).forEach(k=>{if(num(ss.seen[k]))sync.seen[k]=ss.seen[k]})}}catch(e){}
     if(raw==null)return{migrated};
     try{
       const parsed=JSON.parse(raw);
-      const norm=normalizeData(parsed);
-      return{data:norm,migrated,upgraded:!(parsed&&parsed.version===2&&parsed.settings&&parsed.settings.v===2)};
+      const norm=normalizeData(parsed,true);
+      const bad=Object.keys(norm.skipped);
+      if(bad.length){
+        // a bad day is set aside on its own (kept as it was) and the rest loads; the next save no longer contains it
+        const kept=await keepCopy(QUAR_PREFIX,JSON.stringify({quarantinedDays:Object.keys(norm.skipped).reduce((o,k)=>{o[k]=norm.skipped[k].raw;return o},{})}));
+        const list=bad.sort();
+        loadNotice=bad.length+(bad.length===1?' day':' days')+" couldn't be read and "+(bad.length===1?'was':'were')+' set aside ('+list.slice(0,3).join(', ')+(list.length>3?' and '+(list.length-3)+' more':'')+'). Everything else loaded fine.'+(kept?' A copy of '+(bad.length===1?'it':'them')+' was kept on this phone.':'');
+      }
+      return{data:norm,migrated,quarantined:bad,upgraded:bad.length>0||!(parsed&&parsed.version===2&&parsed.settings&&parsed.settings.v===2)};
     }catch(e){
-      // keep the unreadable copy instead of overwriting it with an empty one
-      try{await prefSet('comeback_unreadable_'+Date.now(),raw)}catch(e2){}
-      loadProblem="Your saved data couldn't be read ("+errText(e)+"). A copy was kept. Use Restore from backup to bring your entries back.";
+      // the whole copy is unreadable: keep it as it is, and do not write over it or over the automatic backup
+      await keepCopy(UNREAD_PREFIX,raw);
+      dataLocked=true;
+      loadProblem="Your saved data couldn't be read ("+errText(e)+"). A copy was kept and nothing was overwritten. Use Restore from backup (or Recover below) to bring your entries back.";
+      try{ // work done since then was saved apart; pick it up again
+        const w=await prefGet(SAFE_KEY);
+        if(w){const n=normalizeData(JSON.parse(w),true);return{data:n,migrated}}
+      }catch(e2){}
       return{migrated};
     }
   },
@@ -200,7 +296,7 @@ async function writeDocs(name,text){
 let autoQueue=Promise.resolve(),autoErrText='';
 function autoFail(text){autoErrText=text;setMsg('bkMsg',text,true)}
 function autoBackup(){
-  if(!IS_NATIVE)return Promise.resolve();
+  if(!IS_NATIVE||dataLocked)return Promise.resolve();   // while the saved copy is unreadable the backup files are left alone
   autoQueue=autoQueue.then(async()=>{
     try{
       const text=JSON.stringify(buildData(),null,2);
@@ -283,23 +379,26 @@ async function restoreFromFile(file){
   try{
     let obj;
     try{obj=JSON.parse(await readText(file))}catch(e){throw new Error("That file isn't valid JSON, so it can't be a Comeback backup.")}
-    inc=normalizeData(obj);
+    inc=file.salvage?salvageData(obj):normalizeData(obj);
   }catch(e){setMsg('bkMsg',"Couldn't restore: "+errText(e),true);return}
   const n=Object.keys(inc.days).length;
-  const body=(file.name||'This file')+' has '+n+' logged '+(n===1?'day':'days')+(n?' ('+range(Object.keys(inc.days))+')':'')+', '+inc.settings.habits.filter(h=>h.type!=='measure').length+' habits and rules. This phone has '+Object.keys(days).length+' logged days.';
+  const body=(file.name||'This file')+' has '+n+' logged '+(n===1?'day':'days')+(n?' ('+range(Object.keys(inc.days))+')':'')+', '+inc.settings.habits.filter(h=>h.type!=='measure').length+' habits and rules. This phone has '+Object.keys(days).length+' logged days.'+(inc.salvaged?' '+inc.salvaged:'');
   if(await askModal('Restore this backup?',body,[{label:'Continue',value:'go'},{label:'Cancel',value:'cancel'}])!=='go')return;
   const mode=await askModal('How should it be restored?','Merge keeps what is on this phone and adds the backup. If a day is in both, the newer save wins. Replace everything deletes what is on this phone and uses only the backup.'+(signedIn()?' The restored data is also sent to your cloud copy; days that exist only in the cloud will come back on the next sync.':''),[{label:'Merge',value:'merge'},{label:'Replace everything',value:'replace',cls:'danger'},{label:'Cancel',value:'cancel'}]);
   if(mode!=='merge'&&mode!=='replace')return;
   let warn='';
-  if(IS_NATIVE){try{await writeDocs('comeback-before-restore.json',JSON.stringify(buildData(),null,2))}catch(e){warn=" Couldn't save a safety copy of your old data first ("+errText(e)+")."}}
-  const before=buildData();let summary;
+  if(IS_NATIVE&&!dataLocked){try{await writeDocs('comeback-before-restore.json',JSON.stringify(buildData(),null,2))}catch(e){warn=" Couldn't save a safety copy of your old data first ("+errText(e)+")."}}
+  const before=buildData(),wasLocked=dataLocked;let summary;
   try{
     let next;
     if(mode==='replace'){next=inc;summary='Replaced everything with the backup: '+n+(n===1?' day.':' days.')}
     else{const m=mergeData(before,inc);next=m.data;summary='Merged: '+m.added+' new, '+m.updated+' updated, '+m.kept+' kept as they were.'}
     settings=next.settings;days=next.days;
+    dataLocked=false;   // the restored data is good, so saving goes back to the normal copy
     await store.persist();
-  }catch(e){settings=before.settings;days=before.days;setMsg('bkMsg',"Couldn't restore: "+errText(e)+' Nothing was changed.',true);return}
+  }catch(e){settings=before.settings;days=before.days;dataLocked=wasLocked;setMsg('bkMsg',"Couldn't restore: "+errText(e)+' Nothing was changed.',true);return}
+  if(wasLocked){loadProblem='';try{await Prefs.remove({key:SAFE_KEY})}catch(e){}hideRecoverRow()}
+  if(!signedIn())markSettingsDirty(true);   // a restored plan is a deliberate choice: it counts as edited when you sign in later
   if(signedIn()){
     // restored data counts as a fresh write, so it also wins over older cloud copies
     const now=Date.now();
@@ -311,6 +410,26 @@ async function restoreFromFile(file){
   setMsg('bkMsg',summary+warn,!!warn);
   autoBackup();
   syncSoon(false);
+}
+
+/* When the saved copy couldn't be read, Settings > Backup gets a "Recover" row. It offers the copy that was kept through the same
+   restore flow as a backup file (so it is checked, and Merge or Replace is chosen the same way). */
+async function recoverUnreadable(){
+  const raw=await newestUnreadable();
+  if(raw==null){setMsg('bkMsg','No kept copy was found on this phone. Use Restore from backup with a backup file.',true);return}
+  await restoreFromFile({name:'The copy kept on this phone',text:async()=>raw,salvage:true});
+}
+function showRecoverRow(){
+  const g=$('bkGroup');if(!g||$('recoverBtn'))return;
+  const b=h('<button class="row" id="recoverBtn"><span class="row-ic orange"><svg data-ic="upload"></svg></span><span class="row-body"><span class="row-label">Recover the unreadable copy</span><span class="row-sub">Tries to bring back the entries that were kept</span></span><svg data-ic="chevron-right" class="chev"></svg></button>');
+  b.addEventListener('click',recoverUnreadable);
+  g.appendChild(b);hydrate(b);
+}
+function hideRecoverRow(){const b=$('recoverBtn');if(b)b.remove()}
+/* Called once after the saved data has been read: says what, if anything, could not be loaded. */
+function showLoadNotice(){
+  if(loadProblem){setMsg('bkMsg',loadProblem,true);if(dataLocked)showRecoverRow()}
+  else if(loadNotice)setMsg('bkMsg',loadNotice,true);
 }
 
 /* ---------- daily reminder ---------- */
@@ -377,13 +496,12 @@ async function initReminder(){
 const CFG=window.COMEBACK_CONFIG||{};
 const SYNC_KEY='comeback_sync';
 let sb=null,session=null;
-let sync={signedIn:false,userId:null,email:'',lastSyncAt:null,settingsUpdatedAt:0,pendingDays:[],pendingSettings:false};
+let sync={signedIn:false,userId:null,email:'',lastSyncAt:null,settingsUpdatedAt:0,pendingDays:[],pendingSettings:false,seen:{}};   // seen: for each day, the cloud timestamp this phone last took in or wrote (tells "the cloud changed" from "only I changed")
 let syncRunning=null,syncAgain=false,wantFull=false,syncError='',syncOffline=false,lastFullAt=0;
 const cloudConfigured=()=>!!(CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&Native.createClient);
 const signedIn=()=>cloudConfigured()&&sync.signedIn;
 const saveSync=()=>prefSet(SYNC_KEY,JSON.stringify(sync));
 const pendingCount=()=>sync.pendingDays.length+(sync.pendingSettings?1:0);
-const isDefaultSettings=()=>JSON.stringify(settings)===JSON.stringify(DEFAULT_SETTINGS);
 const dayData=d=>{const o={vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''};if(d.steps_meta)o.steps_meta=d.steps_meta;return o};
 const isNetErr=e=>!!e&&(e.name==='AuthRetryableFetchError'||e.status===0||/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(String(e.message||e)));
 function syncErrText(e){
@@ -399,7 +517,45 @@ const authStorage={
 };
 
 function markDayDirty(k){if(signedIn()&&!sync.pendingDays.includes(k)){sync.pendingDays.push(k);saveSync().catch(()=>{})}}
-function markSettingsDirty(){sync.settingsUpdatedAt=Date.now();if(signedIn())sync.pendingSettings=true;saveSync().catch(()=>{})}
+const inOnboarding=()=>{try{return typeof onb!=='undefined'&&!!onb}catch(e){return false}};
+/* A settings change counts as "edited" (it can then beat the cloud copy) when it is deliberate: made while signed in, after
+   onboarding, or forced (a restore). The starter plan and targets picked during onboarding are not an edit, so signing in later
+   to an account that already has settings brings that account's plan instead of replacing it. */
+function markSettingsDirty(force){
+  const signed=signedIn();
+  if(signed||force||!inOnboarding())sync.settingsUpdatedAt=Date.now();
+  if(signed)sync.pendingSettings=true;
+  saveSync().catch(()=>{});
+}
+let cloudSettingsFuture=false;   // the cloud copy is from a newer app version: read nothing from it and write nothing over it
+
+/* Applying settings from the cloud changes the live objects in place (the same settings object, habits array, habit objects and
+   section objects), so anything that still holds one of them (an open edit sheet, an undo toast) keeps writing to the live plan. */
+function replaceProps(o,n){Object.keys(o).forEach(k=>{if(!(k in n))delete o[k]});Object.assign(o,n)}
+function applySettingsInPlace(next){
+  const cur=settings,byId=(list)=>new Map(list.map(x=>[x.id,x]));
+  const hs=byId(cur.habits),ss=byId(cur.sections);
+  const habits=next.habits.map(nh=>{const o=hs.get(nh.id);if(!o)return clone(nh);replaceProps(o,clone(nh));return o});
+  const sections=next.sections.map(ns=>{const o=ss.get(ns.id);if(!o)return clone(ns);replaceProps(o,clone(ns));return o});
+  cur.habits.splice(0,cur.habits.length,...habits);
+  cur.sections.splice(0,cur.sections.length,...sections);
+  ['body','units','prefs'].forEach(k=>{if(cur[k]&&typeof cur[k]==='object')replaceProps(cur[k],clone(next[k]));else cur[k]=clone(next[k])});
+  cur.v=2;
+}
+/* An older app (version 1: just habits and rules) uploaded this copy after this phone's last change. Take what it can have changed
+   (names, targets, units, new habits and rules) and keep this phone's layout: sections, order, schedules, icons, hidden habits, units, body, preferences. */
+function mergeLegacySettings(inc){
+  inc.habits.forEach(ih=>{
+    const lh=settings.habits.find(x=>x.id===ih.id);
+    if(lh){
+      lh.name=ih.name;
+      if(lh.type===ih.type&&(lh.type==='count'||lh.type==='duration'||lh.type==='steps')){lh.target=ih.target;if(lh.type!=='steps')lh.unit=ih.unit}
+    }else if(!(ih.type==='measure'&&settings.habits.some(x=>x.type==='measure'&&x.measure===ih.measure))){
+      settings.habits.push(clone(ih));
+      Core.ensureSection(settings,ih.section,((inc.sections||[]).find(x=>x.id===ih.section)||{}).name);
+    }
+  });
+}
 
 async function fetchAllDays(){
   const out=[];
@@ -416,42 +572,79 @@ async function pullAndMerge(){
   const rows=await fetchAllDays();
   const {data:srow,error:serr}=await sb.from('user_settings').select('data,updated_at').eq('user_id',sync.userId).maybeSingle();
   if(serr)throw serr;
+  const now=Date.now();
+  // a phone that has never synced and has nothing logged only holds the plan from onboarding: the cloud copy is the real one
+  const firstPull=!sync.lastSyncAt&&Object.keys(days).length===0;
   let changed=false,skipped=0;
-  const cloud={};
-  rows.forEach(r=>{cloud[r.log_date]=Date.parse(r.updated_at)});
+  // settings first: an old-shape (version 1) cloud copy also says how to rename rule ids that clash with habit ids, in its days
+  let mig=null;cloudSettingsFuture=false;
+  if(srow){
+    const v=srow.data&&srow.data.v;
+    if(num(v)&&v>2)cloudSettingsFuture=true;
+    else{try{mig=Core.migrateSettings(srow.data)}catch(e){skipped++}}
+  }
+  const cloud={},unreadable=new Set();
   rows.forEach(r=>{
-    const ts=Date.parse(r.updated_at),local=days[r.log_date];
-    if(!local||ts>(local.updatedAt||0)){
-      try{days[r.log_date]=normalizeDay(r.log_date,Object.assign({},r.data,{updatedAt:ts}));changed=true}catch(e){skipped++}
-    }
+    const k=r.log_date,raw=Date.parse(r.updated_at)||0,ts=clampTs(raw,now);
+    cloud[k]=raw;
+    let inc;
+    try{
+      inc=normalizeDay(k,Object.assign({},r.data,{updatedAt:ts}));
+      if(mig&&mig.wasLegacy)Core.applyIdMap({[k]:inc},mig.idMap);
+    }catch(e){skipped++;unreadable.add(k);return}
+    const L=days[k],seen=sync.seen[k];
+    sync.seen[k]=raw;
+    if(!L){days[k]=inc;changed=true;return}
+    const cloudChanged=seen!==raw,localChanged=L.updatedAt!==(seen===undefined?raw:seen);
+    if(!cloudChanged)return;                       // the cloud is as this phone last left it: keep the phone's copy (it goes up if it changed)
+    const lts=clampTs(L.updatedAt,now);
+    if(!localChanged){if(ts>lts){days[k]=inc;changed=true}return}   // only the cloud changed (a copy that looks older leaves this phone's day alone)
+    if(sameDay(L,inc)){L.updatedAt=ts;return}      // both changed it the same way
+    // both changed it (or this phone cannot tell): keep the fields from both
+    const mg=mergeDayRecords(L,inc,now);
+    mg.updatedAt=Math.max(mg.updatedAt+1,now);   // a new version: it differs from the cloud's timestamp, so every phone can tell it is new
+    days[k]=mg;changed=true;
   });
-  // first sign in with customised local settings: they count as newer than an untouched cloud copy
-  if(!sync.settingsUpdatedAt&&!isDefaultSettings())sync.settingsUpdatedAt=Date.now();
-  const cts=srow?Date.parse(srow.updated_at):null;
-  if(srow&&cts>sync.settingsUpdatedAt){
-    try{settings=normalizeSettings(srow.data);sync.settingsUpdatedAt=cts;sync.pendingSettings=false;changed=true;if(adoptDeviceHeight())sync.pendingSettings=true}catch(e){skipped++}
-  }else if(!srow||sync.settingsUpdatedAt>cts)sync.pendingSettings=true;
-  else sync.pendingSettings=false;
-  // everything the cloud lacks or has an older copy of still has to go up
-  sync.pendingDays=Object.keys(days).filter(k=>cloud[k]==null||(days[k].updatedAt||0)>cloud[k]);
+  // settings: the newer side wins, but an older-shaped cloud copy never wipes the layout kept on this phone
+  const cts=srow?clampTs(Date.parse(srow.updated_at)||0,now):null;
+  if(mig){
+    const legacy=mig.wasLegacy;
+    if(firstPull||cts>sync.settingsUpdatedAt){
+      if(legacy&&!firstPull)mergeLegacySettings(mig.settings);else applySettingsInPlace(mig.settings);
+      sync.settingsUpdatedAt=cts;sync.pendingSettings=legacy;changed=true;   // a version-1 copy is replaced by version 2 right away
+      if(adoptDeviceHeight())sync.pendingSettings=true;
+    }else sync.pendingSettings=sync.settingsUpdatedAt>cts||legacy;
+  }else if(!srow)sync.pendingSettings=true;
+  // everything the cloud lacks or holds a different copy of still has to go up (a future timestamp in the cloud is put right too)
+  sync.pendingDays=Object.keys(days).filter(k=>!unreadable.has(k)&&(cloud[k]==null||days[k].updatedAt!==cloud[k]));
   if(changed){await store.persist();refreshAfterCloudChange()}
+  if(cloudSettingsFuture)throw new Error('Your cloud settings were saved by a newer version of Comeback. Update the app to sync them.');
   if(skipped)throw new Error(skipped+' cloud '+(skipped===1?'row was':'rows were')+' skipped because it could not be read.');
 }
 
 async function flushPending(){
-  const uid=sync.userId;
-  const sent=sync.pendingDays.filter(k=>days[k]).map(k=>({k,at:days[k].updatedAt||0}));
+  const uid=sync.userId,now=Date.now();
+  let stamped=false;
+  // outgoing timestamps are never more than 5 minutes ahead, and a day with an unknown one (0) gets a real one
+  const sent=sync.pendingDays.filter(k=>days[k]).map(k=>{
+    const d=days[k],at=d.updatedAt>0?Math.min(d.updatedAt,now+SKEW_MS):now;
+    if(at!==d.updatedAt){d.updatedAt=at;stamped=true}
+    return{k,at};
+  });
+  if(stamped)try{await store.persist()}catch(e){}
   for(let i=0;i<sent.length;i+=200){
     const chunk=sent.slice(i,i+200);
     const {error}=await sb.from('day_logs').upsert(chunk.map(x=>({user_id:uid,log_date:x.k,data:dayData(days[x.k]),updated_at:new Date(x.at).toISOString()})),{onConflict:'user_id,log_date'});
     if(error)throw error;
-    chunk.forEach(x=>{if(days[x.k]&&(days[x.k].updatedAt||0)===x.at)sync.pendingDays=sync.pendingDays.filter(d=>d!==x.k)});
+    chunk.forEach(x=>{sync.seen[x.k]=x.at;if(days[x.k]&&(days[x.k].updatedAt||0)===x.at)sync.pendingDays=sync.pendingDays.filter(d=>d!==x.k)});
     await saveSync();
   }
   sync.pendingDays=sync.pendingDays.filter(k=>days[k]);
-  if(sync.pendingSettings){
+  if(sync.pendingSettings&&!cloudSettingsFuture){
+    if(!sync.settingsUpdatedAt)sync.settingsUpdatedAt=now;   // the first plan to reach an empty cloud becomes its copy
+    if(sync.settingsUpdatedAt>now+SKEW_MS)sync.settingsUpdatedAt=now+SKEW_MS;
     const at=sync.settingsUpdatedAt;
-    const {error}=await sb.from('user_settings').upsert({user_id:uid,data:settings,updated_at:new Date(at).toISOString()},{onConflict:'user_id'});
+    const {error}=await sb.from('user_settings').upsert({user_id:uid,data:Object.assign({},settings,{v:2}),updated_at:new Date(at).toISOString()},{onConflict:'user_id'});
     if(error)throw error;
     if(sync.settingsUpdatedAt===at)sync.pendingSettings=false;
   }
@@ -520,8 +713,9 @@ async function onSignedIn(s){
   if(sync.userId&&sync.userId!==uid&&Object.keys(days).length){
     const pick=await askModal('Different account','The entries on this phone were synced with another account. Add them to this account too, or use only this account\'s data?',[{label:'Add this phone\'s entries to this account',value:'merge'},{label:'Use only this account\'s data',value:'replace',cls:'danger'},{label:'Cancel and sign out',value:'cancel'}]);
     if(pick!=='merge'&&pick!=='replace'){try{await sb.auth.signOut({scope:'local'})}catch(e){}sync.signedIn=false;renderAccount();return}
-    if(pick==='replace'){days={};settings=clone(DEFAULT_SETTINGS);sync.settingsUpdatedAt=0;try{await store.persist()}catch(e){setMsg('acctMsg',"Couldn't clear the old entries: "+errText(e),true);return}refreshAfterCloudChange()}
+    if(pick==='replace'){days={};applySettingsInPlace(clone(DEFAULT_SETTINGS));sync.settingsUpdatedAt=0;try{await store.persist()}catch(e){setMsg('acctMsg',"Couldn't clear the old entries: "+errText(e),true);return}refreshAfterCloudChange()}
   }
+  if(sync.userId!==uid){sync.seen={};sync.lastSyncAt=null}   // what was synced with another account says nothing about this one
   Object.assign(sync,{signedIn:true,userId:uid,email:s.user.email||'',pendingDays:[],pendingSettings:false});
   session=s;await saveSync();
   renderAccount();setMsg('acctMsg','');

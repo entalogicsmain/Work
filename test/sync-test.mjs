@@ -2,8 +2,10 @@
 // in-memory fake (auth + PostgREST, rows filtered by the caller's user id like RLS does).
 // Run: npm run test:sync
 import crypto from 'crypto';
+import { createRequire } from 'module';
 import { serve, launch, counter, newPage, skipOnboarding, tab, gear, ready, stored, sheetGone, settle, setHabit, setBody, setNote, goDate, actionChoose, logDay, todayKey } from './helpers.mjs';
 
+const Core = createRequire(import.meta.url)('../www/js/core.js');
 const { srv, base } = serve();
 const API = 'https://fake.supabase.test';
 const T = counter();
@@ -268,6 +270,218 @@ ok(/another account/.test(await pg.textContent('.asheet .ah')), 'a different acc
 await actionChoose(pg, 'Cancel and sign out');
 await pg.waitForSelector('#signInBtn', { state: 'visible' });
 ok(fake.days.every(r => r.user_id === uid), 'cancelling uploads nothing to the other account');
+
+
+/* ================= more phones: onboarding, per-key day merge, settings versions, open sheets ================= */
+async function phone({ onboard = false } = {}) {
+  const c = await browser.newContext({ viewport: { width: 400, height: 800 } });
+  if (!onboard) await skipOnboarding(c);
+  await c.route(API + '/**', handler);
+  await c.route('**/config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.COMEBACK_CONFIG={SUPABASE_URL:'${API}',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fake'}` }));
+  const p = await newPage(c, errs);
+  return { c, p };
+}
+const mkUser = email => { const u = { id: crypto.randomUUID(), email, password: PW, confirmed: true }; fake.users.set(u.id, u); return u.id; };
+async function signInUI(p, email) {
+  await gear(p); await p.click('#signInBtn'); await p.waitForSelector('#authEmail');
+  await p.fill('#authEmail', email); await p.fill('#authPw', PW); await p.click('#authIn');
+  await p.waitForFunction(() => !document.getElementById('authEmail'), null, { timeout: 8000 });
+  await p.waitForFunction(() => /Synced at/.test(document.getElementById('syncStatus').textContent), null, { timeout: 8000 });
+}
+const syncNow = p => p.evaluate(() => syncSoon(true));
+const cloudDay = (uid, k) => fake.days.find(r => r.user_id === uid && r.log_date === k);
+const putDay = (uid, k, data, at) => { const i = fake.days.findIndex(r => r.user_id === uid && r.log_date === k); const row = { user_id: uid, log_date: k, data: { vals: {}, rules: {}, weight: null, waist: null, note: '', ...data }, updated_at: new Date(at).toISOString() }; if (i >= 0) fake.days[i] = row; else fake.days.push(row); };
+const putSettings = (uid, data, at) => { const i = fake.settings.findIndex(r => r.user_id === uid); const row = { user_id: uid, data, updated_at: new Date(at).toISOString() }; if (i >= 0) fake.settings[i] = row; else fake.settings.push(row); };
+const settingsRow = uid => fake.settings.find(r => r.user_id === uid);
+
+/* ---------- 11. onboarding (starter plan) then sign in to an account that already has settings ---------- */
+console.log('Onboard signed out, then sign in to an existing account');
+{
+  const uid = mkUser('existing@example.com');
+  const cs = Core.defaultSettings();
+  cs.habits = cs.habits.filter(h => ['steps', 'water', 'nosugar', 'weight', 'waist'].includes(h.id));
+  cs.habits.find(h => h.id === 'water').target = 4;
+  cs.habits.find(h => h.id === 'steps').target = 12000;
+  cs.habits.find(h => h.id === 'nosugar').schedule = { kind: 'days', days: [1, 3, 5] };
+  cs.habits.find(h => h.id === 'nosugar').section = 'mine';
+  cs.sections.splice(1, 0, { id: 'mine', name: 'My stuff' });
+  cs.sections = cs.sections.filter(x => x.id !== 'workout' && x.id !== 'health');
+  cs.habits.find(h => h.id === 'water').section = 'mine';
+  const cloudSettingsAt = Date.now() - 3600e3;
+  putSettings(uid, cs, cloudSettingsAt);
+  putDay(uid, '2026-09-01', { vals: { water: 3 }, note: 'cloud day' }, Date.now() - 7200e3);
+  const snapshot = JSON.stringify(settingsRow(uid).data);
+  const { c, p } = await phone({ onboard: true });
+  await p.goto(base); await p.waitForSelector('.onb');
+  await p.click('#onbNext'); await p.click('#plan-beginner'); await p.click('#onbNext');
+  await p.click('#onbNext'); await p.click('#onbNext'); await p.click('#onbNext');
+  await p.click('#onbStart'); await p.waitForFunction(() => !document.querySelector('.onb'));
+  await settle(p);
+  ok((await stored(p)).settings.habits.some(h => h.id === 'pushups'), 'the phone has the starter plan after onboarding');
+  ok(await p.evaluate(() => sync.settingsUpdatedAt) === 0, 'onboarding while signed out does not stamp the settings as "edited"');
+  await signInUI(p, 'existing@example.com');
+  const st = await stored(p);
+  ok(st.settings.habits.map(h => h.id).join() === cs.habits.map(h => h.id).join(), 'cloud habits win over the starter plan', st.settings.habits.map(h => h.id));
+  ok(st.settings.sections.map(x => x.id).join() === cs.sections.map(x => x.id).join(), 'cloud sections win over the starter plan', st.settings.sections.map(x => x.id));
+  ok(JSON.stringify(st.settings.habits.find(h => h.id === 'nosugar').schedule) === '{"kind":"days","days":[1,3,5]}' && st.settings.habits.find(h => h.id === 'water').target === 4, 'cloud schedules and targets are kept');
+  ok(JSON.stringify(settingsRow(uid).data) === snapshot && settingsRow(uid).updated_at === new Date(cloudSettingsAt).toISOString(), 'the cloud settings were not overwritten by the starter plan');
+  ok(!!st.days['2026-09-01'] && st.days['2026-09-01'].note === 'cloud day', 'cloud days still arrive');
+  await c.close();
+}
+
+/* ---------- 11b. a deliberate settings edit while signed out still counts ---------- */
+console.log('Deliberate edit while signed out');
+{
+  const uid = mkUser('edited@example.com');
+  const cs = Core.defaultSettings(); cs.habits.find(h => h.id === 'steps').target = 5555;
+  putSettings(uid, cs, Date.now() - 3600e3);
+  const { c, p } = await phone();
+  await p.goto(base); await ready(p);
+  await logDay(p, { reps: 12 });
+  await tab(p, 'setup'); await p.click('#planSections .swipe[data-id="walk"] .row'); await p.fill('#fTarget', '41'); await p.click('.sheet .txtbtn.strong'); await sheetGone(p);
+  await settle(p);
+  ok(await p.evaluate(() => sync.settingsUpdatedAt) > 0, 'a Plan edit made after onboarding is stamped');
+  await signInUI(p, 'edited@example.com');
+  ok((await stored(p)).settings.habits.find(h => h.id === 'walk').target === 41 && settingsRow(uid).data.habits.find(h => h.id === 'walk').target === 41, 'the phone with real local days and a deliberate edit keeps its plan and uploads it');
+  await c.close();
+}
+
+/* ---------- 12. a day edited on two phones keeps both phones' fields ---------- */
+console.log('Per-key day merge');
+{
+  const uid = mkUser('merge@example.com');
+  const { c, p } = await phone();
+  await p.goto(base); await ready(p);
+  await logDay(p, { reps: 30 });
+  await signInUI(p, 'merge@example.com');
+  const k = tk;
+  // this phone goes offline and records weight and steps; the other phone, meanwhile, logs water and a note
+  fake.offline = true;
+  await p.evaluate(k => { const d = clone(days[k]); d.weight = 80.5; d.vals.steps = 6000; d.steps_meta = { source: 'auto', counted: 6000, distance_km: 4.2, filtered: 10, hourly: new Array(24).fill(250) }; d.updatedAt = Date.now(); days[k] = d; markDayDirty(k); return store.persist(); }, k);
+  const base0 = cloudDay(uid, k);
+  putDay(uid, k, { ...base0.data, vals: { ...base0.data.vals, water: 2, steps: 4000 }, steps_meta: { source: 'auto', counted: 4000, distance_km: 2.8, filtered: 0, hourly: new Array(24).fill(166) }, note: 'from phone B' }, Date.now() + 1500);
+  fake.offline = false;
+  await syncNow(p);
+  const m = (await stored(p)).days[k], cr = cloudDay(uid, k).data;
+  ok(m.vals.pushups === 30 && m.vals.water === 2 && m.weight === 80.5, 'fields changed on only one phone are all kept (pushups, water, weight)', m);
+  ok(m.vals.steps === 6000 && m.steps_meta.counted === 6000, 'steps keep the higher count with its richer step details', m.steps_meta);
+  ok(m.note === 'from phone B', 'a note from the newer side wins when it is not empty');
+  ok(cr.vals.water === 2 && cr.weight === 80.5 && cr.vals.steps === 6000 && cr.note === 'from phone B', 'the merged day is uploaded so the cloud has everything too', cr);
+  // a plain, one-sided change still behaves as before (including removing things)
+  await p.evaluate(k => { const d = clone(days[k]); delete d.vals.water; d.updatedAt = Date.now(); days[k] = d; markDayDirty(k); return store.persist(); }, k);
+  await syncNow(p);
+  ok(!('water' in cloudDay(uid, k).data.vals) && !('water' in (await stored(p)).days[k].vals), 'removing a value on one phone is not undone by the old cloud copy');
+  await c.close();
+}
+
+console.log('Clocks and unknown timestamps');
+{
+  const uid = mkUser('clock@example.com');
+  const { c, p } = await phone();
+  await p.goto(base); await ready(p);
+  await logDay(p, { reps: 20 });
+  await signInUI(p, 'clock@example.com');
+  const k = tk, now = Date.now();
+  // another phone with its clock a day ahead wrote this day while this phone also changed it
+  fake.offline = true;
+  await p.evaluate(k => { const d = clone(days[k]); d.weight = 79; d.updatedAt = Date.now(); days[k] = d; markDayDirty(k); return store.persist(); }, k);
+  putDay(uid, k, { vals: { pushups: 25, water: 1 }, note: 'future clock' }, now + 86400e3);
+  fake.offline = false;
+  await syncNow(p);
+  const cr = cloudDay(uid, k), loc = (await stored(p)).days[k];
+  ok(Date.parse(cr.updated_at) <= Date.now() + 5 * 60e3 + 2000 && loc.updatedAt <= Date.now() + 5 * 60e3 + 2000, 'a phone with its clock in the future cannot keep a timestamp more than 5 minutes ahead', { cloud: Date.parse(cr.updated_at) - Date.now(), local: loc.updatedAt - Date.now() });
+  ok(loc.weight === 79 && loc.vals.water === 1 && loc.vals.pushups === 25, 'both phones\' fields are merged with the future-clock phone', loc);
+  // a future-clock day that this phone only receives is also pulled back to "now" in the cloud
+  const k2 = '2026-09-02';
+  putDay(uid, k2, { vals: { water: 1.5 } }, now + 5 * 86400e3);
+  await syncNow(p);
+  ok((await stored(p)).days[k2].updatedAt <= Date.now() + 5 * 60e3 + 2000 && Date.parse(cloudDay(uid, k2).updated_at) <= Date.now() + 5 * 60e3 + 2000, 'a future timestamp that only arrives from the cloud is clamped there too');
+  // later edits on this phone win over that clamped copy
+  await p.evaluate(k => { const d = clone(days[k]); d.vals.water = 4; d.updatedAt = Date.now() + 10 * 60e3; days[k] = d; markDayDirty(k); return store.persist(); }, k2);
+  await syncNow(p);
+  ok(cloudDay(uid, k2).data.vals.water === 4, 'but a real later edit still reaches the cloud');
+  // updatedAt 0 / missing = unknown: it is merged, not replaced
+  const k3 = '2026-09-03';
+  putDay(uid, k3, { vals: { pushups: 22 }, note: 'cloud only note' }, Date.now() - 1000);
+  await p.evaluate(k3 => { days[k3] = { vals: { water: 2.5 }, rules: {}, weight: 70, waist: null, note: '', date: k3, updatedAt: 0 }; return store.persist(); }, k3);
+  const k4 = '2026-09-04';
+  await p.evaluate(k4 => { days[k4] = { vals: { sleep: 7 }, rules: {}, weight: null, waist: null, note: 'only here', date: k4, updatedAt: 0 }; return store.persist(); }, k4);
+  await syncNow(p);
+  const l3 = (await stored(p)).days[k3], c3 = cloudDay(uid, k3).data;
+  ok(l3.vals.water === 2.5 && l3.weight === 70 && l3.vals.pushups === 22 && l3.note === 'cloud only note', 'a local day with an unknown timestamp is merged with the cloud row, not blindly replaced', l3);
+  ok(c3.vals.water === 2.5 && c3.vals.pushups === 22, 'and the merged result is in the cloud', c3);
+  const c4 = cloudDay(uid, k4);
+  ok(c4 && c4.data.note === 'only here' && Date.parse(c4.updated_at) > 1e12, 'an unknown-timestamp day that the cloud lacks is uploaded with a real timestamp', c4 && c4.updated_at);
+  await c.close();
+}
+
+/* ---------- 13. settings versions in the cloud ---------- */
+console.log('Old-shape cloud settings');
+{
+  const uid = mkUser('legacy@example.com');
+  const { c, p } = await phone();
+  await p.goto(base); await ready(p);
+  await logDay(p, { reps: 10 });
+  await signInUI(p, 'legacy@example.com');
+  // customise the layout on this phone
+  await p.evaluate(() => { settings.units.weight = 'lb'; settings.body.scale = 'asian'; settings.habits.find(h => h.id === 'walk').hidden = true; settings.habits.find(h => h.id === 'pushups').schedule = { kind: 'days', days: [1, 3] }; Core.ensureSection(settings, 'mine', 'Mine'); settings.habits.find(h => h.id === 'pullups').section = 'mine'; return saveSettingsQuiet(); });
+  await settle(p); await syncNow(p);
+  ok(settingsRow(uid).data.v === 2 && settingsRow(uid).data.units.weight === 'lb', 'this phone\'s plan is in the cloud as version 2');
+  // an old app (version 1 shape) uploads a newer copy: a changed target, a new habit, and a rule whose id clashes with a habit
+  putSettings(uid, { habits: [{ id: 'steps', name: 'Steps', unit: 'steps', target: 12000 }, { id: 'zumba', name: 'Zumba', unit: 'min', target: 40 }, { id: 'water', name: 'Water', unit: 'litres', target: 2.5 }], rules: [{ id: 'water', name: 'Drank water rule' }, { id: 'nosugar', name: 'No sugar!' }] }, Date.now() + 60e3);
+  putDay(uid, '2026-09-10', { vals: { zumba: 40 }, rules: { water: true, nosugar: true }, note: 'old app day' }, Date.now() + 60e3);
+  await syncNow(p);
+  const st = (await stored(p));
+  ok(st.settings.v === 2 && st.settings.units.weight === 'lb' && st.settings.body.scale === 'asian', 'a version-1 cloud copy does not reset units and body settings', { u: st.settings.units, b: st.settings.body });
+  ok(st.settings.habits.find(h => h.id === 'walk').hidden === true && JSON.stringify(st.settings.habits.find(h => h.id === 'pushups').schedule) === '{"kind":"days","days":[1,3]}' && st.settings.habits.find(h => h.id === 'pullups').section === 'mine' && st.settings.sections.some(x => x.id === 'mine'), 'nor does it reset hidden habits, schedules and sections');
+  ok(st.settings.habits.some(h => h.id === 'zumba') && st.settings.habits.find(h => h.id === 'steps').target === 12000 && st.settings.habits.some(h => h.id === 'pushups'), 'habits are merged by id: the new one is added, a changed target arrives, the rest stay');
+  ok(st.settings.habits.find(h => h.id === 'nosugar').name === 'No sugar!' && st.settings.habits.some(h => h.id === 'water-rule'), 'rules from the old app become Yes/No habits (a clashing id gets a new one)');
+  ok(st.days['2026-09-10'] && st.days['2026-09-10'].rules['water-rule'] === true && !('water' in st.days['2026-09-10'].rules) && st.days['2026-09-10'].rules.nosugar === true, 'old-app days get their rule ids remapped', st.days['2026-09-10'] && st.days['2026-09-10'].rules);
+  const up = settingsRow(uid).data;
+  ok(up.v === 2 && !('rules' in up) && up.units.weight === 'lb', 'the merged settings are written back to the cloud as version 2', Object.keys(up));
+  // an old-shape copy that is OLDER than this phone's last edit is ignored (and replaced by version 2)
+  await p.evaluate(() => { settings.habits.find(h => h.id === 'steps').target = 9000; return saveSettingsQuiet(); });
+  await settle(p); await syncNow(p);
+  putSettings(uid, { habits: [{ id: 'steps', name: 'Steps', unit: 'steps', target: 1 }], rules: [] }, Date.now() - 3600e3);
+  await syncNow(p);
+  ok((await stored(p)).settings.habits.find(h => h.id === 'steps').target === 9000 && settingsRow(uid).data.v === 2 && settingsRow(uid).data.habits.find(h => h.id === 'steps').target === 9000, 'an older version-1 copy never overwrites newer local settings; the cloud is upgraded');
+  await c.close();
+}
+
+/* ---------- 14. an open edit sheet survives a cloud pull ---------- */
+console.log('Open edit sheet and a cloud pull');
+{
+  const uid = mkUser('sheet@example.com');
+  const { c, p } = await phone();
+  await p.goto(base); await ready(p);
+  await logDay(p, { reps: 10 });
+  await signInUI(p, 'sheet@example.com');
+  await tab(p, 'setup');
+  await p.click('#planSections .swipe[data-id="pushups"] .row');
+  await p.waitForSelector('#fTarget');
+  // another phone changes a different habit while the sheet is open
+  const cur = JSON.parse(JSON.stringify(settingsRow(uid).data));
+  cur.habits.find(h => h.id === 'walk').target = 45;
+  putSettings(uid, cur, Date.now() + 30e3);
+  await syncNow(p);
+  ok((await p.evaluate(() => settings.habits.find(h => h.id === 'walk').target)) === 45, 'the cloud change arrived while the sheet was open');
+  await p.fill('#fTarget', '55'); await p.fill('#fName', 'Push-ups plus');
+  await p.click('.sheet .txtbtn.strong'); await sheetGone(p);
+  await settle(p);
+  const st = await stored(p);
+  ok(st.settings.habits.find(h => h.id === 'pushups').target === 55 && st.settings.habits.find(h => h.id === 'pushups').name === 'Push-ups plus' && st.settings.habits.find(h => h.id === 'walk').target === 45, 'Done saves the edit into the live settings (and keeps the other phone\'s change)', st.settings.habits.find(h => h.id === 'pushups'));
+  await syncNow(p);
+  ok(settingsRow(uid).data.habits.find(h => h.id === 'pushups').target === 55 && settingsRow(uid).data.habits.find(h => h.id === 'walk').target === 45, 'both changes reach the cloud');
+  // the cloud removes the habit being edited: the edit is not silently lost
+  await p.click('#planSections .swipe[data-id="plank"] .row'); await p.waitForSelector('#fTarget');
+  const cur2 = JSON.parse(JSON.stringify(settingsRow(uid).data));
+  cur2.habits = cur2.habits.filter(h => h.id !== 'plank');
+  putSettings(uid, cur2, Date.now() + 60e3);
+  await syncNow(p);
+  await p.fill('#fTarget', '90'); await p.click('.sheet .txtbtn.strong'); await sheetGone(p); await settle(p);
+  ok((await stored(p)).settings.habits.some(h => h.id === 'plank' && h.target === 90), 'editing a habit that another phone just removed keeps what you typed');
+  await c.close();
+}
 
 ok(errs.length === 0, 'no JS errors', errs);
 await browser.close(); srv.close();
