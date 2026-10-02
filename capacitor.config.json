@@ -1,0 +1,19 @@
+{
+  "appId": "com.umar.resetlog",
+  "appName": "Reset Log",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#1C2629"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 500,
+      "launchAutoHide": true,
+      "backgroundColor": "#1C2629",
+      "showSpinner": false
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_resetlog"
+    }
+  }
+}
