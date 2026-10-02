@@ -1,6 +1,6 @@
 {
-  "appId": "com.umar.resetlog",
-  "appName": "Reset Log",
+  "appId": "com.entalogics.comeback",
+  "appName": "Comeback",
   "webDir": "www",
   "android": {
     "backgroundColor": "#1C2629"
@@ -13,7 +13,7 @@
       "showSpinner": false
     },
     "LocalNotifications": {
-      "smallIcon": "ic_stat_resetlog"
+      "smallIcon": "ic_stat_comeback"
     }
   }
 }

@@ -1,4 +1,4 @@
-package com.umar.resetlog.steps
+package com.entalogics.comeback.steps
 
 /*
  * Pedometer for phones without a step sensor. Pure Kotlin.

@@ -1,4 +1,4 @@
-package com.umar.resetlog.steps
+package com.entalogics.comeback.steps
 
 import android.Manifest
 import android.os.Build

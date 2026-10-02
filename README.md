@@ -1,8 +1,8 @@
-# Reset Log
+# Comeback
 
-A personal daily health tracker (workouts, steps, rules, weight, waist, notes, progress charts) packaged as an offline Android app with Capacitor.
+Comeback is a habit tracker for getting back to your best, one day at a time: daily targets, rules, automatic step counting, weight, waist, notes and progress charts, packaged as an offline Android app with Capacitor. Developer: EntaLogics.
 
-- App ID: `com.umar.resetlog` — minSdk 23, target SDK 36
+- App ID: `com.entalogics.comeback` — minSdk 23, target SDK 36
 - Works fully offline (Chart.js, the Inter font and the icons are bundled)
 - Data is stored with Capacitor Preferences on the phone
 - Automatic step counting, backup, restore, a daily reminder and optional cloud sync are on the **Plan** tab
@@ -39,15 +39,25 @@ All screenshots (every screen, sheet, the step-tracking flow and the intro, at 3
 ## Install the APK
 
 
-1. Get `release/ResetLog-debug.apk` onto your phone (download it from this repo, or take it from the latest GitHub Actions run, see below).
+1. Get `release/Comeback-debug.apk` onto your phone (download it from this repo, or take it from the latest GitHub Actions run, see below).
 2. Open it. Android will ask you to allow **Install unknown apps** for the app you opened it from (Files, Chrome, etc.). Allow it, then tap Install.
-3. Open **Reset Log**. On Android 13+ the first time you switch the daily reminder on, allow notifications.
+3. Open **Comeback**. On Android 13+ the first time you switch the daily reminder on, allow notifications.
 
 Every build uses the same signing key, so a newer APK installs straight over an older one and keeps your data. Don't uninstall first, because uninstalling deletes the app's data.
 
+### Moving from the earlier version of the app
+
+Comeback has a new application ID (`com.entalogics.comeback`), so Android treats it as a **new app**. It does not replace the earlier version and it cannot read that app's data. Before you install it:
+
+1. In the earlier app open **Plan > Export backup (JSON)** and save the file somewhere safe (Drive, email, WhatsApp to yourself).
+2. Install Comeback, open **Plan > Restore from backup** and pick that file. Backup files from the earlier app (`resetlog-backup-YYYY-MM-DD.json`) restore as they are. Or just sign in to sync with the same account and your days come down from the cloud.
+3. Once you have checked your days, uninstall the earlier app.
+
+Inside Comeback, anything saved under the earlier storage names (`resetlog`, `resetlog_meta`, `resetlog_sync`, `resetlog_onboarded`, the native step file `resetlog_steps`) moves to the new `comeback` names the first time the app opens, and the old names are removed. It is safe to run more than once, and if both an old and a new value exist and differ, nothing is deleted. `npm run test:rename` and the Kotlin `LegacyMigrationTest` cover this.
+
 ## Automatic steps (phone sensor)
 
-Reset Log can count your steps by itself using the phone's own motion sensors. It does **not** use Health Connect, Google Fit, Samsung Health or any other health app, and nothing is shared with other apps. Everything is counted and stored on the phone. (This is Android-app only; in a browser, steps stay manual.)
+Comeback can count your steps by itself using the phone's own motion sensors. It does **not** use Health Connect, Google Fit, Samsung Health or any other health app, and nothing is shared with other apps. Everything is counted and stored on the phone. (This is Android-app only; in a browser, steps stay manual.)
 
 **Turn it on:** Plan > Step tracking > **Source** > Automatic (phone sensor). The app explains what it does, asks for the "Physical activity" permission (and notifications on Android 13+), helps you keep it running in the background (see the battery section), and asks your height once (default 180 cm). Counting starts from that moment: earlier days stay as they are. If you deny the permission, Steps stays on **Manual** and the Source row keeps a "try again" hint.
 
@@ -81,17 +91,17 @@ Plan > Step tracking shows **Step tracking health** (Working / Paused by battery
 
 ### Keep it running (battery settings)
 
-Many phones stop background apps. Switching on Automatic opens a setup sheet that asks Android to exclude Reset Log from battery optimisation and shows steps for your brand, with a button that opens the right settings screen where possible. If counting pauses later, Plan shows "Paused by battery settings" with the same help.
+Many phones stop background apps. Switching on Automatic opens a setup sheet that asks Android to exclude Comeback from battery optimisation and shows steps for your brand, with a button that opens the right settings screen where possible. If counting pauses later, Plan shows "Paused by battery settings" with the same help.
 
 | Brand | What to set |
 | --- | --- |
-| Xiaomi / Redmi / POCO | Settings > Apps > Manage apps > Reset Log: turn on **Autostart**, set **Battery saver** to **No restrictions**. |
-| Oppo / Realme / OnePlus | Settings > Battery > Reset Log: allow background activity and auto-launch, turn off "Optimize battery use". |
-| Vivo / iQOO | Settings > Battery > Background power consumption: allow Reset Log; turn on Autostart in the phone manager. |
-| Samsung | Settings > Battery > Background usage limits: remove Reset Log from Sleeping apps and Deep sleeping apps; set it to **Unrestricted**. |
-| Huawei / Honor | Settings > Apps > App launch > Reset Log: turn off "Manage automatically", turn on Auto-launch, Secondary launch and Run in background. |
-| Infinix / Tecno / itel | Phone Master (or Settings) > App management > Autostart: allow Reset Log; set battery use to "No restrictions". |
-| Other | Settings > Apps > Reset Log > Battery > Unrestricted ("Don't optimize"), and allow it in any Autostart / Background apps list. |
+| Xiaomi / Redmi / POCO | Settings > Apps > Manage apps > Comeback: turn on **Autostart**, set **Battery saver** to **No restrictions**. |
+| Oppo / Realme / OnePlus | Settings > Battery > Comeback: allow background activity and auto-launch, turn off "Optimize battery use". |
+| Vivo / iQOO | Settings > Battery > Background power consumption: allow Comeback; turn on Autostart in the phone manager. |
+| Samsung | Settings > Battery > Background usage limits: remove Comeback from Sleeping apps and Deep sleeping apps; set it to **Unrestricted**. |
+| Huawei / Honor | Settings > Apps > App launch > Comeback: turn off "Manage automatically", turn on Auto-launch, Secondary launch and Run in background. |
+| Infinix / Tecno / itel | Phone Master (or Settings) > App management > Autostart: allow Comeback; set battery use to "No restrictions". |
+| Other | Settings > Apps > Comeback > Battery > Unrestricted ("Don't optimize"), and allow it in any Autostart / Background apps list. |
 
 The app restarts counting after the phone reboots or the app is updated. A 15-minute WorkManager check brings the service back if the system killed it, and the hardware counter keeps counting while the service is down, so steps are caught up later (without the rhythm checks, but still honouring vehicle periods). While counting, a quiet notification reads "Counting steps · 4,320 today"; tapping it opens the app.
 
@@ -154,16 +164,16 @@ Either way every account gets its own rows. Row Level Security means one user ca
 
 ## Where backups are stored
 
-- **Automatic:** every time you save a day (or change your plan), the app writes your full data to `Documents/ResetLog/resetlog-autobackup.json`. It also keeps one copy per day as `resetlog-autobackup-YYYY-MM-DD.json` for the last 7 days; older ones are deleted.
-- **Manual:** My plan > Backup > *Export backup (JSON)* saves `resetlog-backup-YYYY-MM-DD.json` in the same folder and opens the share sheet (Drive, WhatsApp, email...). *Export as spreadsheet (CSV)* does the same with a one-row-per-day file you can open in Excel or Sheets.
-- Before a restore, the app saves what is on the phone as `resetlog-before-restore.json` in that folder.
+- **Automatic:** every time you save a day (or change your plan), the app writes your full data to `Documents/Comeback/comeback-autobackup.json`. It also keeps one copy per day as `comeback-autobackup-YYYY-MM-DD.json` for the last 7 days; older ones are deleted.
+- **Manual:** My plan > Backup > *Export backup (JSON)* saves `comeback-backup-YYYY-MM-DD.json` in the same folder and opens the share sheet (Drive, WhatsApp, email...). *Export as spreadsheet (CSV)* does the same with a one-row-per-day file you can open in Excel or Sheets.
+- Before a restore, the app saves what is on the phone as `comeback-before-restore.json` in that folder.
 - "Last backup" on the Backup card shows when a backup was last written.
 
 ## Restore on a new phone
 
 1. Install the APK on the new phone.
-2. Copy a backup file to the phone (from Drive, WhatsApp, email, or `Documents/ResetLog/`).
-3. Open Reset Log > **My plan** > **Restore from backup** and pick the `.json` file.
+2. Copy a backup file to the phone (from Drive, WhatsApp, email, or `Documents/Comeback/`).
+3. Open Comeback > **My plan** > **Restore from backup** and pick the `.json` file.
 4. The app shows how many days it contains. Choose **Merge** (keeps what is on the phone; for a day that exists in both, the newer save wins) or **Replace everything**.
 
 Backups use this shape, so old and new backups stay compatible:
@@ -185,10 +195,16 @@ npm run build:apk        # bundles plugins, syncs www/ into android/, runs Gradl
 ```
 
 - The web app is `www/index.html` with `www/css/app.css`, `www/js/logic.js` (data, storage, backup, reminder, sync) and `www/js/ui.js` (screens and sheets). The Capacitor plugins and supabase-js are bundled from `src/native.js` into `www/vendor/native.js`, and the Lucide icons into `www/vendor/icons.js`, by `npm run build:web`.
-- `npm run lint:android` (Android lint, warnings count as errors), `npm run test:android` (Kotlin sensor tests), `npm run test:steps` (step tracking UI) and `npm run test:contrast` (WCAG AA colour contrast). `npm run test:web` and `npm run test:sync` run the headless-browser tests (they need a Chromium for Playwright). `test:sync` uses a fake Supabase server; `npm run test:real` runs the same kind of checks against the real project and needs `E2E_EMAIL` and `E2E_PASSWORD` of an existing confirmed user.
+- `npm run test:rename` (old-data move, old backups still restore, new copy, no leftover old name or medical wording), `npm run lint:android` (Android lint, warnings count as errors), `npm run test:android` (Kotlin sensor tests), `npm run test:steps` (step tracking UI) and `npm run test:contrast` (WCAG AA colour contrast). `npm run test:web` and `npm run test:sync` run the headless-browser tests (they need a Chromium for Playwright). `test:sync` uses a fake Supabase server; `npm run test:real` runs the same kind of checks against the real project and needs `E2E_EMAIL` and `E2E_PASSWORD` of an existing confirmed user.
 - `supabase/migrations/` holds the SQL that creates the two tables and their security policies. The Supabase URL and publishable key are in `www/config.js`.
 - `npm run assets` regenerates icons and splash screens from `assets/`.
 
 ### Rebuild on GitHub
 
-`.github/workflows/build-apk.yml` builds the debug APK on every push to `main` (and on demand from the Actions tab). Open the run and download the **ResetLog-debug-apk** artifact.
+`.github/workflows/build-apk.yml` builds the debug APK on every push to `main` (and on demand from the Actions tab). Open the run and download the **Comeback-debug-apk** artifact.
+
+
+## Icon, splash and store files
+
+- The Comeback mark (an open "C" that rises into an upward arrow, white on dark slate `#1C2629`) is defined once in `scripts/glyph.mjs`. `npm run brand` draws the icon, the adaptive icon layers, the Android 13 themed (monochrome) icon, the splash screens, the notification icon and the Play Store graphics from it, then lets `@capacitor/assets` cut the Android sizes.
+- `store/icon-512.png` (512 x 512), `store/feature-graphic-1024x500.png` and `store/listing.md` (title, short and full description) are the Play Store listing draft.

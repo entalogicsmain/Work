@@ -1,4 +1,4 @@
--- Reset Log cloud sync: one settings row per user, one row per logged day.
+-- Comeback cloud sync: one settings row per user, one row per logged day.
 
 create table public.user_settings (
   user_id uuid primary key references auth.users (id) on delete cascade,

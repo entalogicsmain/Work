@@ -20,7 +20,7 @@ async function open(opts = {}) {
 }
 const mock = pg => pg.evaluate(() => window.__mock.st());
 // with the mock native bridge the app's data lives in the mock Preferences
-const stored = async pg => { const v = (await mock(pg)).prefs.resetlog; return v ? JSON.parse(v) : null; };
+const stored = async pg => { const v = (await mock(pg)).prefs.comeback; return v ? JSON.parse(v) : null; };
 const calls = async (pg, n) => (await mock(pg)).calls.filter(c => c.n === n);
 const setSteps = (pg, p) => pg.evaluate(x => window.__mock.steps(x), p);
 const sendDays = (pg, days, health = 'working') => pg.evaluate(([d, h]) => { window.__mock.steps({ days: d, health: h }); window.__mock.fire('stepsChanged', { days: d, health: h }); }, [days, health]);
@@ -201,7 +201,7 @@ console.log('Step tracking settings');
 
 /* ---------- accelerometer fallback shows sensitivity ---------- */
 {
-  const { ctx, pg, errs } = await open({ init: () => { if (!localStorage.getItem('__acc')) { localStorage.setItem('__acc', '1'); localStorage.setItem('__mock', JSON.stringify({ prefs: { resetlog_onboarded: '1' }, fs: {}, calls: [], perm: 'prompt', requestResult: 'granted', failWrite: false, shareMode: 'ok', exit: 0, steps: { activityGranted: true, locationGranted: true, batteryIgnored: true, brand: 'samsung', health: 'working', source: 'accelerometer', days: {}, filteredToday: 0, cfg: { enabled: false } } })); } } });
+  const { ctx, pg, errs } = await open({ init: () => { if (!localStorage.getItem('__acc')) { localStorage.setItem('__acc', '1'); localStorage.setItem('__mock', JSON.stringify({ prefs: { comeback_onboarded: '1' }, fs: {}, calls: [], perm: 'prompt', requestResult: 'granted', failWrite: false, shareMode: 'ok', exit: 0, steps: { activityGranted: true, locationGranted: true, batteryIgnored: true, brand: 'samsung', health: 'working', source: 'accelerometer', days: {}, filteredToday: 0, cfg: { enabled: false } } })); } } });
   await enableAuto(pg);
   await pg.waitForSelector('#stSens');
   ok(/Normal/.test(await pg.textContent('#stSens')), 'phones without a step counter chip get a Sensitivity row (Normal by default)');
@@ -262,8 +262,8 @@ console.log('Data, sync, export and Progress');
 
   // CSV export has the new columns
   await tab(pg, 'setup'); await pg.click('#expCsv');
-  await pg.waitForFunction(() => /resetlog-.*\.csv/.test(document.getElementById('bkMsg').textContent));
-  const csv = (await mock(pg)).fs['DOCUMENTS/ResetLog/resetlog-' + tk + '.csv'].replace(/^﻿/, '');
+  await pg.waitForFunction(() => /comeback-.*\.csv/.test(document.getElementById('bkMsg').textContent));
+  const csv = (await mock(pg)).fs['DOCUMENTS/Comeback/comeback-' + tk + '.csv'].replace(/^﻿/, '');
   const [head, ...rows] = csv.trim().split('\r\n');
   ok(head.includes('Steps source,Distance (km),Filtered steps,Weight (kg)'), 'CSV has Steps source, Distance (km) and Filtered steps columns', head);
   // columns after the rules are Steps source, Distance (km), Filtered steps, Weight, Waist, Note (rule names contain commas, so count from the end)
@@ -273,8 +273,8 @@ console.log('Data, sync, export and Progress');
   ok(yRow.source === 'manual', 'CSV: a typed day is "manual"', yRow);
 
   // backup JSON keeps it, restore round-trips it, bad data is refused
-  await pg.click('#expJson'); await pg.waitForFunction(() => /resetlog-backup/.test(document.getElementById('bkMsg').textContent));
-  const json = JSON.parse((await mock(pg)).fs['DOCUMENTS/ResetLog/resetlog-backup-' + tk + '.json']);
+  await pg.click('#expJson'); await pg.waitForFunction(() => /comeback-backup/.test(document.getElementById('bkMsg').textContent));
+  const json = JSON.parse((await mock(pg)).fs['DOCUMENTS/Comeback/comeback-backup-' + tk + '.json']);
   ok(json.days[tk].steps_meta.counted === 4500 && json.days[tk].steps_meta.hourly[18] === 1240, 'backup JSON includes the step details');
   await pg.setInputFiles('#restoreFile', { name: 'steps.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(json)) });
   await actionChoose(pg, 'Continue'); await actionChoose(pg, 'Replace everything'); await pg.waitForFunction(() => /Replaced everything/.test(document.getElementById('bkMsg').textContent));
@@ -313,12 +313,12 @@ console.log('Data, sync, export and Progress');
 {
   const errs = [];
   const ctx = await browser.newContext({ viewport: { width: 400, height: 900 } });
-  await ctx.addInitScript(() => { localStorage.setItem('CapacitorStorage.resetlog_onboarded', '1'); });
+  await ctx.addInitScript(() => { localStorage.setItem('CapacitorStorage.comeback_onboarded', '1'); });
   const pg = await newPage(ctx, errs); await pg.goto(base); await ready(pg);
   await tab(pg, 'setup');
   ok(!(await pg.isVisible('#stepGroup')), 'no Step tracking section in a plain browser (Android app only)');
   await tab(pg, 'today'); await setHabit(pg, 1, 1234); await settle(pg);
-  ok(JSON.parse(await pg.evaluate(() => localStorage.getItem('CapacitorStorage.resetlog'))).days[tk].vals.steps === 1234, 'Steps still work by hand in a browser');
+  ok(JSON.parse(await pg.evaluate(() => localStorage.getItem('CapacitorStorage.comeback'))).days[tk].vals.steps === 1234, 'Steps still work by hand in a browser');
   ok(errs.length === 0, 'no JS errors (web)', errs);
   await ctx.close();
 }

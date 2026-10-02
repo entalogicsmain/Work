@@ -54,11 +54,11 @@ async function setup(browserCtxOpts, data, onboarded) {
   await ctx.addInitScript(([d, ob]) => {
     if (!localStorage.getItem('__seeded')) {
       localStorage.setItem('__seeded', '1');
-      if (d) localStorage.setItem('CapacitorStorage.resetlog', JSON.stringify(d));
-      if (ob) localStorage.setItem('CapacitorStorage.resetlog_onboarded', '1');
+      if (d) localStorage.setItem('CapacitorStorage.comeback', JSON.stringify(d));
+      if (ob) localStorage.setItem('CapacitorStorage.comeback_onboarded', '1');
     }
   }, [data, onboarded]);
-  await ctx.route('**/config.js', r => r.fulfill({ contentType: 'text/javascript', body: "window.RESETLOG_CONFIG={SUPABASE_URL:'https://x.supabase.test',SUPABASE_PUBLISHABLE_KEY:'k'}" }));
+  await ctx.route('**/config.js', r => r.fulfill({ contentType: 'text/javascript', body: "window.COMEBACK_CONFIG={SUPABASE_URL:'https://x.supabase.test',SUPABASE_PUBLISHABLE_KEY:'k'}" }));
   await ctx.route(/supabase\.test/, r => r.abort('internetdisconnected'));
   const pg = await ctx.newPage();
   const errs = [];
@@ -134,7 +134,7 @@ for (const scheme of ['light', 'dark']) {
       await pg.click('#signInBtn'); await snap(pg, '30-sheet-sign-in');
       await pg.fill('#authEmail', 'me@example.com'); await pg.fill('#authPw', 'secret12'); await pg.click('#authIn'); await pg.waitForTimeout(1200); await snap(pg, '31-sheet-sign-in-no-internet');
       await pg.click('#authCancel');
-      await pg.setInputFiles('#restoreFile', { name: 'resetlog-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(SEED)) });
+      await pg.setInputFiles('#restoreFile', { name: 'comeback-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(SEED)) });
       await pg.waitForSelector('.asheet'); await snap(pg, '32-action-sheet-restore');
       await pg.click('.asheet .ab:has-text("Continue")'); await pg.waitForTimeout(500); await snap(pg, '33-action-sheet-restore-mode');
       await pg.click('.asheet .cancel');
@@ -156,7 +156,7 @@ for (const scheme of ['light', 'dark']) {
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, deviceScaleFactor: 2 });
     await ctx.route('**/vendor/native.js', r => r.fulfill({ contentType: 'text/javascript', body: MOCK }));
     await ctx.addInitScript(d => {
-      if (!localStorage.getItem('__mock')) localStorage.setItem('__mock', JSON.stringify({ prefs: { resetlog_onboarded: '1', resetlog: JSON.stringify(d) }, fs: {}, calls: [], perm: 'prompt', requestResult: 'granted', failWrite: false, shareMode: 'ok', exit: 0,
+      if (!localStorage.getItem('__mock')) localStorage.setItem('__mock', JSON.stringify({ prefs: { comeback_onboarded: '1', comeback: JSON.stringify(d) }, fs: {}, calls: [], perm: 'prompt', requestResult: 'granted', failWrite: false, shareMode: 'ok', exit: 0,
         steps: { activityGranted: false, grantOnRequest: false, locationGranted: true, batteryIgnored: false, brand: 'xiaomi', health: 'working', source: 'counter', days: {}, filteredToday: 0, cfg: { enabled: false } } }));
     }, SEED_NO_STEPS_TODAY);
     const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));

@@ -42,11 +42,11 @@ export async function newPage(ctx, errs, opts = {}) {
   return pg;
 }
 // skips onboarding unless asked to show it
-export const skipOnboarding = ctx => ctx.addInitScript(() => { if (!localStorage.getItem('__ob')) { localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.resetlog_onboarded', '1'); } });
+export const skipOnboarding = ctx => ctx.addInitScript(() => { if (!localStorage.getItem('__ob')) { localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.comeback_onboarded', '1'); } });
 
 export const tab = (pg, t) => pg.click(`.tab[data-tab="${t}"]`);
 export const ready = pg => pg.waitForSelector('#habitList .hcard', { state: 'attached' });
-export const stored = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('CapacitorStorage.resetlog')));
+export const stored = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('CapacitorStorage.comeback')));
 export const sheetGone = pg => pg.waitForFunction(() => !document.querySelector('.sheet-wrap'), null, { timeout: 5000 });
 export const settle = pg => pg.waitForTimeout(750); // auto-save debounce (400ms) + write
 
@@ -101,7 +101,7 @@ export async function logDay(pg, { steps, weight, note }) {
 export const MOCK = `
 (function(){
   var KEY='__mock';
-  var st=JSON.parse(localStorage.getItem(KEY)||'null')||{prefs:{resetlog_onboarded:'1'},fs:{},calls:[],perm:'prompt',requestResult:'granted',failWrite:false,shareMode:'ok',exit:0};
+  var st=JSON.parse(localStorage.getItem(KEY)||'null')||{prefs:{comeback_onboarded:'1'},fs:{},calls:[],perm:'prompt',requestResult:'granted',failWrite:false,shareMode:'ok',exit:0};
   if(!st.steps)st.steps={activityGranted:true,locationGranted:true,batteryIgnored:false,brand:'xiaomi',health:'working',source:'counter',days:{},filteredToday:0,cfg:{enabled:false}};
   function save(){localStorage.setItem(KEY,JSON.stringify(st))}
   function rec(n,a){st.calls.push({n:n,a:a});save()}
@@ -110,9 +110,9 @@ export const MOCK = `
     fire:function(ev,p){(listeners[ev]||[]).forEach(function(f){f(p||{})})},
     set:function(k,v){st[k]=v;save()},
     steps:function(p){Object.assign(st.steps,p);save()}};
-  window.ResetNative={
+  window.ComebackNative={
     isNative:true,
-    Preferences:{get:async function(o){return{value:o.key in st.prefs?st.prefs[o.key]:null}},set:async function(o){st.prefs[o.key]=o.value;save()},remove:async function(o){delete st.prefs[o.key];save()}},
+    Preferences:{get:async function(o){return{value:o.key in st.prefs?st.prefs[o.key]:null}},set:async function(o){st.prefs[o.key]=o.value;save()},remove:async function(o){delete st.prefs[o.key];save()},keys:async function(){return{keys:Object.keys(st.prefs)}}},
     Directory:{Documents:'DOCUMENTS',Cache:'CACHE'},Encoding:{UTF8:'utf8'},
     Filesystem:{
       writeFile:async function(o){

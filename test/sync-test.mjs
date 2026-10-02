@@ -82,7 +82,7 @@ const browser = await launch();
 const ctx = await browser.newContext({ viewport: { width: 400, height: 800 } });
 await skipOnboarding(ctx);
 await ctx.route(API + '/**', handler);
-await ctx.route('**/config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.RESETLOG_CONFIG={SUPABASE_URL:'${API}',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fake'}` }));
+await ctx.route('**/config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.COMEBACK_CONFIG={SUPABASE_URL:'${API}',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fake'}` }));
 const errs = [];
 const pg = await newPage(ctx, errs);
 
@@ -179,7 +179,7 @@ await waitStatus(/Synced at/);
 ok(await pg.isVisible('#signOutBtn'), 'still signed in after closing and reopening the app (session kept in Preferences)');
 const before = await stored(pg);
 fake.calls.length = 0;
-await pg.evaluate(() => { localStorage.clear(); localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.resetlog_onboarded', '1'); });
+await pg.evaluate(() => { localStorage.clear(); localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.comeback_onboarded', '1'); });
 await pg.reload(); await ready(pg); await tab(pg, 'setup');
 ok((await pg.textContent('#sDays')) === '0' && await pg.isVisible('#signInBtn'), 'wiped phone: empty and signed out');
 await auth('in', EMAIL, PW);
@@ -200,7 +200,7 @@ await tab(pg, 'setup');
 await waitStatus(/1 change is waiting to sync/);
 ok(/Offline|waiting to sync/.test(await status()), 'status says a change is waiting', await status());
 ok(!fake.days.some(r => r.data.note === 'saved offline'), 'nothing reached the cloud while offline');
-ok(await pg.evaluate(() => JSON.parse(localStorage.getItem('CapacitorStorage.resetlog_sync')).pendingDays.length === 1), 'pending queue is stored in Preferences');
+ok(await pg.evaluate(() => JSON.parse(localStorage.getItem('CapacitorStorage.comeback_sync')).pendingDays.length === 1), 'pending queue is stored in Preferences');
 await ctx.setOffline(false); // the page itself must load; the cloud stays unreachable
 await pg.reload(); await ready(pg); await tab(pg, 'setup');
 await waitStatus(/1 change is waiting to sync/);

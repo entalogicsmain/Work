@@ -1,8 +1,8 @@
-package com.umar.resetlog;
+package com.entalogics.comeback;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
-import com.umar.resetlog.steps.StepsPlugin;
+import com.entalogics.comeback.steps.StepsPlugin;
 
 public class MainActivity extends BridgeActivity {
     @Override

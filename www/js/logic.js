@@ -42,12 +42,13 @@ function scoreOf(d){
   return Math.round(parts.reduce((a,b)=>a+b,0)/parts.length*100);
 }
 /* ---------- platform ---------- */
-const Native=window.ResetNative||{isNative:false};
+const Native=window.ComebackNative||{isNative:false};
 const IS_NATIVE=!!Native.isNative;
 const localShim={
   async get({key}){try{return{value:localStorage.getItem('CapacitorStorage.'+key)}}catch(e){return{value:null}}},
   async set({key,value}){localStorage.setItem('CapacitorStorage.'+key,value)},
-  async remove({key}){localStorage.removeItem('CapacitorStorage.'+key)}
+  async remove({key}){localStorage.removeItem('CapacitorStorage.'+key)},
+  async keys(){const out=[];try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf('CapacitorStorage.')===0)out.push(k.slice(17))}}catch(e){}return{keys:out}}
 };
 const Prefs=Native.Preferences||localShim;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -56,7 +57,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 
 /* ---------- data shape ----------
    { version:1, settings:{habits:[...],rules:[...]}, days:{ "YYYY-MM-DD":{vals,rules,weight,waist,note,date,updatedAt} } } */
-const DATA_KEY='resetlog', META_KEY='resetlog_meta', MIGRATED_KEY='resetlog_migrated';
+const DATA_KEY='comeback', META_KEY='comeback_meta', MIGRATED_KEY='comeback_migrated';
 const buildData=()=>({version:1,settings,days});
 const ID_RE=/^[A-Za-z0-9_-]{1,64}$/, DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
 const num=v=>typeof v==='number'&&isFinite(v);
@@ -104,10 +105,10 @@ function normalizeDay(k,d){
   if(sm)out.steps_meta=sm;
   return out;
 }
-/* Throws an Error with a readable message when the object is not a Reset Log backup. */
+/* Throws an Error with a readable message when the object is not a Comeback backup. */
 function normalizeData(obj){
-  if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error("This isn't a Reset Log backup (expected a JSON object).");
-  if(obj.version!=null&&obj.version!==1)throw new Error(typeof obj.version==='number'&&obj.version>1?'This backup was made by a newer version of Reset Log (version '+obj.version+'). Update the app first.':'Unknown backup version: '+esc(String(obj.version)).slice(0,20)+'.');
+  if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error("This isn't a Comeback backup (expected a JSON object).");
+  if(obj.version!=null&&obj.version!==1)throw new Error(typeof obj.version==='number'&&obj.version>1?'This backup was made by a newer version of Comeback (version '+obj.version+'). Update the app first.':'Unknown backup version: '+esc(String(obj.version)).slice(0,20)+'.');
   const settings=normalizeSettings(obj.settings);
   if(!obj.days||typeof obj.days!=='object'||Array.isArray(obj.days))throw new Error("The backup is missing its 'days' section.");
   const outDays={};
@@ -135,6 +136,27 @@ let loadProblem='';
 const prefGet=async k=>(await Prefs.get({key:k})).value;
 const prefSet=(k,v)=>Prefs.set({key:k,value:v});
 
+/* Before the app was renamed Comeback it saved under "resetlog" keys. On launch those move to the "comeback" keys and
+   the old ones are removed. Safe to run any number of times: a key is only removed once its value is stored under the new name,
+   and when both names exist with different values neither is touched, so nothing can be lost. */
+const LEGACY_PREFIX='resetlog';
+const LEGACY_KEYS=[[LEGACY_PREFIX,'comeback'],[LEGACY_PREFIX+'_meta','comeback_meta'],[LEGACY_PREFIX+'_migrated','comeback_migrated'],[LEGACY_PREFIX+'_sync','comeback_sync'],[LEGACY_PREFIX+'_onboarded','comeback_onboarded']];
+async function migrateLegacyKeys(){
+  const pairs=LEGACY_KEYS.slice();
+  try{((await Prefs.keys()).keys||[]).forEach(k=>{if(k.indexOf(LEGACY_PREFIX+'_unreadable_')===0)pairs.push([k,'comeback_unreadable_'+k.slice((LEGACY_PREFIX+'_unreadable_').length)])})}catch(e){}
+  let moved=0;
+  for(const[oldK,newK]of pairs){
+    try{
+      const ov=await prefGet(oldK);if(ov==null)continue;
+      const nv=await prefGet(newK);
+      if(nv==null){await prefSet(newK,ov);moved++}
+      else if(nv!==ov)continue;
+      await Prefs.remove({key:oldK});
+    }catch(e){}
+  }
+  return moved;
+}
+
 store={
   queue:Promise.resolve(),
   persist(){
@@ -144,10 +166,11 @@ store={
     return p;
   },
   async load(){
+    await migrateLegacyKeys();
     let raw=await prefGet(DATA_KEY),migrated=0;
     if(await prefGet(MIGRATED_KEY)==null){
-      // one-time move of the old browser copy (localStorage "resetlog") into Preferences
-      let old=null;try{old=localStorage.getItem('resetlog')}catch(e){}
+      // one-time move of the old browser copy (localStorage "resetlog", from before Preferences was used) into Preferences
+      let old=null;try{old=localStorage.getItem(LEGACY_PREFIX)}catch(e){}
       if(raw==null&&old){
         try{
           const parsed=JSON.parse(old);
@@ -166,7 +189,7 @@ store={
       return{data:norm,migrated};
     }catch(e){
       // keep the unreadable copy instead of overwriting it with an empty one
-      try{await prefSet('resetlog_unreadable_'+Date.now(),raw)}catch(e2){}
+      try{await prefSet('comeback_unreadable_'+Date.now(),raw)}catch(e2){}
       loadProblem="Your saved data couldn't be read ("+errText(e)+"). A copy was kept. Use Restore from backup to bring your entries back.";
       return{migrated};
     }
@@ -175,7 +198,7 @@ store={
 };
 
 /* ---------- files: export, auto backup ---------- */
-const DIR='ResetLog';
+const DIR='Comeback';
 const fmtWhen=t=>new Date(t).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'});
 function showLastBackup(){$('lastBackup').textContent='Last backup: '+(meta.lastBackup?fmtWhen(meta.lastBackup):'never')}
 async function markBackup(){meta.lastBackup=Date.now();showLastBackup();try{await store.saveMeta()}catch(e){}}
@@ -192,11 +215,11 @@ function autoBackup(){
   autoQueue=autoQueue.then(async()=>{
     try{
       const text=JSON.stringify(buildData(),null,2);
-      await writeDocs('resetlog-autobackup.json',text);
-      await writeDocs('resetlog-autobackup-'+todayStr()+'.json',text);
+      await writeDocs('comeback-autobackup.json',text);
+      await writeDocs('comeback-autobackup-'+todayStr()+'.json',text);
       try{
         const list=await FS().readdir({path:DIR,directory:Native.Directory.Documents});
-        const dated=list.files.map(f=>f.name).filter(n=>/^resetlog-autobackup-\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort().reverse();
+        const dated=list.files.map(f=>f.name).filter(n=>/^comeback-autobackup-\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort().reverse();
         for(const n of dated.slice(7))await FS().deleteFile({path:DIR+'/'+n,directory:Native.Directory.Documents});
       }catch(e){await markBackup();autoFail("Backup saved, but cleaning up old copies failed: "+errText(e));return}
       await markBackup();
@@ -269,7 +292,7 @@ async function restoreFromFile(file){
   let inc;
   try{
     let obj;
-    try{obj=JSON.parse(await readText(file))}catch(e){throw new Error("That file isn't valid JSON, so it can't be a Reset Log backup.")}
+    try{obj=JSON.parse(await readText(file))}catch(e){throw new Error("That file isn't valid JSON, so it can't be a Comeback backup.")}
     inc=normalizeData(obj);
   }catch(e){setMsg('bkMsg',"Couldn't restore: "+errText(e),true);return}
   const n=Object.keys(inc.days).length;
@@ -278,7 +301,7 @@ async function restoreFromFile(file){
   const mode=await askModal('How should it be restored?','Merge keeps what is on this phone and adds the backup. If a day is in both, the newer save wins. Replace everything deletes what is on this phone and uses only the backup.'+(signedIn()?' The restored data is also sent to your cloud copy; days that exist only in the cloud will come back on the next sync.':''),[{label:'Merge',value:'merge'},{label:'Replace everything',value:'replace',cls:'danger'},{label:'Cancel',value:'cancel'}]);
   if(mode!=='merge'&&mode!=='replace')return;
   let warn='';
-  if(IS_NATIVE){try{await writeDocs('resetlog-before-restore.json',JSON.stringify(buildData(),null,2))}catch(e){warn=" Couldn't save a safety copy of your old data first ("+errText(e)+")."}}
+  if(IS_NATIVE){try{await writeDocs('comeback-before-restore.json',JSON.stringify(buildData(),null,2))}catch(e){warn=" Couldn't save a safety copy of your old data first ("+errText(e)+")."}}
   const before=buildData();let summary;
   try{
     let next;
@@ -308,13 +331,13 @@ async function scheduleReminder(time){
   await LN().cancel({notifications:[{id:REM_ID}]});
   await LN().createChannel({id:REM_CHANNEL,name:'Daily reminder',description:'Reminds you to log your day',importance:4,visibility:1});
   await LN().schedule({notifications:[{
-    id:REM_ID,title:'Reset Log',body:'Time to log today. How did your workout and food go?',
-    channelId:REM_CHANNEL,smallIcon:'ic_stat_resetlog',
+    id:REM_ID,title:'Comeback',body:'Time to log today. How did your comeback go?',
+    channelId:REM_CHANNEL,smallIcon:'ic_stat_comeback',
     schedule:{on:{hour:h,minute:m},allowWhileIdle:true},isExactNotification:false,
     extra:{tab:'today'}
   }]});
 }
-const BLOCKED="Notifications are blocked for Reset Log. Turn them on in Android Settings > Apps > Reset Log > Notifications, then switch this on again.";
+const BLOCKED="Notifications are blocked for Comeback. Turn them on in Android Settings > Apps > Comeback > Notifications, then switch this on again.";
 async function setReminder(on){
   const box=$('remOn');setMsg('remMsg','');
   try{
@@ -361,8 +384,8 @@ async function initReminder(){
    Saves go to the cloud right away when online; otherwise the day is queued in
    Preferences and sent later. A full sync (open, sign in, foreground, network back,
    "Sync now") pulls every cloud row and keeps whichever side has the newer timestamp. */
-const CFG=window.RESETLOG_CONFIG||{};
-const SYNC_KEY='resetlog_sync';
+const CFG=window.COMEBACK_CONFIG||{};
+const SYNC_KEY='comeback_sync';
 let sb=null,session=null;
 let sync={signedIn:false,userId:null,email:'',lastSyncAt:null,settingsUpdatedAt:0,pendingDays:[],pendingSettings:false};
 let syncRunning=null,syncAgain=false,wantFull=false,syncError='',syncOffline=false,lastFullAt=0;
@@ -552,8 +575,8 @@ function syncBars(){
 
 /* ---------- wiring for the buttons that call the logic above ---------- */
 function bindLogic(){
-  $('expJson').addEventListener('click',e=>runExport(e.currentTarget,()=>exportFile('resetlog-backup-'+todayStr()+'.json',JSON.stringify(buildData(),null,2),'application/json','Reset Log backup')));
-  $('expCsv').addEventListener('click',e=>runExport(e.currentTarget,()=>exportFile('resetlog-'+todayStr()+'.csv',buildCsv(),'text/csv','Reset Log spreadsheet')));
+  $('expJson').addEventListener('click',e=>runExport(e.currentTarget,()=>exportFile('comeback-backup-'+todayStr()+'.json',JSON.stringify(buildData(),null,2),'application/json','Comeback backup')));
+  $('expCsv').addEventListener('click',e=>runExport(e.currentTarget,()=>exportFile('comeback-'+todayStr()+'.csv',buildCsv(),'text/csv','Comeback spreadsheet')));
   $('restoreBtn').addEventListener('click',()=>$('restoreFile').click());
   $('restoreFile').addEventListener('change',async e=>{
     const f=e.target.files&&e.target.files[0];

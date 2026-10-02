@@ -1,4 +1,4 @@
-package com.umar.resetlog.steps
+package com.entalogics.comeback.steps
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

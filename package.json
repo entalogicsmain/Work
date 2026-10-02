@@ -1,8 +1,8 @@
 {
-  "name": "reset-log",
+  "name": "comeback",
   "version": "1.0.0",
   "private": true,
-  "description": "Reset Log - personal daily health tracker",
+  "description": "Comeback - personal daily health tracker",
   "scripts": {
     "build:web": "node scripts/build-icons.mjs && esbuild src/native.js --bundle --minify --format=iife --target=chrome90 --outfile=www/vendor/native.js",
     "sync": "npm run build:web && cap sync android",
@@ -14,7 +14,9 @@
     "test:contrast": "node test/contrast-test.mjs",
     "test:steps": "node test/steps-test.mjs",
     "test:android": "cd android && ./gradlew :app:testDebugUnitTest",
-    "lint:android": "cd android && ./gradlew :app:lintDebug"
+    "lint:android": "cd android && ./gradlew :app:lintDebug",
+    "brand": "node scripts/build-brand.mjs",
+    "test:rename": "node test/rename-test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

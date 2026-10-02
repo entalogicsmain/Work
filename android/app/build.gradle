@@ -2,10 +2,10 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 android {
-    namespace = "com.umar.resetlog"
+    namespace = "com.entalogics.comeback"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.umar.resetlog"
+        applicationId "com.entalogics.comeback"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Local builds are version 1; CI builds count up so newer builds always install over older ones.
@@ -22,9 +22,9 @@ android {
         // Fixed debug key (not a secret) so APKs built here and on GitHub share one signature
         // and can be installed over each other without uninstalling (which would wipe app data).
         debug {
-            storeFile file('resetlog-debug.keystore')
+            storeFile file('comeback-debug.keystore')
             storePassword 'android'
-            keyAlias 'resetlogdebug'
+            keyAlias 'comebackdebug'
             keyPassword 'android'
         }
     }

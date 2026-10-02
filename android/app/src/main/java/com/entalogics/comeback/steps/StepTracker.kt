@@ -1,4 +1,4 @@
-package com.umar.resetlog.steps
+package com.entalogics.comeback.steps
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
 // appCtx is always the application context, so holding it statically does not leak an Activity.
 @SuppressLint("StaticFieldLeak")
 object StepTracker {
-    private const val PREFS = "resetlog_steps"
+    private const val PREFS = LegacyMigration.NEW_PREFS
     private const val K_ENGINE = "engine"
     private const val K_CFG = "config"
     private const val K_SENSORS = "sensors"
@@ -64,6 +64,7 @@ object StepTracker {
         synchronized(lock) {
             if (appCtx != null) return
             appCtx = c.applicationContext
+            LegacyMigration.run(c.applicationContext)
             val p = prefs()
             p.getString(K_CFG, null)?.let { s ->
                 try {

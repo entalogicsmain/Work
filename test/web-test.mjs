@@ -22,7 +22,7 @@ console.log('Part A: web build');
   await skipOnboarding(ctx);
   const pg = await newPage(ctx, errs);
 
-  // old localStorage key "resetlog" is migrated once (old shape: no version, no settings)
+  // the very old browser copy (localStorage key "resetlog", from before the Comeback rename) is migrated once (old shape: no version, no settings)
   await pg.addInitScript(() => {
     if (!localStorage.getItem('__seeded')) {
       localStorage.setItem('__seeded', '1');
@@ -34,7 +34,7 @@ console.log('Part A: web build');
   let d = await stored(pg);
   ok(d && d.version === 1 && d.days['2026-09-01'] && d.days['2026-09-01'].weight === 88.5, 'old localStorage data migrated into Preferences with version 1', d);
   ok(d.settings.habits.length === 8 && d.settings.rules.length === 4, 'default settings used when old data had none');
-  ok(await pg.evaluate(() => localStorage.getItem('CapacitorStorage.resetlog_migrated') === '1'), 'migration flag set (runs once)');
+  ok(await pg.evaluate(() => localStorage.getItem('CapacitorStorage.comeback_migrated') === '1'), 'migration flag set (runs once)');
   const html = await pg.content();
   ok(!/googleapis|cdnjs|window\.claude/.test(html + (await pg.evaluate(() => [...document.scripts].map(s => s.src).join()))), 'no CDN / claude references left in the page');
 
@@ -152,7 +152,7 @@ console.log('Part A: web build');
 
   // export JSON
   let [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('#expJson')]);
-  ok(dl.suggestedFilename() === `resetlog-backup-${tk}.json`, 'JSON export file name', dl.suggestedFilename());
+  ok(dl.suggestedFilename() === `comeback-backup-${tk}.json`, 'JSON export file name', dl.suggestedFilename());
   const jsonPath = await dl.path();
   ok(same(JSON.parse(fs.readFileSync(jsonPath, 'utf8')), before), 'exported JSON equals stored data (version, settings, days)');
   ok(!(await pg.textContent('#lastBackup')).includes('never'), 'Last backup time shown after export');
@@ -160,12 +160,12 @@ console.log('Part A: web build');
   [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('#expCsv')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
   const lines = csv.replace(/^﻿/, '').trim().split('\r\n');
-  ok(dl.suggestedFilename() === `resetlog-${tk}.csv` && lines.length === 4, 'CSV: file name and one row per day', [dl.suggestedFilename(), lines.length]);
+  ok(dl.suggestedFilename() === `comeback-${tk}.csv` && lines.length === 4, 'CSV: file name and one row per day', [dl.suggestedFilename(), lines.length]);
   ok(lines[0].startsWith('Date,Score %,') && lines[0].includes('Cycling (km)') && lines[0].includes('No chips') && lines[0].endsWith('Weight (kg),Waist (cm),Note'), 'CSV header has habits, rules, weight, waist, note', lines[0]);
   ok(lines[1].startsWith('2026-09-01,') && csv.includes('"Daal, roti, ""quoted"", comma"') && csv.includes("'- starts with dash"), 'CSV escapes commas/quotes and guards formula-like notes');
 
   // wipe, then restore (Replace) through action sheets
-  await pg.evaluate(() => { localStorage.clear(); localStorage.setItem('__seeded', '1'); localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.resetlog_onboarded', '1'); });
+  await pg.evaluate(() => { localStorage.clear(); localStorage.setItem('__seeded', '1'); localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.comeback_onboarded', '1'); });
   await pg.reload(); await ready(pg);
   await tab(pg, 'progress');
   ok(await pg.isVisible('#progEmpty') && /Log your first day/.test(await pg.textContent('#progEmpty')), 'empty state invites the first log (no blank screen)');
@@ -253,7 +253,7 @@ console.log('Onboarding');
   const pg = await newPage(ctx, errs);
   await pg.goto(base); await pg.waitForSelector('.onb');
   ok((await pg.$$('.onb-page')).length === 3 && await pg.isVisible('#onbSkip'), 'first launch shows a 3-page intro with Skip');
-  ok(/Log your day in seconds/.test(await pg.textContent('.onb-page:nth-child(1)')), 'page 1 explains what the app does');
+  ok(/Get back to your best, one day at a time\./.test(await pg.textContent('.onb-page:nth-child(1)')), 'page 1 explains what the app does');
   await pg.click('#onbNext');
   ok(/Set your targets/.test(await pg.textContent('.onb-page:nth-child(2)')), 'page 2: set your targets');
   await pg.fill('.onb-page:nth-child(2) .row:nth-child(1) input', '9000');
@@ -263,7 +263,7 @@ console.log('Onboarding');
   await settle(pg);
   const d = await stored(pg);
   ok(d && d.settings.habits[0].target === 9000, 'targets edited in the intro are saved');
-  ok(await pg.evaluate(() => localStorage.getItem('CapacitorStorage.resetlog_onboarded') === '1'), 'intro is marked as seen');
+  ok(await pg.evaluate(() => localStorage.getItem('CapacitorStorage.comeback_onboarded') === '1'), 'intro is marked as seen');
   await pg.reload(); await ready(pg); await pg.waitForTimeout(400);
   ok(!(await pg.$('.onb')), 'intro does not come back');
   await tab(pg, 'setup'); await pg.click('#replayIntro');
@@ -290,7 +290,7 @@ const seedDays = (n, scoreAt) => {
   const ctx = await browser.newContext({ viewport: { width: 360, height: 800 } });
   await skipOnboarding(ctx);
   const data = seedDays(60, i => 0.5 + 0.5 * Math.abs(Math.sin(i)));
-  await ctx.addInitScript(d => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem('CapacitorStorage.resetlog', JSON.stringify(d)); } }, data);
+  await ctx.addInitScript(d => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem('CapacitorStorage.comeback', JSON.stringify(d)); } }, data);
   const pg = await newPage(ctx, errs);
   await pg.goto(base); await ready(pg);
   await tab(pg, 'progress'); await pg.waitForTimeout(700);
@@ -335,7 +335,7 @@ console.log('Positive reinforcement');
     const settings = { habits: [{ id: 'a', name: 'Pushups', unit: 'reps', target: 10 }, { id: 'b', name: 'Water', unit: 'litres', target: 2 }], rules: [{ id: 'r', name: 'No sugar' }] };
     const day = (k, v, r) => ({ vals: v, rules: r, weight: null, waist: null, note: '', date: k, updatedAt: 1e12 });
     const days = { [daysAgo(1)]: day(daysAgo(1), { a: 10, b: 2 }, { r: true }), [daysAgo(2)]: day(daysAgo(2), { a: 10, b: 2 }, { r: true }), [tk]: day(tk, { a: 10 }, { r: true }) };
-    await ctx.addInitScript(d => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem('CapacitorStorage.resetlog', JSON.stringify(d)); } }, { version: 1, settings, days });
+    await ctx.addInitScript(d => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem('CapacitorStorage.comeback', JSON.stringify(d)); } }, { version: 1, settings, days });
     const pg = await newPage(ctx, errs); await pg.goto(base); await ready(pg); await pg.waitForTimeout(600);
     return { ctx, pg };
   };
@@ -343,7 +343,7 @@ console.log('Positive reinforcement');
   ok(/3-day streak/.test(await pg.textContent('#streakLine')), 'streak shown on Today', await pg.textContent('#streakLine'));
   await setHabit(pg, 2, 2);
   await pg.waitForTimeout(150);
-  ok(await pg.$eval('#ring', e => e.classList.contains('done')) && /All done today/.test(await pg.textContent('#toastMsg')), 'completing every target and rule closes the ring and says so');
+  ok(await pg.$eval('#ring', e => e.classList.contains('done')) && /Strong day\. Your comeback is on track\./.test(await pg.textContent('#toastMsg')), 'completing every target and rule closes the ring and says so');
   ok(!!(await pg.$('.confetti')), 'a short confetti moment plays');
   ok((await pg.textContent('#ringCap')) === 'All done' && (await pg.textContent('#headScore')) === '100%', 'ring reads 100% / All done');
   await ctx.close();
@@ -354,7 +354,7 @@ console.log('Positive reinforcement');
   // streak milestone + goal hit wording
   const ctx3 = await browser.newContext({ viewport: { width: 360, height: 800 } });
   await skipOnboarding(ctx3);
-  await ctx3.addInitScript(d => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem('CapacitorStorage.resetlog', JSON.stringify(d)); } }, (() => {
+  await ctx3.addInitScript(d => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem('CapacitorStorage.comeback', JSON.stringify(d)); } }, (() => {
     const settings = { habits: [{ id: 'a', name: 'Pushups', unit: 'reps', target: 10 }, { id: 'b', name: 'Water', unit: 'litres', target: 2 }], rules: [{ id: 'r', name: 'No sugar' }] };
     const day = (k, v, r) => ({ vals: v, rules: r, weight: null, waist: null, note: '', date: k, updatedAt: 1e12 });
     return { version: 1, settings, days: { [daysAgo(1)]: day(daysAgo(1), { a: 10, b: 2 }, { r: true }), [daysAgo(2)]: day(daysAgo(2), { a: 10, b: 2 }, { r: true }) } };
@@ -381,7 +381,7 @@ console.log('Accessibility and theming');
   const ctx = await browser.newContext({ viewport: { width: 360, height: 800 } });
   await skipOnboarding(ctx);
   const data = seedDays(40, i => 0.45 + 0.5 * Math.abs(Math.sin(i * 1.7)));
-  await ctx.addInitScript(d => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem('CapacitorStorage.resetlog', JSON.stringify(d)); } }, data);
+  await ctx.addInitScript(d => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem('CapacitorStorage.comeback', JSON.stringify(d)); } }, data);
   const pg = await newPage(ctx, errs); await pg.goto(base); await ready(pg); await pg.waitForTimeout(500);
   const audit = async tabName => {
     await tab(pg, tabName); await pg.waitForTimeout(500);
@@ -449,14 +449,14 @@ console.log('Part B: mocked native bridge');
   await pg.addInitScript(() => {
     if (!localStorage.getItem('__mock')) {
       const fsx = {};
-      for (let i = 1; i <= 9; i++) fsx[`DOCUMENTS/ResetLog/resetlog-autobackup-2026-08-0${i}.json`] = '{}';
-      fsx['DOCUMENTS/ResetLog/resetlog-backup-2026-08-01.json'] = '{"manual":true}';
-      localStorage.setItem('__mock', JSON.stringify({ prefs: { resetlog_onboarded: '1' }, fs: fsx, calls: [], perm: 'prompt', requestResult: 'granted', failWrite: false, shareMode: 'ok', exit: 0 }));
+      for (let i = 1; i <= 9; i++) fsx[`DOCUMENTS/Comeback/comeback-autobackup-2026-08-0${i}.json`] = '{}';
+      fsx['DOCUMENTS/Comeback/comeback-backup-2026-08-01.json'] = '{"manual":true}';
+      localStorage.setItem('__mock', JSON.stringify({ prefs: { comeback_onboarded: '1' }, fs: fsx, calls: [], perm: 'prompt', requestResult: 'granted', failWrite: false, shareMode: 'ok', exit: 0 }));
     }
   });
   await pg.goto(base); await ready(pg);
   await tab(pg, 'setup');
-  ok((await pg.textContent('#storeNote')).includes('Documents/ResetLog'), 'native mode note mentions Documents/ResetLog');
+  ok((await pg.textContent('#storeNote')).includes('Documents/Comeback'), 'native mode note mentions Documents/Comeback');
   ok((await pg.textContent('#lastBackup')) === 'Last backup: never', 'Last backup shows "never" at first');
 
   // haptics
@@ -466,14 +466,14 @@ console.log('Part B: mocked native bridge');
   await setHabit(pg, 1, 8000); await setNote(pg, 'native day'); await settle(pg);
   await pg.waitForFunction(() => !document.getElementById('lastBackup').textContent.includes('never'));
   let m = await mock();
-  const pref = JSON.parse(m.prefs.resetlog);
+  const pref = JSON.parse(m.prefs.comeback);
   ok(pref.version === 1 && pref.days[tk], 'Preferences holds the data object (version 1) after a change');
-  const auto = m.fs['DOCUMENTS/ResetLog/resetlog-autobackup.json'];
-  ok(auto && same(JSON.parse(auto), pref), 'Documents/ResetLog/resetlog-autobackup.json written with full data');
-  ok(m.fs[`DOCUMENTS/ResetLog/resetlog-autobackup-${tk}.json`] === auto, "today's dated copy written");
-  const dated = Object.keys(m.fs).filter(k => /resetlog-autobackup-\d{4}-\d{2}-\d{2}\.json$/.test(k)).map(k => k.split('-autobackup-')[1].slice(0, 10)).sort();
+  const auto = m.fs['DOCUMENTS/Comeback/comeback-autobackup.json'];
+  ok(auto && same(JSON.parse(auto), pref), 'Documents/Comeback/comeback-autobackup.json written with full data');
+  ok(m.fs[`DOCUMENTS/Comeback/comeback-autobackup-${tk}.json`] === auto, "today's dated copy written");
+  const dated = Object.keys(m.fs).filter(k => /comeback-autobackup-\d{4}-\d{2}-\d{2}\.json$/.test(k)).map(k => k.split('-autobackup-')[1].slice(0, 10)).sort();
   ok(dated.length === 7 && dated.includes(tk) && !dated.includes('2026-08-01') && !dated.includes('2026-08-03') && dated.includes('2026-08-04'), 'only the newest 7 dated copies are kept', dated);
-  ok('DOCUMENTS/ResetLog/resetlog-backup-2026-08-01.json' in m.fs, 'manual exports are never pruned');
+  ok('DOCUMENTS/Comeback/comeback-backup-2026-08-01.json' in m.fs, 'manual exports are never pruned');
   ok((await bkMsg(pg)).text === '', 'no error shown after a good auto backup');
 
   // goal haptic
@@ -497,13 +497,13 @@ console.log('Part B: mocked native bridge');
   await pg.waitForFunction(() => /Shared\./.test(document.getElementById('bkMsg').textContent));
   m = await mock();
   const sh = (await calls('share')).pop().a;
-  ok(sh.files.length === 1 && sh.files[0].endsWith(`/Documents/ResetLog/resetlog-backup-${tk}.json`), 'JSON export shared from Documents/ResetLog with the right name', sh.files);
-  ok(same(JSON.parse(m.fs[`DOCUMENTS/ResetLog/resetlog-backup-${tk}.json`]), JSON.parse(m.prefs.resetlog)), 'exported JSON contains the full data object');
-  ok(!(await bkMsg(pg)).bad && (await bkMsg(pg)).text.includes(`Saved to Documents/ResetLog/resetlog-backup-${tk}.json`), 'success message names the saved file');
+  ok(sh.files.length === 1 && sh.files[0].endsWith(`/Documents/Comeback/comeback-backup-${tk}.json`), 'JSON export shared from Documents/Comeback with the right name', sh.files);
+  ok(same(JSON.parse(m.fs[`DOCUMENTS/Comeback/comeback-backup-${tk}.json`]), JSON.parse(m.prefs.comeback)), 'exported JSON contains the full data object');
+  ok(!(await bkMsg(pg)).bad && (await bkMsg(pg)).text.includes(`Saved to Documents/Comeback/comeback-backup-${tk}.json`), 'success message names the saved file');
   await pg.click('#expCsv');
-  await pg.waitForFunction(() => /resetlog-.*\.csv/.test(document.getElementById('bkMsg').textContent));
+  await pg.waitForFunction(() => /comeback-.*\.csv/.test(document.getElementById('bkMsg').textContent));
   m = await mock();
-  ok(m.fs[`DOCUMENTS/ResetLog/resetlog-${tk}.csv`].startsWith('﻿Date,Score %') && (await calls('share')).pop().a.files[0].endsWith('.csv'), 'CSV written to Documents and shared');
+  ok(m.fs[`DOCUMENTS/Comeback/comeback-${tk}.csv`].startsWith('﻿Date,Score %') && (await calls('share')).pop().a.files[0].endsWith('.csv'), 'CSV written to Documents and shared');
   await pg.evaluate(() => window.__mock.set('shareMode', 'cancel'));
   await pg.click('#expJson'); await pg.waitForFunction(() => /cancelled/.test(document.getElementById('bkMsg').textContent));
   ok(!(await bkMsg(pg)).bad, 'cancelling the share sheet is not an error');
@@ -513,14 +513,14 @@ console.log('Part B: mocked native bridge');
   await pg.evaluate(() => window.__mock.set('shareMode', 'ok'));
 
   // restore writes a safety copy first
-  const snapshot = JSON.parse((await mock()).prefs.resetlog);
+  const snapshot = JSON.parse((await mock()).prefs.comeback);
   await pg.setInputFiles('#restoreFile', { name: 'new-phone.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ version: 1, settings: snapshot.settings, days: { '2026-01-05': { vals: { steps: 1 }, rules: {}, weight: 90, waist: 100, note: '', date: '2026-01-05', updatedAt: 3 } } })) });
   await actionChoose(pg, 'Continue'); await actionChoose(pg, 'Replace everything');
   await pg.waitForFunction(() => /Replaced everything/.test(document.getElementById('bkMsg').textContent));
   m = await mock();
-  ok(same(JSON.parse(m.fs['DOCUMENTS/ResetLog/resetlog-before-restore.json']), snapshot), 'safety copy of the old data saved before restoring');
-  ok(Object.keys(JSON.parse(m.prefs.resetlog).days).join() === '2026-01-05', 'Replace everything leaves only the backup days');
-  ok(same(JSON.parse(m.fs['DOCUMENTS/ResetLog/resetlog-autobackup.json']), JSON.parse(m.prefs.resetlog)), 'auto backup refreshed after restore');
+  ok(same(JSON.parse(m.fs['DOCUMENTS/Comeback/comeback-before-restore.json']), snapshot), 'safety copy of the old data saved before restoring');
+  ok(Object.keys(JSON.parse(m.prefs.comeback).days).join() === '2026-01-05', 'Replace everything leaves only the backup days');
+  ok(same(JSON.parse(m.fs['DOCUMENTS/Comeback/comeback-autobackup.json']), JSON.parse(m.prefs.comeback)), 'auto backup refreshed after restore');
 
   // reminder: denied, then granted
   await tab(pg, 'setup');
@@ -532,7 +532,7 @@ console.log('Part B: mocked native bridge');
   ok((await pg.inputValue('#remTime')) === '21:00', 'default reminder time is 9:00 PM');
   await pg.check('#remOn'); await pg.waitForFunction(() => /Reminder set/.test(document.getElementById('remMsg').textContent));
   let sch = (await calls('schedule')).pop().a.notifications[0];
-  ok(sch.schedule.on.hour === 21 && sch.schedule.on.minute === 0 && sch.body === 'Time to log today. How did your workout and food go?' && sch.title === 'Reset Log', 'daily repeating schedule at 21:00 with the requested text', sch);
+  ok(sch.schedule.on.hour === 21 && sch.schedule.on.minute === 0 && sch.body === 'Time to log today. How did your comeback go?' && sch.title === 'Comeback', 'daily repeating schedule at 21:00 with the requested text', sch);
   ok(sch.isExactNotification === false && sch.schedule.allowWhileIdle === true && sch.channelId === 'daily-reminder', 'inexact, doze-friendly, own channel');
   await pg.fill('#remTime', '07:30'); await pg.waitForFunction(() => /moved to/i.test(document.getElementById('remMsg').textContent));
   sch = (await calls('schedule')).pop().a.notifications[0];
@@ -541,7 +541,7 @@ console.log('Part B: mocked native bridge');
   await pg.reload(); await ready(pg); await tab(pg, 'setup'); await pg.waitForTimeout(400);
   ok((await pg.isChecked('#remOn')) && (await pg.inputValue('#remTime')) === '07:30' && (await calls('schedule')).length === nBefore + 1, 'reminder settings survive a restart and are re-armed');
   await pg.uncheck('#remOn'); await pg.waitForFunction(() => /off/i.test(document.getElementById('remMsg').textContent));
-  ok(!JSON.parse((await mock()).prefs.resetlog_meta).reminder.enabled, 'turning the reminder off cancels it');
+  ok(!JSON.parse((await mock()).prefs.comeback_meta).reminder.enabled, 'turning the reminder off cancels it');
 
   // back button: sheet first, then Today, then exit
   await tab(pg, 'progress');

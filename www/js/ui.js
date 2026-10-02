@@ -1,8 +1,8 @@
-/* Reset Log UI: tabs, sheets, Today, Progress, Plan, onboarding.
+/* Comeback UI: tabs, sheets, Today, Progress, Plan, onboarding.
    Presentation only. Data, storage, backup, reminder and sync logic is in logic.js. */
 
 /* ================= basics ================= */
-const ICONS=window.RL_ICONS||{};
+const ICONS=window.CB_ICONS||{};
 const icon=(n,cls)=>'<svg class="ic'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" aria-hidden="true">'+(ICONS[n]||'')+'</svg>';
 function hydrate(root){(root||document).querySelectorAll('svg[data-ic]').forEach(s=>{s.setAttribute('viewBox','0 0 24 24');s.setAttribute('aria-hidden','true');s.classList.add('ic');s.innerHTML=ICONS[s.dataset.ic]||'';s.removeAttribute('data-ic')})}
 function h(html){const t=document.createElement('template');t.innerHTML=html.trim();const el=t.content.firstElementChild;hydrate(el);return el}
@@ -130,6 +130,22 @@ function dayMetrics(d){
 }
 function streak(){let n=0;const d=new Date();if(!days[ymd(d)])d.setDate(d.getDate()-1);while(days[ymd(d)]&&scoreOf(days[ymd(d)])>=50){n++;d.setDate(d.getDate()-1)}return n}
 const addDays=(k,n)=>{const d=parse(k);d.setDate(d.getDate()+n);return ymd(d)};
+/* The comeback starts with the first day that has anything logged. */
+function firstLogKey(){
+  let first=null;
+  Object.keys(days).forEach(k=>{
+    const d=days[k];if(!d)return;
+    const any=Object.keys(d.vals||{}).some(i=>Number(d.vals[i])>0)||Object.keys(d.rules||{}).some(i=>d.rules[i])||d.weight!=null||d.waist!=null||(d.note&&d.note.trim());
+    if(any&&(first===null||k<first))first=k;
+  });
+  return first;
+}
+function comebackDay(k){
+  const f=firstLogKey()||todayStr();
+  if(k<f)return 0;
+  return Math.round((parse(k)-parse(f))/864e5)+1;
+}
+const GENTLE_RESTART='Every comeback has restarts. Start again today.';
 function bestStreak(){
   const ks=Object.keys(days).filter(k=>scoreOf(days[k])>=50).sort();let best=0,run=0,prev=null;
   ks.forEach(k=>{run=prev&&addDays(prev,1)===k?run+1:1;if(run>best)best=run;prev=k});
@@ -169,7 +185,7 @@ function commitDay(label,mutate,quiet){
     scheduleSave(k);renderToday();renderProgress();haptic('light');toast('Change undone',{icon:'check'});
   };
   let msg=label,ic='circle-check',ok=false;
-  if(after.full&&!before.full){msg='All done today. Great work.';ic='sparkles';ok=true;celebrate()}
+  if(after.full&&!before.full){msg='Strong day. Your comeback is on track.';ic='sparkles';ok=true;celebrate()}
   else{
     const MILE=[3,5,7,10,14,21,30,50,100];
     const newlyMet=settings.habits.filter(x=>x.target>0&&Number((d.vals||{})[x.id]||0)>=x.target&&!(prev&&Number((prev.vals||{})[x.id]||0)>=x.target));
@@ -243,7 +259,8 @@ function renderToday(inPlace){
   const d=days[current],isToday=current===todayStr(),m=dayMetrics(d);
   const tt=dayTitle(current);
   $('todayTitle').textContent=tt.h1;
-  $('todaySub').textContent=tt.weekday+(isToday?' · Today':d?'':' · Not logged');
+  const cd=comebackDay(current);
+  $('todaySub').textContent=cd>0?'Day '+cd+' of your comeback'+(isToday?'':' · '+tt.weekday):tt.weekday+(d?'':' · Not logged');
   $('dayLabelText').textContent=relLabel(current);
   $('nextDay').disabled=current>=todayStr();
   if(activeTab==='today')$('navTitle').textContent=tt.h1;
@@ -262,7 +279,7 @@ function renderToday(inPlace){
   const cr=$('chipRules');cr.classList.toggle('ok',m.rTotal>0&&m.rKept===m.rTotal);cr.querySelector('span').textContent=m.rKept+' of '+m.rTotal+' rules';
   const st=streak(),best=bestStreak();
   $('streakLine').querySelector('span').textContent=st>0?st+'-day streak':(best>0?'Start again today':'Log a day to start a streak');
-  $('todayHint').textContent=!d?(isToday?'Nothing logged yet. Tap a target to start.':'This day was not logged. You can fill it in now.'):(m.full?'All done. Nice work today.':'');
+  $('todayHint').textContent=!d?(isToday?(st===0&&best>0?GENTLE_RESTART:'Nothing logged yet. Tap a target to start.'):'This day was not logged. You can fill it in now.'):(m.full?'Strong day. Your comeback is on track.':'');
   $('todayHint').hidden=!$('todayHint').textContent;
 
   // habit cards
@@ -425,7 +442,7 @@ function renderProgress(){
     $('sAvgSteps').textContent=fmt(avg);$('sAvgStepsSub').textContent='over '+withSteps.length+(withSteps.length===1?' day':' days');
     $('sAvgDist').textContent=fmtKm(kmFor(avg));$('sAvgDistSub').textContent='a day, at '+meta.steps.heightCm+' cm tall';
   }else{$('sAvgSteps').textContent='–';$('sAvgStepsSub').textContent='No steps logged yet';$('sAvgDist').textContent='–';$('sAvgDistSub').textContent=''}
-  $('streakNote').textContent=st>0?(best>st?'Your best streak was '+best+' days.':'This is your best streak yet.'):(best>0?'Start again today. Your best streak was '+best+' days.':'Log a day to start your streak.');
+  $('streakNote').textContent=st>0?(best>st?'Your best streak was '+best+' days.':'This is your best streak yet.'):(best>0?GENTLE_RESTART+' Your best streak was '+best+' days.':'Log a day to start your streak.');
 
   // metric chips
   const opts=[['score','Score'],['weight','Weight'],['waist','Waist']].concat(settings.habits.map(x=>['h:'+x.id,x.name]));
@@ -636,8 +653,8 @@ function renderSetup(){
   renderStepGroup();
   $('reorderBtn').textContent=reorderMode?'Done':'Reorder';
   $('reorderBtn').setAttribute('aria-pressed',String(reorderMode));
-  $('storeNote').textContent=IS_NATIVE?'Entries are saved on this phone and copied to Documents/ResetLog after every change.':'Entries are saved in this browser only.';
-  $('bkHint').textContent=IS_NATIVE?'Your entries live on this phone. A copy is also saved to Documents/ResetLog after every change. Export one to keep it somewhere safe.':'Your entries live in this browser. Export a copy to keep it somewhere safe.';
+  $('storeNote').textContent=IS_NATIVE?'Entries are saved on this phone and copied to Documents/Comeback after every change.':'Entries are saved in this browser only.';
+  $('bkHint').textContent=IS_NATIVE?'Your entries live on this phone. A copy is also saved to Documents/Comeback after every change. Export one to keep it somewhere safe.':'Your entries live in this browser. Export a copy to keep it somewhere safe.';
 }
 async function persistSettings(msg){
   try{await store.persist();flashSaved();toast(msg);autoBackup();markSettingsDirty();syncSoon(false)}
@@ -719,14 +736,14 @@ function refreshAfterCloudChange(){renderToday();renderProgress();renderSetup()}
 function refreshAll(){renderToday();renderProgress();renderSetup();showLastBackup();renderAccount()}
 
 /* ================= onboarding ================= */
-const ONB_KEY='resetlog_onboarded';
+const ONB_KEY='comeback_onboarded';
 let onb=null;
 function showOnboarding(){
   if(onb)return;
   const edits={};
-  const root=h('<div class="onb" role="dialog" aria-modal="true" aria-label="Welcome to Reset Log"><div class="onb-top"><button class="txtbtn" id="onbSkip">Skip</button></div><div class="onb-pages"><div class="onb-track" id="onbTrack"></div></div><div class="dots" aria-hidden="true"><i class="on"></i><i></i><i></i></div><div class="onb-foot" id="onbFoot"></div></div>');
+  const root=h('<div class="onb" role="dialog" aria-modal="true" aria-label="Welcome to Comeback"><div class="onb-top"><button class="txtbtn" id="onbSkip">Skip</button></div><div class="onb-pages"><div class="onb-track" id="onbTrack"></div></div><div class="dots" aria-hidden="true"><i class="on"></i><i></i><i></i></div><div class="onb-foot" id="onbFoot"></div></div>');
   const track=root.querySelector('#onbTrack');
-  const p1=h('<div class="onb-page"><div class="onb-art"></div><h2>Log your day in seconds</h2><p>Tap a target to log steps, workouts and water. Switch on the rules you kept. Everything saves by itself, and you can undo any change.</p></div>');
+  const p1=h('<div class="onb-page"><div class="onb-art"></div><h2>Get back to your best, one day at a time.</h2><p>Tap a target to log steps, workouts and water. Switch on the rules you kept. Everything saves by itself, and you can undo any change.</p></div>');
   p1.querySelector('.onb-art').innerHTML=icon('trending-up');
   const p2=h('<div class="onb-page"><div class="onb-art"></div><h2>Set your targets</h2><p>These are a starting point. Change a number now or later in Plan.</p><div class="group" id="onbTargets"></div></div>');
   p2.querySelector('.onb-art').innerHTML=icon('target');

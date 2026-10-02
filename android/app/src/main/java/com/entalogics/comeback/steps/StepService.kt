@@ -1,4 +1,4 @@
-package com.umar.resetlog.steps
+package com.entalogics.comeback.steps
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -31,7 +31,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.umar.resetlog.R
+import com.entalogics.comeback.R
 import java.text.NumberFormat
 
 /**
@@ -41,7 +41,7 @@ import java.text.NumberFormat
  */
 class StepService : Service(), SensorEventListener {
     companion object {
-        const val ACTION_SAMPLE = "com.umar.resetlog.steps.SAMPLE"
+        const val ACTION_SAMPLE = "com.entalogics.comeback.steps.SAMPLE"
         const val CHANNEL = "step_counting"
         const val NOTIF_ID = 4201
         private const val BATCH_US = 20_000_000
@@ -118,7 +118,7 @@ class StepService : Service(), SensorEventListener {
                     accelDetector = AccelStepDetector(AccelStepDetector.Sensitivity.of(cfg.sensitivity)) { ts, amp -> StepTracker.accelStep(ts, amp) }
                     sm.registerListener(this, acc, SensorManager.SENSOR_DELAY_GAME, 1_000_000)
                     val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-                    wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "resetlog:steps").also { it.setReferenceCounted(false); it.acquire(WAKE_MS) }
+                    wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "comeback:steps").also { it.setReferenceCounted(false); it.acquire(WAKE_MS) }
                 }
             }
         } catch (e: Exception) { }
@@ -185,7 +185,7 @@ class StepService : Service(), SensorEventListener {
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             val ch = NotificationChannel(CHANNEL, "Step counting", NotificationManager.IMPORTANCE_LOW)
-            ch.description = "Quiet notification while Reset Log counts your steps"; ch.setShowBadge(false)
+            ch.description = "Quiet notification while Comeback counts your steps"; ch.setShowBadge(false)
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
         }
     }
@@ -194,7 +194,7 @@ class StepService : Service(), SensorEventListener {
         val launch = packageManager.getLaunchIntentForPackage(packageName)
         val pi = PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_stat_resetlog).setContentTitle(text).setOngoing(true).setOnlyAlertOnce(true).setShowWhen(false)
+            .setSmallIcon(R.drawable.ic_stat_comeback).setContentTitle(text).setOngoing(true).setOnlyAlertOnce(true).setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_LOW).setCategory(NotificationCompat.CATEGORY_SERVICE).setContentIntent(pi).build()
     }
 

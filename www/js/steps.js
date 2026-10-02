@@ -130,13 +130,13 @@ async function initSteps(){
 
 /* ---------- setup flow ---------- */
 const BRANDS={
-  xiaomi:{name:'Xiaomi / Redmi / POCO',tips:['Open Settings > Apps > Manage apps > Reset Log.','Turn on Autostart.','Set Battery saver to "No restrictions".']},
-  oppo:{name:'Oppo / Realme / OnePlus',tips:['Open Settings > Battery > Reset Log (or App battery management).','Allow background activity and auto-launch.','Turn off "Optimize battery use".']},
-  vivo:{name:'Vivo / iQOO',tips:['Open Settings > Battery > Background power consumption.','Find Reset Log and allow high background power use.','Turn on Autostart in the phone manager.']},
-  samsung:{name:'Samsung',tips:['Open Settings > Battery > Background usage limits.','Remove Reset Log from "Sleeping apps" and "Deep sleeping apps".','Set Reset Log to "Unrestricted" battery use.']},
-  huawei:{name:'Huawei / Honor',tips:['Open Settings > Apps > App launch > Reset Log.','Turn off "Manage automatically".','Turn on Auto-launch, Secondary launch and Run in background.']},
-  transsion:{name:'Infinix / Tecno / itel',tips:['Open Phone Master (or Settings) > App management > Autostart.','Allow Reset Log to autostart.','Set battery use for Reset Log to "No restrictions".']},
-  other:{name:'Your phone',tips:['Open Settings > Apps > Reset Log > Battery.','Choose "Unrestricted" (or "Don\'t optimize").','If your phone has an Autostart or Background apps list, allow Reset Log there.']}
+  xiaomi:{name:'Xiaomi / Redmi / POCO',tips:['Open Settings > Apps > Manage apps > Comeback.','Turn on Autostart.','Set Battery saver to "No restrictions".']},
+  oppo:{name:'Oppo / Realme / OnePlus',tips:['Open Settings > Battery > Comeback (or App battery management).','Allow background activity and auto-launch.','Turn off "Optimize battery use".']},
+  vivo:{name:'Vivo / iQOO',tips:['Open Settings > Battery > Background power consumption.','Find Comeback and allow high background power use.','Turn on Autostart in the phone manager.']},
+  samsung:{name:'Samsung',tips:['Open Settings > Battery > Background usage limits.','Remove Comeback from "Sleeping apps" and "Deep sleeping apps".','Set Comeback to "Unrestricted" battery use.']},
+  huawei:{name:'Huawei / Honor',tips:['Open Settings > Apps > App launch > Comeback.','Turn off "Manage automatically".','Turn on Auto-launch, Secondary launch and Run in background.']},
+  transsion:{name:'Infinix / Tecno / itel',tips:['Open Phone Master (or Settings) > App management > Autostart.','Allow Comeback to autostart.','Set battery use for Comeback to "No restrictions".']},
+  other:{name:'Your phone',tips:['Open Settings > Apps > Comeback > Battery.','Choose "Unrestricted" (or "Don\'t optimize").','If your phone has an Autostart or Background apps list, allow Comeback there.']}
 };
 
 /** Small sheet with text and one or two buttons. Resolves 'primary' | 'secondary' | 'cancel'. */
@@ -163,7 +163,7 @@ async function askStepPermission(){
   try{if(Native.LocalNotifications){const p=await Native.LocalNotifications.checkPermissions();if(p.display!=='granted')await Native.LocalNotifications.requestPermissions()}}catch(e){}
   if(r.granted){meta.steps.setupFailed=false;return true}
   meta.steps.setupFailed=true;await saveStepMeta();renderStepGroup(false);
-  const c=await infoSheet({title:'Permission needed',icon:'shield-check',paragraphs:['Reset Log needs the "Physical activity" permission to read your phone\'s step sensor. Without it, steps stay on Manual.','You can try again, or allow it in Android settings.'],primary:'Try again',secondary:'Open app settings'});
+  const c=await infoSheet({title:'Permission needed',icon:'shield-check',paragraphs:['Comeback needs the "Physical activity" permission to read your phone\'s step sensor. Without it, steps stay on Manual.','You can try again, or allow it in Android settings.'],primary:'Try again',secondary:'Open app settings'});
   if(c==='primary')return askStepPermission();
   if(c==='secondary'){try{await P.openSettings({target:'app'})}catch(e){}}
   return false;
@@ -177,7 +177,7 @@ async function batterySetup(){
   let ignored=!!info.batteryIgnored;
   for(;;){
     const c=await infoSheet({title:'Keep counting all day',icon:'battery-low',
-      paragraphs:['Many phones close background apps to save battery. Let Reset Log keep running so your steps are counted all day.'+(ignored?' Battery optimisation is already off for Reset Log.':'')],
+      paragraphs:['Many phones close background apps to save battery. Let Comeback keep running so your steps are counted all day.'+(ignored?' Battery optimisation is already off for Comeback.':'')],
       list:b.tips.map((t,i)=>(i+1)+'. '+t),
       primary:ignored?'Continue':'Allow background activity',secondary:info.brand==='other'?'Open battery settings':'Open '+b.name.split(' / ')[0]+' settings',tertiary:ignored?undefined:'Skip for now'});
     if(c==='primary'&&!ignored){try{await P.requestIgnoreBatteryOptimizations()}catch(e){}try{ignored=!!(await P.getDeviceInfo()).batteryIgnored}catch(e){}continue}
@@ -200,7 +200,7 @@ async function startAutoSetup(){
   const P=stepsPlugin();if(!P)return;
   try{
     const go=await infoSheet({title:'Count steps automatically',icon:'footprints',
-      paragraphs:["Reset Log counts your steps using your phone's motion sensor. Nothing is shared with other apps.",'Counting starts from the moment you turn this on. Earlier days stay as they are, and you can still change any day by hand.'],primary:'Continue'});
+      paragraphs:["Comeback counts your steps using your phone's motion sensor. Nothing is shared with other apps.",'Counting starts from the moment you turn this on. Earlier days stay as they are, and you can still change any day by hand.'],primary:'Continue'});
     if(go!=='primary')return;
     if(!(await askStepPermission()))return;
     await batterySetup();

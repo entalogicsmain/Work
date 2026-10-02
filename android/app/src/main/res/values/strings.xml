@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Reset Log</string>
-    <string name="title_activity_main">Reset Log</string>
-    <string name="package_name">com.umar.resetlog</string>
-    <string name="custom_url_scheme">com.umar.resetlog</string>
+    <string name="app_name">Comeback</string>
+    <string name="title_activity_main">Comeback</string>
+    <string name="package_name">com.entalogics.comeback</string>
+    <string name="custom_url_scheme">com.entalogics.comeback</string>
 </resources>
