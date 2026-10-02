@@ -5,7 +5,7 @@ A personal daily health tracker (workouts, steps, rules, weight, waist, notes, p
 - App ID: `com.umar.resetlog` — minSdk 23, target SDK 36
 - Works fully offline (Chart.js and the Barlow fonts are bundled)
 - Data is stored with Capacitor Preferences on the phone
-- Backup, restore and a daily reminder notification are on the **My plan** tab
+- Backup, restore, a daily reminder and optional cloud sync are on the **My plan** tab
 
 ## Install the APK
 
@@ -14,6 +14,32 @@ A personal daily health tracker (workouts, steps, rules, weight, waist, notes, p
 3. Open **Reset Log**. On Android 13+ the first time you switch the daily reminder on, allow notifications.
 
 Every build uses the same signing key, so a newer APK installs straight over an older one and keeps your data. Don't uninstall first, because uninstalling deletes the app's data.
+
+## Cloud sync (optional)
+
+The app works fully without an account. If you want your log on more than one phone, or safe in the cloud, sync it with a free account.
+
+**Create an account**
+1. Open **My plan > Cloud sync > Sign in to sync**.
+2. Enter your email and a password (at least 6 characters) and tap **Create account**.
+3. Supabase emails you a confirmation link. Tap it, then come back and tap **Sign in**. Until you confirm, the app says "Check your email to confirm your account, then sign in."
+4. On another phone, install the app and sign in with the same email and password. Your whole history downloads.
+
+**How sync works**
+- The phone always keeps its own copy and the app reads from that. The cloud is a second copy.
+- Every time you save a day (or change your plan) the change is sent to the cloud straight away.
+- When you open the app, come back to it, sign in, or tap **Sync now**, the app downloads everything in your account and compares it with the phone, day by day. The version with the newer save time wins, and anything the cloud is missing is uploaded.
+- The first time you sign in on a phone that already has entries, those entries are uploaded.
+- Restoring a backup while signed in also sends the restored days to the cloud. If you choose **Replace everything**, days that exist only in the cloud come back on the next sync.
+- **Sign out** keeps all your entries on the phone. They stop syncing until you sign in again.
+- The sync line on the card shows "Syncing…", "Synced at <time>", "<n> changes waiting to sync", or the error.
+
+**Offline**
+- Saving works without internet. Changes that couldn't be sent wait in a queue on the phone ("2 changes are waiting to sync").
+- The queue is sent automatically when you open the app, when you return to it, and when the connection comes back. The queue survives closing the app.
+- If two phones edited the same day while one was offline, the later save wins when the offline one reconnects.
+
+**Privacy.** Your data is stored in a Supabase database with Row Level Security: your account can only read and write its own rows. The app only contains the project's publishable key (`www/config.js`), never an admin key. The auto backup and export files described below still work the same, signed in or not.
 
 ## Where backups are stored
 
@@ -48,7 +74,8 @@ npm run build:apk        # bundles plugins, syncs www/ into android/, runs Gradl
 ```
 
 - The web app is `www/index.html`. The Capacitor plugins are bundled from `src/native.js` into `www/vendor/native.js` by `npm run build:web`.
-- `npm run test:web` runs the headless-browser tests (needs a Chromium for Playwright).
+- `npm run test:web` and `npm run test:sync` run the headless-browser tests (they need a Chromium for Playwright). `test:sync` uses a fake Supabase server; `npm run test:real` runs the same kind of checks against the real project and needs `E2E_EMAIL` and `E2E_PASSWORD` of an existing confirmed user.
+- `supabase/migrations/` holds the SQL that creates the two tables and their security policies. The Supabase URL and publishable key are in `www/config.js`.
 - `npm run assets` regenerates icons and splash screens from `assets/`.
 
 ### Rebuild on GitHub
