@@ -14,9 +14,9 @@ $('dayLabel').addEventListener('click',dateSheet);
     const adopted=adoptDeviceHeight();
     if(adopted||all.upgraded){try{await store.persist()}catch(e){}}
     if(all.migrated)setMsg('bkMsg','Moved '+all.migrated+' saved '+(all.migrated===1?'day':'days')+' from the old browser storage.');
-  }catch(e){loadProblem="Couldn't read your saved entries: "+errText(e)}
+  }catch(e){dataLocked=true;loadProblem="Couldn't read your saved entries: "+errText(e)}
   refreshAll();
-  if(loadProblem)setMsg('bkMsg',loadProblem,true);
+  showLoadNotice();
   initReminder();
   initSync();
   initSteps();

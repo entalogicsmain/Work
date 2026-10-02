@@ -251,8 +251,11 @@ The app works fully without an account. If you want your log on more than one ph
 **How sync works**
 - The phone always keeps its own copy and the app reads from that. The cloud is a second copy.
 - Every time you save a day (or change your plan) the change is sent to the cloud straight away.
-- When you open the app, come back to it, sign in, or tap **Sync now**, the app downloads everything in your account and compares it with the phone, day by day. The version with the newer save time wins, and anything the cloud is missing is uploaded.
-- The first time you sign in on a phone that already has entries, those entries are uploaded.
+- When you open the app, come back to it, sign in, or tap **Sync now**, the app downloads everything in your account and compares it with the phone, day by day, and anything the cloud is missing is uploaded. The phone remembers the cloud version of each day it last saw, so it can tell "only the cloud changed", "only this phone changed" and "both changed". Only one side changed: that side wins (so removing a value sticks). Both changed the same day (for example the steps counted on one phone and the water logged on another): the two are merged field by field. Every habit value and rule from both is kept; where both have the same one, the newer save wins; steps keep the higher count with its fuller step details; weight, waist and note come from the newer save unless it is empty.
+- Save times are read as at most 5 minutes in the future, so a phone with a wrong clock cannot win forever. A day with no save time (an old backup) is merged, never blindly replaced, and gets a real time when it is uploaded.
+- The first time you sign in on a phone that already has entries, those entries are uploaded. Your plan from onboarding (the starter plan and targets) does not count as an edit: signing in to an account that already has settings brings that account's plan, and a phone with nothing logged and no earlier sync always takes the account's plan. A plan you changed yourself later is kept and uploaded.
+- Plan and settings are stored in the cloud as version 2. If an older app version uploads its older shape (habits and rules only), this app reads it, keeps your layout (sections, order, schedules, hidden habits, units, body and preferences), adds new habits, takes changed names and targets, renames rule ids that clash with habit ids (in the days too), and writes version 2 back. Settings from a newer app version are not read or overwritten.
+- A cloud change arrives into the plan you are looking at without replacing it, so a habit sheet that is open stays valid, and pressing Done still saves your edit.
 - Restoring a backup while signed in also sends the restored days to the cloud. If you choose **Replace everything**, days that exist only in the cloud come back on the next sync.
 - **Sign out** keeps all your entries on the phone. They stop syncing until you sign in again.
 - The sync line on the card shows "Syncing…", "Synced at <time>", "<n> changes waiting to sync", or the error.
@@ -260,7 +263,7 @@ The app works fully without an account. If you want your log on more than one ph
 **Offline**
 - Saving works without internet. Changes that couldn't be sent wait in a queue on the phone ("2 changes are waiting to sync").
 - The queue is sent automatically when you open the app, when you return to it, and when the connection comes back. The queue survives closing the app.
-- If two phones edited the same day while one was offline, the later save wins when the offline one reconnects.
+- If two phones edited the same day while one was offline, the two versions are merged field by field when the offline one reconnects (see above).
 
 **Letting anyone register (owner setup, one time)**
 
@@ -279,6 +282,8 @@ Either way every account gets its own rows. Row Level Security means one user ca
 - **Manual:** Settings > Backup > *Export backup (JSON)* saves `comeback-backup-YYYY-MM-DD.json` in the same folder and opens the share sheet (Drive, WhatsApp, email...). *Export as spreadsheet (CSV)* does the same with a one-row-per-day file you can open in Excel or Sheets.
 - Before a restore, the app saves what is on the phone as `comeback-before-restore.json` in that folder.
 - "Last backup" on the Backup card shows when a backup was last written.
+
+**If saved data is damaged.** When the app starts, a day that cannot be read is set aside on its own: every other day loads, Settings > Backup says which dates were set aside, and the raw records are kept on the phone (`comeback_quarantine_*`). If the whole saved copy cannot be read, the app does not write over it and leaves the automatic backup files alone. New entries are kept apart and come back on the next start, and Settings > Backup shows **Recover the unreadable copy**, which runs the kept copy through the usual restore dialog (readable days are taken; a damaged plan is replaced by the default one, or kept as it is on Merge). Restoring any good backup file also unlocks saving. Only the newest 3 kept copies of each kind are stored. Restoring a backup file is still strict: one bad day refuses the file. `npm run test:datasafety` covers all of this.
 
 ## Restore on a new phone
 

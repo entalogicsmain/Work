@@ -36,6 +36,14 @@ jobs:
       - name: Bundle plugins and sync web app into Android project
         run: npm run sync
 
+      # The web tests drive the real www/ app in headless Chromium (the Supabase server is an in-memory fake).
+      # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD above only keeps `npm ci` light; the browser is installed explicitly here.
+      - name: Install Chromium for the web tests
+        run: env -u PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD npx playwright install --with-deps chromium
+
+      - name: Web tests (logic, structure, UI, sync, data safety, rename, steps, permissions, refresh, contrast, responsive)
+        run: npm test
+
       - name: Step-counting unit tests (simulated sensors)
         working-directory: android
         run: |
