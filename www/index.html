@@ -176,6 +176,15 @@ button{font:600 15px var(--body);color:var(--ink);background:var(--card);border:
     <div class="err" id="nrErr"></div>
   </div>
   <div class="card"><h2>Your starting point</h2><p class="hint" style="margin:0">Oct 2026 reports: ALT 99, triglycerides 282, HDL 36. Weight 87 kg, waist 97 cm. Goal by January: 78–81 kg, waist under 90 cm, then retest LFTs and lipids.</p></div>
+  <div class="card"><h2>Cloud sync</h2>
+    <div id="acctOut"><p class="hint">Optional. Sign in to keep your log in the cloud and on your other phones. The app works fully without it.</p>
+      <button class="primary" id="signInBtn" style="font-size:16px;padding:12px">Sign in to sync</button>
+      <p class="hint" id="acctOffNote" style="margin:0" hidden>Cloud sync isn't set up in this build.</p></div>
+    <div id="acctIn" hidden><p class="hint" style="margin-bottom:10px">Signed in as <b id="acctEmail"></b></p>
+      <div class="btnrow"><button id="syncNowBtn">Sync now</button><button id="signOutBtn">Sign out</button></div></div>
+    <div class="meta" id="syncStatus" role="status"></div>
+    <div class="msg" id="acctMsg" role="status"></div>
+  </div>
   <div class="card"><h2>Daily reminder</h2><p class="hint">A nudge to log your day. Android may delay it a few minutes to save battery.</p>
     <label class="rule" id="remRow"><input type="checkbox" id="remOn"><span>Remind me every day</span></label>
     <div class="timerow"><label class="f" for="remTime">Time</label><input type="time" id="remTime" value="21:00"></div>
@@ -197,8 +206,14 @@ button{font:600 15px var(--body);color:var(--ink);background:var(--card);border:
 
 <div class="savebar" id="savebar"><div><button class="primary" id="saveBtn">Save today</button></div></div>
 <div class="toast" id="toast" role="status"></div>
+<div class="modal" id="authModal" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="aTitle"><h2 id="aTitle">Sign in to sync</h2><p>Use the same email and password on each phone.</p>
+  <label class="f" for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false">
+  <label class="f" for="authPw" style="margin-top:10px">Password</label><input id="authPw" type="password" autocomplete="current-password">
+  <div class="msg" id="authMsg" role="alert"></div>
+  <div class="mbtns" style="margin-top:14px"><button class="primary" id="authIn">Sign in</button><button id="authUp">Create account</button><button id="authCancel">Cancel</button></div></div></div>
 <div class="modal" id="modal" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle"><h2 id="mTitle"></h2><p id="mBody"></p><div class="mbtns" id="mBtns"></div></div></div>
 
+<script src="config.js"></script>
 <script src="vendor/chart.umd.js"></script>
 <script src="vendor/native.js"></script>
 <script>
@@ -254,7 +269,8 @@ const Native=window.ResetNative||{isNative:false};
 const IS_NATIVE=!!Native.isNative;
 const localShim={
   async get({key}){try{return{value:localStorage.getItem('CapacitorStorage.'+key)}}catch(e){return{value:null}}},
-  async set({key,value}){localStorage.setItem('CapacitorStorage.'+key,value)}
+  async set({key,value}){localStorage.setItem('CapacitorStorage.'+key,value)},
+  async remove({key}){localStorage.removeItem('CapacitorStorage.'+key)}
 };
 const Prefs=Native.Preferences||localShim;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -270,13 +286,8 @@ const num=v=>typeof v==='number'&&isFinite(v);
 
 function validDateKey(k){if(!DATE_RE.test(k))return false;const d=parse(k);return ymd(d)===k}
 
-/* Throws an Error with a readable message when the object is not a Reset Log backup. */
-function normalizeData(obj){
-  if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error("This isn't a Reset Log backup (expected a JSON object).");
-  if(obj.version!=null&&obj.version!==1)throw new Error(typeof obj.version==='number'&&obj.version>1?'This backup was made by a newer version of Reset Log (version '+obj.version+'). Update the app first.':'Unknown backup version: '+esc(String(obj.version)).slice(0,20)+'.');
-  const s=obj.settings;
+function normalizeSettings(s){
   if(!s||typeof s!=='object'||!Array.isArray(s.habits)||!Array.isArray(s.rules))throw new Error('The backup is missing its settings (habits and rules).');
-  if(!obj.days||typeof obj.days!=='object'||Array.isArray(obj.days))throw new Error("The backup is missing its 'days' section.");
   const seen=new Set();
   const habits=s.habits.map((h,i)=>{
     if(!h||typeof h.id!=='string'||!ID_RE.test(h.id)||typeof h.name!=='string'||!h.name.trim())throw new Error('Habit #'+(i+1)+' in the backup is not valid.');
@@ -288,19 +299,27 @@ function normalizeData(obj){
     if(!r||typeof r.id!=='string'||!ID_RE.test(r.id)||typeof r.name!=='string'||!r.name.trim())throw new Error('Rule #'+(i+1)+' in the backup is not valid.');
     return{id:r.id,name:r.name};
   }).filter(r=>!seenR.has(r.id)&&seenR.add(r.id));
+  return{habits,rules};
+}
+function normalizeDay(k,d){
+  if(!validDateKey(k))throw new Error('"'+String(k).slice(0,30)+'" is not a valid date (expected YYYY-MM-DD).');
+  if(!d||typeof d!=='object'||Array.isArray(d))throw new Error('Day '+k+' is not valid.');
+  const vals={},rl={};
+  if(d.vals!=null){if(typeof d.vals!=='object'||Array.isArray(d.vals))throw new Error('Day '+k+' has invalid values.');Object.keys(d.vals).forEach(id=>{if(!num(d.vals[id]))throw new Error('Day '+k+' has a non-numeric value for "'+id.slice(0,30)+'".');vals[id]=d.vals[id]})}
+  if(d.rules!=null){if(typeof d.rules!=='object'||Array.isArray(d.rules))throw new Error('Day '+k+' has invalid rules.');Object.keys(d.rules).forEach(id=>{rl[id]=!!d.rules[id]})}
+  if(d.weight!=null&&!num(d.weight))throw new Error('Day '+k+' has an invalid weight.');
+  if(d.waist!=null&&!num(d.waist))throw new Error('Day '+k+' has an invalid waist.');
+  return{vals,rules:rl,weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:typeof d.note==='string'?d.note:'',date:k,updatedAt:num(d.updatedAt)?d.updatedAt:0};
+}
+/* Throws an Error with a readable message when the object is not a Reset Log backup. */
+function normalizeData(obj){
+  if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error("This isn't a Reset Log backup (expected a JSON object).");
+  if(obj.version!=null&&obj.version!==1)throw new Error(typeof obj.version==='number'&&obj.version>1?'This backup was made by a newer version of Reset Log (version '+obj.version+'). Update the app first.':'Unknown backup version: '+esc(String(obj.version)).slice(0,20)+'.');
+  const settings=normalizeSettings(obj.settings);
+  if(!obj.days||typeof obj.days!=='object'||Array.isArray(obj.days))throw new Error("The backup is missing its 'days' section.");
   const outDays={};
-  Object.keys(obj.days).forEach(k=>{
-    const d=obj.days[k];
-    if(!validDateKey(k))throw new Error('"'+k.slice(0,30)+'" is not a valid date (expected YYYY-MM-DD).');
-    if(!d||typeof d!=='object'||Array.isArray(d))throw new Error('Day '+k+' is not valid.');
-    const vals={},rl={};
-    if(d.vals!=null){if(typeof d.vals!=='object'||Array.isArray(d.vals))throw new Error('Day '+k+' has invalid values.');Object.keys(d.vals).forEach(id=>{if(!num(d.vals[id]))throw new Error('Day '+k+' has a non-numeric value for "'+id.slice(0,30)+'".');vals[id]=d.vals[id]})}
-    if(d.rules!=null){if(typeof d.rules!=='object'||Array.isArray(d.rules))throw new Error('Day '+k+' has invalid rules.');Object.keys(d.rules).forEach(id=>{rl[id]=!!d.rules[id]})}
-    if(d.weight!=null&&!num(d.weight))throw new Error('Day '+k+' has an invalid weight.');
-    if(d.waist!=null&&!num(d.waist))throw new Error('Day '+k+' has an invalid waist.');
-    outDays[k]={vals,rules:rl,weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:typeof d.note==='string'?d.note:'',date:k,updatedAt:num(d.updatedAt)?d.updatedAt:0};
-  });
-  return{version:1,settings:{habits,rules},days:outDays};
+  Object.keys(obj.days).forEach(k=>{outDays[k]=normalizeDay(k,obj.days[k])});
+  return{version:1,settings,days:outDays};
 }
 
 function mergeData(local,inc){
@@ -347,6 +366,7 @@ store={
       if(!loadProblem)await prefSet(MIGRATED_KEY,'1');
     }
     try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
+    try{const sv=await prefGet(SYNC_KEY);if(sv){const ss=JSON.parse(sv);sync.signedIn=!!ss.signedIn;sync.userId=typeof ss.userId==='string'?ss.userId:null;sync.email=typeof ss.email==='string'?ss.email:'';sync.lastSyncAt=num(ss.lastSyncAt)?ss.lastSyncAt:null;sync.settingsUpdatedAt=num(ss.settingsUpdatedAt)?ss.settingsUpdatedAt:0;sync.pendingDays=Array.isArray(ss.pendingDays)?ss.pendingDays.filter(k=>typeof k==='string'):[];sync.pendingSettings=!!ss.pendingSettings}}catch(e){}
     if(raw==null)return{migrated};
     try{
       const norm=normalizeData(JSON.parse(raw));
@@ -477,7 +497,7 @@ async function restoreFromFile(file){
   const n=Object.keys(inc.days).length;
   const body=(file.name||'This file')+' has '+n+' logged '+(n===1?'day':'days')+(n?' ('+range(Object.keys(inc.days))+')':'')+', '+inc.settings.habits.length+(inc.settings.habits.length===1?' item':' items')+' and '+inc.settings.rules.length+(inc.settings.rules.length===1?' rule':' rules')+'. This phone has '+Object.keys(days).length+' logged days.'+(dirty?' Unsaved changes on the Today tab will be discarded.':'');
   if(await askModal('Restore this backup?',body,[{label:'Continue',value:'go'},{label:'Cancel',value:'cancel'}])!=='go')return;
-  const mode=await askModal('How should it be restored?','Merge keeps what is on this phone and adds the backup. If a day is in both, the newer save wins. Replace everything deletes what is on this phone and uses only the backup.',[{label:'Merge',value:'merge'},{label:'Replace everything',value:'replace',cls:'danger'},{label:'Cancel',value:'cancel'}]);
+  const mode=await askModal('How should it be restored?','Merge keeps what is on this phone and adds the backup. If a day is in both, the newer save wins. Replace everything deletes what is on this phone and uses only the backup.'+(signedIn()?' The restored data is also sent to your cloud copy; days that exist only in the cloud will come back on the next sync.':''),[{label:'Merge',value:'merge'},{label:'Replace everything',value:'replace',cls:'danger'},{label:'Cancel',value:'cancel'}]);
   if(mode!=='merge'&&mode!=='replace')return;
   let warn='';
   if(IS_NATIVE){try{await writeDocs('resetlog-before-restore.json',JSON.stringify(buildData(),null,2))}catch(e){warn=" Couldn't save a safety copy of your old data first ("+errText(e)+")."}}
@@ -489,11 +509,19 @@ async function restoreFromFile(file){
     settings=next.settings;days=next.days;
     await store.persist();
   }catch(e){settings=before.settings;days=before.days;setMsg('bkMsg',"Couldn't restore: "+errText(e)+' Nothing was changed.',true);return}
+  if(signedIn()){
+    // restored data counts as a fresh write, so it also wins over older cloud copies
+    const now=Date.now();
+    Object.keys(days).forEach(k=>{if(mode==='replace'||days[k]!==before.days[k]){days[k]=Object.assign({},days[k],{updatedAt:now});markDayDirty(k)}});
+    markSettingsDirty();
+    try{await store.persist()}catch(e){}
+  }
   dirty=false;
   renderToday();renderProgress();renderSetup();
   $('headScore').textContent=(days[todayStr()]?scoreOf(days[todayStr()]):0)+'%';
   setMsg('bkMsg',summary+warn,!!warn);
   autoBackup();
+  syncSoon(false);
 }
 $('restoreBtn').addEventListener('click',()=>$('restoreFile').click());
 $('restoreFile').addEventListener('change',async e=>{
@@ -561,6 +589,227 @@ async function initReminder(){
   }catch(e){setMsg('remMsg',"Couldn't check the reminder: "+errText(e),true)}
 }
 
+/* ---------- cloud sync (Supabase, optional) ----------
+   Local Preferences stay the source the UI reads. Supabase is the cloud copy.
+   Saves go to the cloud right away when online; otherwise the day is queued in
+   Preferences and sent later. A full sync (open, sign in, foreground, network back,
+   "Sync now") pulls every cloud row and keeps whichever side has the newer timestamp. */
+const CFG=window.RESETLOG_CONFIG||{};
+const SYNC_KEY='resetlog_sync';
+let sb=null,session=null;
+let sync={signedIn:false,userId:null,email:'',lastSyncAt:null,settingsUpdatedAt:0,pendingDays:[],pendingSettings:false};
+let syncRunning=null,syncAgain=false,wantFull=false,syncError='',syncOffline=false,lastFullAt=0;
+const cloudConfigured=()=>!!(CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&Native.createClient);
+const signedIn=()=>cloudConfigured()&&sync.signedIn;
+const saveSync=()=>prefSet(SYNC_KEY,JSON.stringify(sync));
+const pendingCount=()=>sync.pendingDays.length+(sync.pendingSettings?1:0);
+const isDefaultSettings=()=>JSON.stringify(settings)===JSON.stringify(DEFAULT_SETTINGS);
+const dayData=d=>({vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''});
+const isNetErr=e=>!!e&&(e.name==='AuthRetryableFetchError'||e.status===0||/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(String(e.message||e)));
+function syncErrText(e){
+  if(isNetErr(e))return 'No internet connection.';
+  const m=errText(e);
+  return /jwt|token/i.test(m)?m+' Try signing out and in again.':m;
+}
+
+const authStorage={
+  getItem:async k=>(await Prefs.get({key:'sb:'+k})).value,
+  setItem:async(k,v)=>{await Prefs.set({key:'sb:'+k,value:v})},
+  removeItem:async k=>{await Prefs.remove({key:'sb:'+k})}
+};
+
+function renderSyncStatus(){
+  const el=$('syncStatus'),n=pendingCount();
+  if(!signedIn()){el.textContent='';return}
+  const waiting=n?n+(n===1?' change is':' changes are')+' waiting to sync':'';
+  let t,bad=false;
+  if(syncRunning)t='Syncing…';
+  else if(syncError){t='Sync problem: '+syncError+(waiting?' ('+waiting+')':'');bad=true}
+  else if(syncOffline&&n)t='Offline. '+waiting+'.';
+  else if(n)t=waiting.charAt(0).toUpperCase()+waiting.slice(1)+'.';
+  else if(sync.lastSyncAt)t='Synced at '+new Date(sync.lastSyncAt).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  else t='Not synced yet.';
+  el.textContent=t;el.style.color=bad?'var(--bad)':'';
+  $('syncNowBtn').disabled=!!syncRunning;
+}
+function renderAccount(){
+  const on=cloudConfigured(),inn=signedIn();
+  $('acctOut').hidden=inn;$('acctIn').hidden=!inn;
+  $('signInBtn').hidden=!on;
+  $('acctOffNote').hidden=on;
+  $('acctEmail').textContent=sync.email||'your account';
+  renderSyncStatus();
+}
+
+function markDayDirty(k){if(signedIn()&&!sync.pendingDays.includes(k)){sync.pendingDays.push(k);saveSync().catch(()=>{})}}
+function markSettingsDirty(){sync.settingsUpdatedAt=Date.now();if(signedIn())sync.pendingSettings=true;saveSync().catch(()=>{})}
+
+async function fetchAllDays(){
+  const out=[];
+  for(let from=0;;from+=1000){
+    const {data,error}=await sb.from('day_logs').select('log_date,data,updated_at').eq('user_id',sync.userId).order('log_date').range(from,from+999);
+    if(error)throw error;
+    out.push(...data);
+    if(data.length<1000)break;
+  }
+  return out;
+}
+
+async function pullAndMerge(){
+  const rows=await fetchAllDays();
+  const {data:srow,error:serr}=await sb.from('user_settings').select('data,updated_at').eq('user_id',sync.userId).maybeSingle();
+  if(serr)throw serr;
+  let changed=false,skipped=0;
+  const cloud={};
+  rows.forEach(r=>{cloud[r.log_date]=Date.parse(r.updated_at)});
+  rows.forEach(r=>{
+    const ts=Date.parse(r.updated_at),local=days[r.log_date];
+    if(!local||ts>(local.updatedAt||0)){
+      try{days[r.log_date]=normalizeDay(r.log_date,Object.assign({},r.data,{updatedAt:ts}));changed=true}catch(e){skipped++}
+    }
+  });
+  // first sign in with customised local settings: they count as newer than an untouched cloud copy
+  if(!sync.settingsUpdatedAt&&!isDefaultSettings())sync.settingsUpdatedAt=Date.now();
+  const cts=srow?Date.parse(srow.updated_at):null;
+  if(srow&&cts>sync.settingsUpdatedAt){
+    try{settings=normalizeSettings(srow.data);sync.settingsUpdatedAt=cts;sync.pendingSettings=false;changed=true}catch(e){skipped++}
+  }else if(!srow||sync.settingsUpdatedAt>cts)sync.pendingSettings=true;
+  else sync.pendingSettings=false;
+  // everything the cloud lacks or has an older copy of still has to go up
+  sync.pendingDays=Object.keys(days).filter(k=>cloud[k]==null||(days[k].updatedAt||0)>cloud[k]);
+  if(changed){await store.persist();refreshAfterCloudChange()}
+  if(skipped)throw new Error(skipped+' cloud '+(skipped===1?'row was':'rows were')+' skipped because it could not be read.');
+}
+
+async function flushPending(){
+  const uid=sync.userId;
+  const sent=sync.pendingDays.filter(k=>days[k]).map(k=>({k,at:days[k].updatedAt||0}));
+  for(let i=0;i<sent.length;i+=200){
+    const chunk=sent.slice(i,i+200);
+    const {error}=await sb.from('day_logs').upsert(chunk.map(x=>({user_id:uid,log_date:x.k,data:dayData(days[x.k]),updated_at:new Date(x.at).toISOString()})),{onConflict:'user_id,log_date'});
+    if(error)throw error;
+    chunk.forEach(x=>{if(days[x.k]&&(days[x.k].updatedAt||0)===x.at)sync.pendingDays=sync.pendingDays.filter(d=>d!==x.k)});
+    await saveSync();
+  }
+  sync.pendingDays=sync.pendingDays.filter(k=>days[k]);
+  if(sync.pendingSettings){
+    const at=sync.settingsUpdatedAt;
+    const {error}=await sb.from('user_settings').upsert({user_id:uid,data:settings,updated_at:new Date(at).toISOString()},{onConflict:'user_id'});
+    if(error)throw error;
+    if(sync.settingsUpdatedAt===at)sync.pendingSettings=false;
+  }
+}
+
+async function doSync(full){
+  syncError='';syncOffline=false;
+  try{
+    if(Native.Network&&!(await Native.Network.getStatus()).connected){syncOffline=true;return}
+    renderSyncStatus();
+    if(full){await pullAndMerge();lastFullAt=Date.now()}
+    await flushPending();
+    sync.lastSyncAt=Date.now();
+  }catch(e){syncError=syncErrText(e);if(isNetErr(e))syncOffline=true}
+  try{await saveSync()}catch(e){}
+}
+function syncSoon(full){
+  if(!signedIn()||!sb)return Promise.resolve();
+  if(full)wantFull=true;
+  if(syncRunning){syncAgain=true;return syncRunning}
+  syncRunning=(async()=>{
+    do{syncAgain=false;const f=wantFull;wantFull=false;renderSyncStatus();await doSync(f)}while(syncAgain);
+  })().finally(()=>{syncRunning=null;renderSyncStatus()});
+  renderSyncStatus();
+  return syncRunning;
+}
+function syncOnResume(){if(signedIn()&&(pendingCount()||Date.now()-lastFullAt>30000))syncSoon(true)}
+
+function refreshAfterCloudChange(){
+  // never overwrite a form the user is typing in
+  if(!dirty)renderToday();
+  renderProgress();renderSetup();
+  $('headScore').textContent=(days[todayStr()]?scoreOf(days[todayStr()]):0)+'%';
+}
+
+/* ---------- account: sign up / sign in / out ---------- */
+function authErrText(e){
+  const c=String((e&&e.code)||''),m=String((e&&e.message)||e);
+  if(c==='invalid_credentials'||/invalid login credentials/i.test(m))return 'Wrong email or password.';
+  if(c==='email_not_confirmed'||/email not confirmed/i.test(m))return 'Check your email to confirm your account, then sign in.';
+  if(c==='user_already_exists'||/already (registered|been registered|exists)/i.test(m))return 'An account with this email already exists. Try signing in.';
+  if(c==='weak_password'||/password should|password is too/i.test(m))return 'That password is too weak. '+m;
+  if(/rate.?limit|too many|security purposes/i.test(c+' '+m))return 'Too many attempts. Wait a few minutes and try again.';
+  if(c==='signup_disabled')return 'New sign ups are turned off for this project.';
+  if(isNetErr(e))return 'No internet connection. Check your connection and try again.';
+  return m;
+}
+const authModalOpen=()=>!$('authModal').hidden;
+function openAuth(){setMsg('authMsg','');$('authPw').value='';$('authModal').hidden=false;$('authEmail').focus()}
+function closeAuth(){$('authModal').hidden=true;$('authPw').value=''}
+async function doAuth(mode){
+  const email=$('authEmail').value.trim(),pw=$('authPw').value;
+  if(!/^\S+@\S+\.\S+$/.test(email)){setMsg('authMsg','Enter a valid email address.',true);return}
+  if(pw.length<6){setMsg('authMsg','Password must be at least 6 characters.',true);return}
+  ['authIn','authUp'].forEach(i=>$(i).disabled=true);setMsg('authMsg','Working…');
+  try{
+    let res;
+    if(mode==='up'){
+      res=await sb.auth.signUp({email,password:pw});
+      if(res.error)throw res.error;
+      if(res.data.user&&Array.isArray(res.data.user.identities)&&res.data.user.identities.length===0)throw {code:'user_already_exists',message:'User already registered'};
+      if(!res.data.session){setMsg('authMsg','Check your email to confirm your account, then sign in.');return}
+    }else{
+      res=await sb.auth.signInWithPassword({email,password:pw});
+      if(res.error)throw res.error;
+    }
+    closeAuth();
+    await onSignedIn(res.data.session);
+  }catch(e){setMsg('authMsg',authErrText(e),true)}
+  finally{['authIn','authUp'].forEach(i=>$(i).disabled=false)}
+}
+async function onSignedIn(s){
+  const uid=s.user.id;
+  if(sync.userId&&sync.userId!==uid&&Object.keys(days).length){
+    const pick=await askModal('Different account','The entries on this phone were synced with another account. Add them to this account too, or use only this account\'s data?',[{label:'Add this phone\'s entries to this account',value:'merge'},{label:'Use only this account\'s data',value:'replace',cls:'danger'},{label:'Cancel and sign out',value:'cancel'}]);
+    if(pick!=='merge'&&pick!=='replace'){try{await sb.auth.signOut({scope:'local'})}catch(e){}sync.signedIn=false;renderAccount();return}
+    if(pick==='replace'){days={};settings=clone(DEFAULT_SETTINGS);sync.settingsUpdatedAt=0;try{await store.persist()}catch(e){setMsg('acctMsg',"Couldn't clear the old entries: "+errText(e),true);return}refreshAfterCloudChange()}
+  }
+  Object.assign(sync,{signedIn:true,userId:uid,email:s.user.email||'',pendingDays:[],pendingSettings:false});
+  session=s;await saveSync();
+  renderAccount();setMsg('acctMsg','');
+  syncSoon(true);
+}
+async function signOut(){
+  try{await sb.auth.signOut({scope:'local'})}catch(e){}
+  Object.assign(sync,{signedIn:false,email:''});session=null;
+  try{await saveSync()}catch(e){}
+  renderAccount();setMsg('acctMsg','Signed out. Your entries stay on this phone.');
+}
+$('signInBtn').addEventListener('click',openAuth);
+$('authIn').addEventListener('click',()=>doAuth('in'));
+$('authUp').addEventListener('click',()=>doAuth('up'));
+$('authCancel').addEventListener('click',closeAuth);
+$('signOutBtn').addEventListener('click',signOut);
+$('syncNowBtn').addEventListener('click',()=>syncSoon(true));
+['authEmail','authPw'].forEach(i=>$(i).addEventListener('keydown',e=>{if(e.key==='Enter')doAuth('in')}));
+
+async function initSync(){
+  renderAccount();
+  if(!cloudConfigured())return;
+  sb=Native.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_PUBLISHABLE_KEY,{auth:{storage:authStorage,persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+  sb.auth.onAuthStateChange((ev,s)=>{
+    session=s;
+    if(ev==='SIGNED_OUT'&&sync.signedIn){sync.signedIn=false;renderAccount()} // token revoked or removed elsewhere
+  });
+  try{
+    const {data,error}=await sb.auth.getSession();
+    if(data.session){session=data.session;if(!sync.signedIn||sync.userId!==data.session.user.id){sync.signedIn=true;sync.userId=data.session.user.id;sync.email=data.session.user.email||'';await saveSync()}}
+    else if(!error&&sync.signedIn){sync.signedIn=false;await saveSync()} // no stored session any more
+    // a network error while refreshing keeps us "signed in" and retries when back online
+  }catch(e){}
+  renderAccount();
+  syncSoon(true);
+}
+
 /* ---------- native glue: status bar, back button, notification tap, resume ---------- */
 function syncBars(){
   if(!IS_NATIVE||!Native.StatusBar)return;
@@ -580,17 +829,20 @@ function onResume(){
   if(wasToday&&!dirty)current=t;
   renderToday();renderProgress();
 }
+function onForeground(){onResume();syncOnResume()}
 function initNativeGlue(){
   try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{syncBars();drawChart()})}catch(e){}
   syncBars();
-  if(!IS_NATIVE){document.addEventListener('visibilitychange',()=>{if(!document.hidden)onResume()});return}
+  try{if(Native.Network)Native.Network.addListener('networkStatusChange',s=>{if(s.connected)syncSoon(true)})}catch(e){}
+  if(!IS_NATIVE){document.addEventListener('visibilitychange',()=>{if(!document.hidden)onForeground()});return}
   Native.App.addListener('backButton',()=>{
+    if(authModalOpen()){closeAuth();return}
     if(modalOpen()){closeModal('cancel');return}
     if(activeTab!=='today'){showTab('today');return}
     if(dirty&&!confirm('You have unsaved changes. Exit without saving?'))return;
     Native.App.exitApp();
   });
-  Native.App.addListener('appStateChange',s=>{if(s.isActive)onResume()});
+  Native.App.addListener('appStateChange',s=>{if(s.isActive)onForeground()});
   LN().addListener('localNotificationActionPerformed',()=>openToday());
 }
 
@@ -647,7 +899,7 @@ async function save(){
   $('saveBtn').disabled=true;
   const prev=days[current];
   days[current]=d;
-  try{await store.persist();dirty=false;toast('Saved');renderToday();renderProgress();autoBackup()}
+  try{await store.persist();dirty=false;toast('Saved');renderToday();renderProgress();autoBackup();markDayDirty(current);syncSoon(false)}
   catch(e){if(prev)days[current]=prev;else delete days[current];toast("Couldn't save. Try again.")}
   $('saveBtn').disabled=false;
 }
@@ -718,7 +970,7 @@ function renderSetup(){
   $('storeNote').textContent=IS_NATIVE?'Entries are saved on this phone and copied to Documents/ResetLog after every save.':'Entries are saved in this browser only.';
   $('bkHint').textContent=IS_NATIVE?'Your entries live on this phone. A copy is also saved to Documents/ResetLog after every save. Export one to keep it somewhere safe.':'Your entries live in this browser. Export a copy to keep it somewhere safe.';
 }
-async function persistSettings(msg){try{await store.persist();toast(msg);autoBackup()}catch(e){toast("Couldn't save. Try again.")}renderSetup();renderToday();renderProgress()}
+async function persistSettings(msg){try{await store.persist();toast(msg);autoBackup();markSettingsDirty();syncSoon(false)}catch(e){toast("Couldn't save. Try again.")}renderSetup();renderToday();renderProgress()}
 
 $('addHabit').addEventListener('click',async()=>{
   const n=$('nhName').value.trim(),t=Number($('nhTarget').value),u=$('nhUnit').value.trim()||'times';
@@ -754,6 +1006,7 @@ $('dateInput').addEventListener('change',e=>{if(e.target.value&&e.target.value<=
   if(loadProblem)setMsg('bkMsg',loadProblem,true);
   $('headScore').textContent=(days[todayStr()]?scoreOf(days[todayStr()]):scoreOf(collect()))+'%';
   initReminder();
+  initSync();
 })();
 </script>
 </body>
