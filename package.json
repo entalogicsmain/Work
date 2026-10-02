@@ -24,8 +24,9 @@
     "test:core": "node test/core-test.mjs",
     "test:dates": "node test/dates-test.mjs",
     "test:structure": "node test/structure-test.mjs",
+    "test:travel": "node test/travel-test.mjs",
     "test:datasafety": "node test/datasafety-test.mjs",
-    "test": "node test/core-test.mjs && node test/dates-test.mjs && node test/structure-test.mjs && node test/web-test.mjs && node test/sync-test.mjs && node test/datasafety-test.mjs && node test/rename-test.mjs && node test/steps-test.mjs && node test/permissions-test.mjs && node test/refresh-test.mjs && node test/contrast-test.mjs && node test/a11y-test.mjs && node test/responsive-test.mjs"
+    "test": "node test/core-test.mjs && node test/dates-test.mjs && node test/structure-test.mjs && node test/web-test.mjs && node test/sync-test.mjs && node test/datasafety-test.mjs && node test/rename-test.mjs && node test/steps-test.mjs && node test/permissions-test.mjs && node test/refresh-test.mjs && node test/contrast-test.mjs && node test/a11y-test.mjs && node test/travel-test.mjs && node test/responsive-test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

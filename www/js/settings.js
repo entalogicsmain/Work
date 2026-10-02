@@ -171,6 +171,7 @@ function renderAdvanced(){
   }
   const loc=switchRow({id:'stLoc',boxId:'stLocOn',icon:'map-pin',label:'Use location to improve accuracy in vehicles',sub:'Off by default. Speed above about 15 km/h for 30 seconds pauses counting.',on:!!meta.steps.useLocation,onChange:(on,box)=>setStepLocation(on,box)});
   g.appendChild(loc);
+  if(typeof travelSettingsRows==='function'&&stepsAuto())travelSettingsRows().forEach(r=>g.appendChild(r));
   foot.textContent='These are the defaults for most people. Change them only if steps look wrong.';
 }
 

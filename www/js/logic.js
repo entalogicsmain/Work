@@ -79,6 +79,7 @@ function normalizeDay(k,d){
   const out={vals,rules:rl,weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:typeof d.note==='string'?d.note:'',date:k,updatedAt:num(d.updatedAt)?d.updatedAt:0};
   const sm=normalizeStepsMeta(d.steps_meta,k);
   if(sm)out.steps_meta=sm;
+  const tv=normalizeTravel(d.travel);if(tv)out.travel=tv;
   return out;
 }
 /* Throws an Error with a readable message when the object is not a Comeback backup. Restoring from a file is strict: one bad day
@@ -123,6 +124,12 @@ function mergeDayRecords(a,b,now){
     const wa=metaWeight(ma),wb=metaWeight(mb);
     const aWins=!mb||(ma&&(wa[0]>wb[0]||(wa[0]===wb[0]&&(wa[1]>wb[1]||(wa[1]===wb[1]&&nw===a)))));
     out.steps_meta=clone(aWins?ma:mb);
+  }
+  // travel: the side that recorded more wins whole (a relabelled trip is kept with it)
+  const tvA=a.travel,tvB=b.travel;
+  if(tvA||tvB){
+    const tw=t=>t?(t.walk_min||0)+(t.run_min||0)+(t.bike_min||0)+(t.vehicle_min||0)+(t.trips||[]).length:-1;
+    out.travel=clone(!tvB||(tvA&&(tw(tvA)>tw(tvB)||(tw(tvA)===tw(tvB)&&nw===a)))?tvA:tvB);
   }
   return out;
 }
@@ -349,12 +356,12 @@ function csvCell(v){
 function stepsSourceOf(d){return d.steps_meta?(d.steps_meta.source==='auto'?'counted':'manual'):(d.vals&&d.vals.steps!=null?'manual':'')}
 function buildCsv(){
   const cols=settings.habits.filter(h=>h.type!=='measure');
-  const head=['Date','Score %'].concat(cols.map(h=>h.type==='yesno'?h.name:h.name+' ('+h.unit+')'),['Steps source','Distance (km)','Filtered steps','Weight (kg)','Waist (cm)','BMI','Note']);
+  const head=['Date','Score %'].concat(cols.map(h=>h.type==='yesno'?h.name:h.name+' ('+h.unit+')'),TRAVEL_CSV_HEAD,['Steps source','Distance (km)','Filtered steps','Weight (kg)','Waist (cm)','BMI','Note']);
   const rows=Core.loggedKeys(days).sort().map(k=>{
     const d=days[k],b=Core.bmi(d.weight,settings.body.heightCm);
     return [k,scoreOf(d)].concat(
       cols.map(h=>h.type==='yesno'?(d.rules&&d.rules[h.id]?'yes':'no'):(d.vals&&d.vals[h.id]!=null?d.vals[h.id]:'')),
-      [stepsSourceOf(d),d.steps_meta?d.steps_meta.distance_km:'',d.steps_meta?d.steps_meta.filtered:'',d.weight==null?'':d.weight,d.waist==null?'':d.waist,b==null?'':Core.bmiRound(b),d.note||'']);
+      travelCsvCells(d),[stepsSourceOf(d),d.steps_meta?d.steps_meta.distance_km:'',d.steps_meta?d.steps_meta.filtered:'',d.weight==null?'':d.weight,d.waist==null?'':d.waist,b==null?'':Core.bmiRound(b),d.note||'']);
   });
   return '﻿'+[head].concat(rows).map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n';
 }
@@ -502,7 +509,7 @@ const cloudConfigured=()=>!!(CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&Nat
 const signedIn=()=>cloudConfigured()&&sync.signedIn;
 const saveSync=()=>prefSet(SYNC_KEY,JSON.stringify(sync));
 const pendingCount=()=>sync.pendingDays.length+(sync.pendingSettings?1:0);
-const dayData=d=>{const o={vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''};if(d.steps_meta)o.steps_meta=d.steps_meta;return o};
+const dayData=d=>{const o={vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''};if(d.steps_meta)o.steps_meta=d.steps_meta;if(d.travel)o.travel=d.travel;return o};
 const isNetErr=e=>!!e&&(e.name==='AuthRetryableFetchError'||e.status===0||/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(String(e.message||e)));
 function syncErrText(e){
   if(isNetErr(e))return 'No internet connection.';

@@ -269,7 +269,7 @@ console.log('normalizeTravel');
   if (hooked) {
     const dd = await pg.evaluate(() => { const o = normalizeDay('2026-01-01', { vals: {}, travel: { walk_min: 5, bogus: 1, trips: [{ mode: 'x' }] } }); return [o.travel, dayData(o).travel]; });
     ok(dd[0].walk_min === 5 && !('bogus' in dd[0]) && dd[0].trips.length === 0 && dd[1] && dd[1].walk_min === 5, 'normalizeDay whitelists travel and the sync payload carries it', dd);
-    const csv = await pg.evaluate(() => { days['2026-01-01'] = { vals: {}, rules: {}, weight: null, waist: null, note: '', date: '2026-01-01', updatedAt: 1, travel: { walk_min: 5, run_min: 1, bike_min: 2, vehicle_min: 30, trips: [{ mode: 'vehicle', start: 1.7e12, end: 1.7e12 + 6e5, min: 10, km: 4.5 }] } }; return buildCsv(); });
+    const csv = await pg.evaluate(() => { days['2026-01-01'] = { vals: {}, rules: {}, weight: null, waist: null, note: 'trip day', date: '2026-01-01', updatedAt: 1, travel: { walk_min: 5, run_min: 1, bike_min: 2, vehicle_min: 30, trips: [{ mode: 'vehicle', start: 1.7e12, end: 1.7e12 + 6e5, min: 10, km: 4.5 }] } }; return buildCsv(); });
     ok(/Walk \(min\),Run \(min\),Bike \(min\),Vehicle \(min\),Vehicle \(km\)/.test(csv) && /5,1,2,30,4\.5/.test(csv), 'the CSV has the travel columns');
   } else console.log('  SKIP  logic.js hooks (normalizeDay, dayData, buildCsv) are not in yet');
   const cells = await pg.evaluate(() => [travelCsvCells({}), travelCsvCells({ travel: { walk_min: 5, run_min: 1, bike_min: 2, vehicle_min: 30, trips: [{ mode: 'vehicle', km: 4.5 }, { mode: 'vehicle', km: 1.25 }, { mode: 'bike', km: 9 }] } }), travelCsvCells({ travel: { walk_min: 5, trips: [{ mode: 'vehicle' }] } }), TRAVEL_CSV_HEAD]);
