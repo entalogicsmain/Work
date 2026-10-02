@@ -90,11 +90,11 @@ function segRow(o){
   const r=h('<div class="row segrow"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span></span><div class="seg mini" role="radiogroup"></div></div>');
   r.querySelector('.row-ic').innerHTML=icon(o.icon);
   r.querySelector('.row-label').textContent=o.label;
-  const seg=r.querySelector('.seg');seg.setAttribute('aria-label',o.label);
+  const seg=r.querySelector('.seg');seg.setAttribute('aria-label',o.label);seg.setAttribute('role','radiogroup');
   if(o.id)r.id=o.id;
   o.options.forEach(op=>{
     const b=h('<button role="radio"></button>');b.textContent=op.label;b.dataset.v=op.value;if(op.id)b.id=op.id;
-    b.setAttribute('aria-checked',String(op.value===o.value));b.setAttribute('aria-selected',String(op.value===o.value));
+    b.setAttribute('aria-checked',String(op.value===o.value));
     b.addEventListener('click',()=>{if(op.value!==o.value){haptic('light');o.onPick(op.value)}});
     seg.appendChild(b);
   });
@@ -121,6 +121,19 @@ function renderBodyGroup(){
   }}));
   $('bodyFoot').textContent=bmiScale()==='asian'?'Asian (WHO Asia-Pacific): healthy range 18.5 to 22.9. Often recommended for South, East and Southeast Asian backgrounds.':'Standard (WHO): healthy range 18.5 to 24.9. Choose Asian if your background is South, East or Southeast Asian.';
 }
+
+/* ---------- appearance: "Simple look" (device-local, kept in Preferences, not in the synced settings) ---------- */
+const SIMPLE_KEY='comeback_simple_look';
+const AUTO_LITE=document.documentElement.classList.contains('lite');   // the low-end-phone heuristic in ui.js stays on whatever this is set to
+let simpleLook=false;
+function applySimpleLook(on){simpleLook=!!on;document.documentElement.classList.toggle('lite',simpleLook||AUTO_LITE)}
+function renderAppearance(){
+  const g=$('appearGroup');if(!g)return;g.innerHTML='';
+  g.appendChild(switchRow({id:'simpleRow',boxId:'simpleOn',icon:'eye',label:'Simple look',sub:'Solid bars and sheets, no blur, no wiggle',on:simpleLook,onChange:async on=>{
+    applySimpleLook(on);try{await prefSet(SIMPLE_KEY,on?'1':'0')}catch(e){}
+  }}));
+}
+try{prefGet(SIMPLE_KEY).then(v=>{applySimpleLook(v==='1');renderAppearance()}).catch(()=>{})}catch(e){}
 
 /* ---------- suggestions ---------- */
 function renderSuggestions(){
@@ -164,7 +177,7 @@ function renderAdvanced(){
 /* ---------- the whole screen ---------- */
 function renderSettings(){
   renderAccount();
-  renderUnits();renderBodyGroup();renderSuggestions();
+  renderUnits();renderBodyGroup();renderSuggestions();renderAppearance();
   renderStepGroup(false);
   $('storeNote').textContent=IS_NATIVE?'Entries are saved on this phone and copied to Documents/Comeback after every change.':'Entries are saved in this browser only.';
   $('bkHint').textContent=IS_NATIVE?'Your entries live on this phone. A copy is also saved to Documents/Comeback after every change. Export one to keep it somewhere safe.':'Your entries live in this browser. Export a copy to keep it somewhere safe.';

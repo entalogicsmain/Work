@@ -18,6 +18,7 @@
     "brand": "node scripts/build-brand.mjs",
     "test:rename": "node test/rename-test.mjs",
     "test:responsive": "node test/responsive-test.mjs",
+    "test:a11y": "node test/a11y-test.mjs",
     "test:permissions": "node test/permissions-test.mjs",
     "test:refresh": "node test/refresh-test.mjs",
     "test:core": "node test/core-test.mjs",

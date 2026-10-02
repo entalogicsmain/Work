@@ -37,7 +37,7 @@ function bodyState(until){
   if(b==null)return{state:'no-weight',cm};
   return{state:'ok',bmi:b,rounded:Core.bmiRound(b),cat:Core.bmiCategory(b,bmiScale()),kg:w.v,cm,k:w.k};
 }
-const catPill=cat=>({under:'o',normal:'g',over:'o',obese:'r'})[cat]||'';
+const catPill=cat=>({under:'bmi-under',normal:'bmi-normal',over:'bmi-over',obese:'bmi-obese'})[cat]||'';
 const catName=cat=>Core.BMI_CAT_NAME[cat]||'';
 /** BMI per logged weight day, oldest first, for the small trend line and the chart. */
 function bmiSeries(keys){
@@ -162,7 +162,7 @@ function bmiSheet(){
   }
   // trend
   if(st.state==='ok'){
-    const tr=h('<div class="card" style="margin-bottom:var(--s3)"><div class="seg" id="bmiSeg" role="tablist" aria-label="Time range"><button role="tab" data-range="7">Week</button><button role="tab" data-range="30">Month</button><button role="tab" data-range="90">3 Months</button></div><div class="readout" id="bmiReadout" aria-live="polite"></div><div class="chartbox" style="height:11rem"><canvas id="chartBmi" role="img"></canvas></div><p class="t-foot muted" id="bmiTrendSum" style="margin:12px 0 0"></p></div>');
+    const tr=h('<div class="card" style="margin-bottom:var(--s3)"><div class="seg" id="bmiSeg" role="radiogroup" aria-label="Time range"><button role="radio" aria-checked="false" data-range="7">Week</button><button role="radio" aria-checked="false" data-range="30">Month</button><button role="radio" aria-checked="false" data-range="90">3 Months</button></div><div class="readout" id="bmiReadout"></div><div class="chartbox" style="height:11rem"><canvas id="chartBmi" aria-hidden="true"></canvas></div><p class="t-foot muted" id="bmiTrendSum" role="status" aria-live="polite" style="margin:12px 0 0"></p></div>');
     root.appendChild(tr);
   }
   // quick calculator
@@ -194,20 +194,23 @@ function bmiSheet(){
   }
   return sh;
 }
+let bmiRoot=null;
+/** Redraws the BMI trend with fresh colours (the system theme changed) if its sheet is open. */
+function redrawBmiChart(){if(bmiChart&&bmiRoot&&bmiRoot.isConnected)drawBmiChart(bmiRoot)}
 function drawBmiChart(root){
-  const seg=root.querySelectorAll('#bmiSeg button');seg.forEach(b=>b.setAttribute('aria-selected',String(Number(b.dataset.range)===bmiPeriod)));
+  bmiRoot=root;
+  const seg=root.querySelectorAll('#bmiSeg button');seg.forEach(b=>b.setAttribute('aria-checked',String(Number(b.dataset.range)===bmiPeriod)));
   const keys=rangeKeys(bmiPeriod),ser=bmiSeries(keys);
   const sum=root.querySelector('#bmiTrendSum'),ro=root.querySelector('#bmiReadout');
   const setRead=i=>{ro.innerHTML='';if(i==null||!ser.length){ro.innerHTML='<b>–</b><span>No weights in this '+RANGE_NAME[bmiPeriod]+'</span>';return}const b=document.createElement('b'),sp=document.createElement('span');b.textContent='BMI '+Core.bmiRound(ser[i].bmi).toFixed(1);sp.textContent=nice(ser[i].k)+' · '+catName(Core.bmiCategory(ser[i].bmi,bmiScale()));ro.appendChild(b);ro.appendChild(sp)};
   setRead(ser.length?ser.length-1:null);
   const summ=!ser.length?'No weights logged in the last '+RANGE_NAME[bmiPeriod]+'.':'BMI over the last '+RANGE_NAME[bmiPeriod]+': '+ser.length+(ser.length===1?' entry':' entries')+(ser.length>1?', from '+Core.bmiRound(ser[0].bmi).toFixed(1)+' to '+Core.bmiRound(ser[ser.length-1].bmi).toFixed(1):', '+Core.bmiRound(ser[0].bmi).toFixed(1))+'.';
-  sum.textContent=summ;root.querySelector('#chartBmi').setAttribute('aria-label',summ);
+  if(sum.textContent!==summ)sum.textContent=summ;
   if(bmiChart){bmiChart.destroy();bmiChart=null}
   if(!window.Chart)return;
-  const cs=getComputedStyle(document.documentElement),accent=cs.getPropertyValue('--accent').trim(),muted=cs.getPropertyValue('--label2').trim(),sep=cs.getPropertyValue('--sep').trim();
-  const fnt={family:'Inter, system-ui, sans-serif',size:11};
+  const L=chartLook(),accent=L.accent,muted=L.muted,sep=L.sep,fnt=L.font;
   const vals=keys.map(k=>{const s=ser.find(x=>x.k===k);return s?Core.bmiRound(s.bmi):null});
-  bmiChart=new Chart(root.querySelector('#chartBmi'),{type:'line',data:{labels:keys.map(k=>parse(k).toLocaleDateString(undefined,{day:'numeric',month:'short'})),datasets:[{data:vals,borderColor:accent,borderWidth:2.5,tension:.3,spanGaps:true,pointRadius:ser.length<=3?4:0,pointHoverRadius:5,pointBackgroundColor:accent,fill:false}]},
+  bmiChart=new Chart(root.querySelector('#chartBmi'),{type:'line',data:{labels:keys.map(k=>parse(k).toLocaleDateString(undefined,{day:'numeric',month:'short'})),datasets:[{data:vals,borderColor:accent,borderWidth:2.5,tension:0,cubicInterpolationMode:'monotone',spanGaps:true,pointRadius:ser.length<=20?3:0,pointHoverRadius:5,pointBackgroundColor:accent,pointBorderColor:accent,fill:false}]},
     options:{responsive:true,maintainAspectRatio:false,animation:reduced()?false:{duration:350},interaction:{mode:'nearest',axis:'x',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'BMI '+c.parsed.y.toFixed(1)}}},
       onHover(e,els){if(els&&els.length){const k=keys[els[0].index],s=ser.findIndex(x=>x.k===k);if(s>=0)setRead(s)}},
       scales:{x:{grid:{display:false},border:{display:false},ticks:{color:muted,maxTicksLimit:5,maxRotation:0,font:fnt}},y:{grid:{color:sep},border:{display:false},ticks:{color:muted,maxTicksLimit:4,font:fnt},grace:'10%'}}}});

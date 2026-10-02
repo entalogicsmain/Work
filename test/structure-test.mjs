@@ -20,6 +20,8 @@ async function open({ data, w = 390, h = 900, onboard = false, scheme = 'light',
   const errs = [];
   // `still` turns the wiggle off (reduced motion) so the browser can click moving cards
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, acceptDownloads: true, reducedMotion: still ? 'reduce' : 'no-preference' });
+  // a fast phone: this box has few cores, which would switch the lite look (and with it the wiggle) off by itself
+  await ctx.addInitScript(() => { Object.defineProperty(navigator, 'hardwareConcurrency', { value: 8 }); });
   if (native) await ctx.route('**/vendor/native.js', r => r.fulfill({ contentType: 'text/javascript', body: MOCK }));
   if (!onboard && !native) await skipOnboarding(ctx);
   if (data) await ctx.addInitScript(([d, key]) => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem(key, JSON.stringify(d)); } }, [data, KEY]);
@@ -372,7 +374,7 @@ const bmiData = (cm, kg, extra = {}) => ({ version: 2, settings: withSettings(s 
   ok(!(await pg.$('#bmiWhtr')), 'no waist-to-height ratio until a waist is logged');
   ok(/general screening measure and doesn't account for muscle mass\. It isn't a medical diagnosis\./.test(await pg.textContent('#bmiNote')), 'the screening-measure note is shown');
   ok(await pg.evaluate(() => !!window.Chart.getChart('chartBmi')) && (await pg.$$('#bmiSeg button')).length === 3, 'a BMI trend chart with Week / Month / 3 Months');
-  await pg.click('#bmiSeg button[data-range="7"]'); ok((await pg.getAttribute('#bmiSeg button[data-range="7"]', 'aria-selected')) === 'true', 'the trend range can be changed');
+  await pg.click('#bmiSeg button[data-range="7"]'); ok((await pg.getAttribute('#bmiSeg button[data-range="7"]', 'aria-checked')) === 'true', 'the trend range can be changed');
   // quick calculator
   await pg.fill('#qCm', '170'); await pg.fill('#qW', '70');
   ok(/BMI 24\.2/.test(await pg.textContent('#calcOut')) && /Normal/.test(await pg.textContent('#calcOut')), 'the quick calculator works for any height and weight', await pg.textContent('#calcOut'));

@@ -71,6 +71,19 @@ for (const [mode, V] of [['light', light], ['dark', dark]]) {
     const ratioOn = (bg) => ratio(rgba(s), tint(s + '-soft', bg));
     check(`${s} pill text on its tint (over card)`, 'card', c(s), 4.5, bg => tint(s + '-soft', bg));
   }
+  // the same pills inside a sheet (orange text on the orange tint over the sheet card, for example)
+  for (const s of ['green', 'orange', 'red']) check(`${s} pill text on its tint (over sheet card)`, 'sheet card', c(s), 4.5, bg => tint(s + '-soft', bg));
+  // BMI categories: one token each, used by the pill, the scale segment and the legend swatch
+  for (const cat of ['under', 'normal', 'over', 'obese']) {
+    check(`BMI ${cat} pill text on its tint (over card)`, 'card', c('bmi-' + cat), 4.5, bg => tint('bmi-' + cat + '-soft', bg));
+    check(`BMI ${cat} pill text on its tint (over sheet card)`, 'sheet card', c('bmi-' + cat), 4.5, bg => tint('bmi-' + cat + '-soft', bg));
+    check(`BMI ${cat} scale segment and swatch against the card`, 'card', c('bmi-' + cat), 3);
+    check(`BMI ${cat} scale segment and swatch against the sheet card`, 'sheet card', c('bmi-' + cat), 3);
+  }
+  // chart tick labels and the dashed target line are drawn in the secondary label colour straight on the card
+  check('chart tick labels (secondary label) on the card', 'card', c('label2'), 4.5);
+  check('chart tick labels (secondary label) on the sheet card', 'sheet card', c('label2'), 4.5);
+  check('dashed target line (secondary label) against the card', 'card', c('label2'), 3);
   check('label on orange calendar cell', 'card', c('label'), 4.5, bg => tint('orange-soft', bg));
   check('accent text on its tint (over card)', 'card', c('accent'), 4.5, bg => tint('accent-soft', bg));
   check('accent text on the selected tab pill', 'bars (nav bar, tab bar)', c('accent'), 4.5, bg => tint('accent-soft', bg));
@@ -82,6 +95,7 @@ for (const [mode, V] of [['light', light], ['dark', dark]]) {
   const solid = (name, fg, bg, min) => { const r = ratio(toRGBA(fg), toRGBA(bg)); if (r >= min) { pass++; console.log(`  PASS [${mode}] ${name}  ${r.toFixed(2)}:1 (need ${min})`); } else { fail++; console.log(`  FAIL [${mode}] ${name}  ${r.toFixed(2)}:1 (need ${min})`); } };
   solid('white on accent buttons / selected chips (top of the gradient)', c('on-accent'), c('accent-fill'), 4.5);
   solid('white on accent buttons (bottom of the gradient)', c('on-accent'), c('accent-fill-lo'), 4.5);
+  solid('text on the red swipe-to-remove button (on-red on red)', c('on-red'), c('red'), 4.5);
   solid('text on green calendar cell', c('on-green'), c('green'), 4.5);
   solid('label on the opaque fallback surface', c('label'), c('solid'), 4.5);
   solid('secondary label on the opaque fallback surface', c('label2'), c('solid'), 4.5);

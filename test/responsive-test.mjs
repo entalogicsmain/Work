@@ -87,8 +87,8 @@ for (const scheme of ['light', 'dark']) {
   }
 }
 
-// ---- larger text still fits (130% and 160%) ----
-for (const [w, h] of [[320, 568], [360, 800], [412, 915]]) for (const scale of [130, 160]) {
+// ---- larger text still fits (130%, 160% and 200%) ----
+for (const [w, h] of [[320, 568], [360, 800], [412, 915]]) for (const scale of [130, 160, 200]) {
   const { ctx, pg } = await open(w, h, 'light');
   await pg.addStyleTag({ content: `html{font-size:${scale}% !important}` }); await pg.waitForTimeout(300);
   let bad = [];
@@ -106,15 +106,15 @@ for (const [w, h] of [[320, 568], [360, 800], [412, 915]]) for (const scale of [
     return { card: f(document.querySelector('.ringcard')), hcard: f(document.querySelector('.hcard')), pill: f(document.querySelector('.tabbar-in')),
       cardBg: cs(document.querySelector('.hcard')).backgroundColor, bodyAurora: getComputedStyle(document.body, '::before').backgroundImage.includes('radial-gradient'), border: cs(document.querySelector('.hcard')).borderTopWidth };
   });
-  ok(/blur/.test(g.card) && /blur/.test(g.hcard) && /blur/.test(g.pill), 'glass: cards and the tab bar blur what is behind them', g);
+  ok(g.card === 'none' && g.hcard === 'none' && /blur/.test(g.pill), 'glass: cards are plain translucent (no backdrop blur); the tab bar blurs what is behind it', g);
   ok(/rgba\(/.test(g.cardBg) && g.cardBg.endsWith('0.72)') , 'glass: card surfaces are translucent', g.cardBg);
   ok(g.bodyAurora && g.border === '1px', 'glass: aurora backdrop and edge border are in place', g);
   await ctx.close();
 }
 {
   const { ctx, pg } = await open(412, 915, 'light', () => { Object.defineProperty(navigator, 'deviceMemory', { value: 2 }); });
-  const lite = await pg.evaluate(() => ({ cls: document.documentElement.classList.contains('lite'), hcard: getComputedStyle(document.querySelector('.hcard')).backdropFilter, pill: getComputedStyle(document.querySelector('.tabbar-in')).backdropFilter }));
-  ok(lite.cls && lite.hcard === 'none' && /blur/.test(lite.pill), 'low-end phones: cards drop the blur, the bars keep it', lite);
+  const lite = await pg.evaluate(() => ({ cls: document.documentElement.classList.contains('lite'), hcard: getComputedStyle(document.querySelector('.hcard')).backdropFilter, pill: getComputedStyle(document.querySelector('.tabbar-in')).backdropFilter, glass: getComputedStyle(document.documentElement).getPropertyValue('--glass').trim() }));
+  ok(lite.cls && lite.hcard === 'none' && lite.pill === 'none', 'low-end phones: no blur anywhere, the bars turn solid', lite);
   await ctx.close();
 }
 // the aurora backdrop must not scroll or move with content
