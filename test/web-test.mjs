@@ -4,7 +4,7 @@
 //  Part B: same pages with a mocked native bridge: auto backup + rotation, share flow, reminder, back button, haptics.
 // Run: npm run test:web
 import fs from 'fs';
-import { serve, launch, counter, same, newPage, skipOnboarding, tab, ready, stored, sheetGone, settle, setHabit, setBody, setNote, toggleRule, goDate, actionChoose, logDay, MOCK, todayKey, daysAgo, ymd } from './helpers.mjs';
+import { serve, launch, counter, same, newPage, skipOnboarding, tab, ready, stored, sheetGone, settle, setHabit, setBody, setNote, toggleRule, goDate, actionChoose, logDay, cardSel, openBody, gear, MOCK, todayKey, daysAgo, ymd } from './helpers.mjs';
 
 const { srv, base } = serve();
 const T = counter();
@@ -32,8 +32,8 @@ console.log('Part A: web build');
   await pg.goto(base); await ready(pg);
   await pg.waitForFunction(() => document.getElementById('sDays') && document.querySelector('#logList .row'), null, { timeout: 5000 }).catch(() => {});
   let d = await stored(pg);
-  ok(d && d.version === 1 && d.days['2026-09-01'] && d.days['2026-09-01'].weight === 88.5, 'old localStorage data migrated into Preferences with version 1', d);
-  ok(d.settings.habits.length === 8 && d.settings.rules.length === 4, 'default settings used when old data had none');
+  ok(d && d.version === 2 && d.days['2026-09-01'] && d.days['2026-09-01'].weight === 88.5, 'old localStorage data migrated into Preferences (now version 2) with the day kept', d);
+  ok(d.settings.v === 2 && d.settings.habits.length === 14 && d.settings.habits.filter(h => h.type === 'yesno').length === 4 && !d.settings.rules, 'default settings (8 habits, 4 food rules, weight, waist) used when old data had none');
   ok(await pg.evaluate(() => localStorage.getItem('CapacitorStorage.comeback_migrated') === '1'), 'migration flag set (runs once)');
   const html = await pg.content();
   ok(!/googleapis|cdnjs|window\.claude/.test(html + (await pg.evaluate(() => [...document.scripts].map(s => s.src).join()))), 'no CDN / claude references left in the page');
@@ -53,7 +53,7 @@ console.log('Part A: web build');
 
   // log a day through the sheets, auto-saved
   await setHabit(pg, 3, 25);
-  ok((await pg.textContent('#habitList .hcard:nth-child(3) .hval')) === '25', 'habit card shows the new value');
+  ok((await pg.textContent(`${cardSel(3)} .hval`)) === '25', 'habit card shows the new value');
   ok(await pg.$eval('#savedInd', e => e.classList.contains('on')) || true, '"Saved" indicator element exists');
   await settle(pg);
   d = await stored(pg);
@@ -73,7 +73,7 @@ console.log('Part A: web build');
   ok(/Brisk walk updated/.test(await pg.textContent('#toastMsg')), 'undo toast appears after a change');
   await pg.click('#toastUndo'); await settle(pg);
   d = await stored(pg);
-  ok(d.days[tk].vals.walk === undefined && (await pg.textContent('#habitList .hcard:nth-child(2) .hval')) === '0', 'Undo reverts the last change', d.days[tk].vals);
+  ok(d.days[tk].vals.walk === undefined && (await pg.textContent(`${cardSel(2)} .hval`)) === '0', 'Undo reverts the last change', d.days[tk].vals);
   ok(await pg.$eval('#toast', e => e.classList.contains('show')), 'undo confirmation toast shown');
 
   // keypad behaviour + validation
@@ -89,14 +89,15 @@ console.log('Part A: web build');
   await pg.click('.preset >> nth=0'); // "Use last" or none; presets exist only when a last value exists
   await pg.click('.sheet .txtbtn:has-text("Cancel")'); await sheetGone(pg);
 
-  // long press -> preset action sheet
-  await pg.dispatchEvent('#habitList .hcard:nth-child(3)', 'pointerdown');
-  await pg.waitForSelector('.asheet', { timeout: 3000 });
-  ok(/Add 5 reps/.test(await pg.textContent('.asheet')), 'long-press opens quick presets (+5 for reps)');
-  await actionChoose(pg, 'Add 5 reps'); await settle(pg);
-  ok((await stored(pg)).days[tk].vals.pushups === 30, 'quick preset added 5 reps');
-  await pg.dispatchEvent('#habitList .hcard:nth-child(1)', 'pointerdown'); await pg.waitForTimeout(800);
-  ok(!(await pg.$('.asheet')), 'long-press on the read-only Steps card opens no quick presets');
+  // count cards: + and - buttons; duration cards: quick +5 / +10 chips; the Steps card has no buttons
+  await pg.click(`${cardSel(3)} .cbtn.plus`); await settle(pg);
+  ok((await stored(pg)).days[tk].vals.pushups === 26 && (await pg.textContent(`${cardSel(3)} .hval`)) === '26', 'the + button adds one rep');
+  await pg.click(`${cardSel(3)} .cbtn.minus`); await settle(pg);
+  ok((await stored(pg)).days[tk].vals.pushups === 25, 'the - button takes one away');
+  await pg.click(`${cardSel(2)} .chipbtn >> nth=1`); await settle(pg);
+  ok((await stored(pg)).days[tk].vals.walk === 10, 'a duration card has +5 and +10 minute chips');
+  await pg.click('#toastUndo'); await settle(pg);
+  ok(!(await pg.$(`${cardSel(1)} .cbtn`)), 'the read-only Steps card has no + or - buttons');
 
   // day navigation: previous day
   await pg.click('#prevDay'); await pg.waitForTimeout(100);
@@ -108,51 +109,53 @@ console.log('Part A: web build');
   await pg.click('#nextDay'); await pg.waitForTimeout(100);
   ok((await pg.textContent('#dayLabelText')) === 'Today' && await pg.$eval('#nextDay', b => b.disabled), 'cannot go past today');
 
-  // Plan: add / edit / reorder / swipe to delete
+  // Plan: add / edit / reorder / swipe to delete (goals only)
   await tab(pg, 'setup');
-  await pg.click('#addHabitRow');
+  await pg.click('#createHabitRow');
   await pg.click('.sheet .txtbtn.strong');
-  ok(/Enter a name first/.test(await pg.textContent('#fErr')), 'adding a target needs a name');
+  ok(/Enter a name first/.test(await pg.textContent('#fErr')), 'adding a habit needs a name');
   await pg.fill('#fName', 'Cycling'); await pg.click('.sheet .txtbtn.strong');
-  ok(/Enter a daily target above 0/.test(await pg.textContent('#fErr')), 'adding a target needs a target above 0');
+  ok(/Enter a target above 0/.test(await pg.textContent('#fErr')), 'a Count habit needs a target above 0');
   await pg.fill('#fTarget', '20'); await pg.fill('#fUnit', 'km'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg);
-  await pg.click('#addRuleRow'); await pg.fill('#fName', 'No chips'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg);
-  await pg.click('#setHabits .swipe:nth-child(1) .row'); await pg.fill('#fTarget', '9500'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg);
+  await pg.click('#createHabitRow'); await pg.click('#fType button[data-type="yesno"]'); await pg.fill('#fName', 'No chips'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg);
+  await pg.click('#planSections .swipe[data-id="steps"] .row'); await pg.fill('#fTarget', '9500'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg);
   await settle(pg);
   d = await stored(pg);
-  ok(d.settings.habits.some(h => h.name === 'Cycling' && h.target === 20 && h.unit === 'km') && d.settings.habits[0].target === 9500 && d.settings.rules.some(r => r.name === 'No chips'), 'custom item, rule and edited target persisted', d.settings);
-  // reorder by dragging the handle
+  ok(d.settings.habits.some(h => h.name === 'Cycling' && h.type === 'count' && h.target === 20 && h.unit === 'km') && d.settings.habits.find(h => h.id === 'steps').target === 9500 && d.settings.habits.some(h => h.name === 'No chips' && h.type === 'yesno'), 'custom Count habit, Yes/No habit and edited target persisted', d.settings);
+  // reorder by dragging the handle (inside a section)
   await pg.click('#reorderBtn');
-  ok(await pg.$eval('#setHabits', e => e.classList.contains('reorder')) && (await pg.textContent('#reorderBtn')) === 'Done', 'Reorder shows drag handles');
-  const hb = await (await pg.$('#setHabits .swipe:nth-child(2) .handle')).boundingBox();
+  ok(await pg.$eval('#planSections .plan-group', e => e.classList.contains('reorder')) && (await pg.textContent('#reorderBtn')) === 'Done', 'Reorder shows drag handles');
+  const hb = await (await pg.$('#planSections .swipe[data-id="pushups"] .handle')).boundingBox();
   await pg.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2); await pg.mouse.down();
   await pg.mouse.move(hb.x + hb.width / 2, hb.y + hb.height * 2.2, { steps: 8 }); await pg.mouse.up();
   await pg.waitForTimeout(300);
-  ok((await stored(pg)).settings.habits.map(h => h.id).slice(0, 3).join() === 'steps,pushups,walk', 'dragging a handle reorders the targets', (await stored(pg)).settings.habits.map(h => h.id));
+  const ord = (await stored(pg)).settings.habits.map(h => h.id);
+  ok(ord.indexOf('pullups') < ord.indexOf('pushups'), 'dragging a handle reorders the habits', ord);
   await pg.click('#reorderBtn');
   await tab(pg, 'today');
-  ok((await pg.textContent('#habitList .hcard:nth-child(2) .hname')) === 'Pushups', 'new order shows on Today');
+  ok((await pg.textContent('.tsec[data-sec="workout"] .hcard:nth-of-type(1) .hname')) === 'Pull-ups', 'new order shows on Today');
   await tab(pg, 'setup');
   // swipe left to delete, with confirmation
-  await pg.$eval('#setRules .swipe:nth-last-child(2)', e => e.scrollIntoView({ block: 'center' })); await pg.waitForTimeout(250);
-  const rb = await (await pg.$('#setRules .swipe:nth-last-child(2) .row')).boundingBox();
+  await pg.$eval('#planSections .swipe[data-id="nolate"]', e => e.scrollIntoView({ block: 'center' })); await pg.waitForTimeout(250);
+  const rb = await (await pg.$('#planSections .swipe[data-id="nolate"] .row')).boundingBox();
   const swipe = async () => { await pg.mouse.move(rb.x + rb.width - 30, rb.y + rb.height / 2); await pg.mouse.down(); await pg.mouse.move(rb.x + 60, rb.y + rb.height / 2, { steps: 8 }); await pg.mouse.up(); await pg.waitForTimeout(350); };
   await swipe();
-  ok(await pg.isVisible('#setRules .swipe:nth-last-child(2) .swipe-del'), 'swiping a row left reveals Remove');
-  await pg.click('#setRules .swipe:nth-last-child(2) .swipe-del');
+  ok(await pg.isVisible('#planSections .swipe[data-id="nolate"] .swipe-del'), 'swiping a row left reveals Remove');
+  await pg.click('#planSections .swipe[data-id="nolate"] .swipe-del');
   await pg.waitForSelector('.asheet');
   ok(/Remove/.test(await pg.textContent('.asheet .ab.destructive')) && await pg.$eval('.asheet .ab.destructive', e => getComputedStyle(e).color !== getComputedStyle(document.body).color), 'removal asks for confirmation with a red destructive option');
   await pg.click('.asheet .cancel'); await pg.waitForFunction(() => !document.querySelector('.asheet'));
-  ok((await stored(pg)).settings.rules.some(r => r.name === 'No chips'), 'cancelling keeps the rule');
-  await pg.click('#setRules .swipe:nth-last-child(2) .swipe-del'); await actionChoose(pg, 'Remove'); await settle(pg);
-  ok(!(await stored(pg)).settings.rules.some(r => r.name === 'No chips'), 'confirming removes the rule');
-  // add it back so the backup below includes a custom rule
-  await pg.click('#addRuleRow'); await pg.fill('#fName', 'No chips'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg); await settle(pg);
+  ok((await stored(pg)).settings.habits.some(r => r.id === 'nolate'), 'cancelling keeps the habit');
+  await pg.click('#planSections .swipe[data-id="nolate"] .swipe-del'); await actionChoose(pg, 'Remove'); await settle(pg);
+  ok(!(await stored(pg)).settings.habits.some(r => r.id === 'nolate'), 'confirming removes the habit');
+  // add it back so the backup below has everything
+  await pg.click('#createHabitRow'); await pg.click('#fType button[data-type="yesno"]'); await pg.fill('#fName', 'Nothing eaten after 10 pm'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg); await settle(pg);
   const before = await stored(pg);
   const keys = Object.keys(before.days).sort();
   ok(keys.every(k => { const x = before.days[k]; return x.date === k && 'vals' in x && 'rules' in x && 'weight' in x && 'waist' in x && 'note' in x && 'updatedAt' in x; }), 'every day keeps the exact shape vals/rules/weight/waist/note/date/updatedAt');
 
-  // export JSON
+  // export JSON (Backup is in Settings)
+  await gear(pg);
   let [dl] = await Promise.all([pg.waitForEvent('download'), pg.click('#expJson')]);
   ok(dl.suggestedFilename() === `comeback-backup-${tk}.json`, 'JSON export file name', dl.suggestedFilename());
   const jsonPath = await dl.path();
@@ -163,7 +166,7 @@ console.log('Part A: web build');
   const csv = fs.readFileSync(await dl.path(), 'utf8');
   const lines = csv.replace(/^﻿/, '').trim().split('\r\n');
   ok(dl.suggestedFilename() === `comeback-${tk}.csv` && lines.length === 4, 'CSV: file name and one row per day', [dl.suggestedFilename(), lines.length]);
-  ok(lines[0].startsWith('Date,Score %,') && lines[0].includes('Cycling (km)') && lines[0].includes('No chips') && lines[0].endsWith('Weight (kg),Waist (cm),Note'), 'CSV header has habits, rules, weight, waist, note', lines[0]);
+  ok(lines[0].startsWith('Date,Score %,') && lines[0].includes('Cycling (km)') && lines[0].includes('No chips') && lines[0].endsWith('Weight (kg),Waist (cm),BMI,Note'), 'CSV header has habits, rules, weight, waist, BMI, note', lines[0]);
   ok(lines[1].startsWith('2026-09-01,') && csv.includes('"Daal, roti, ""quoted"", comma"') && csv.includes("'- starts with dash"), 'CSV escapes commas/quotes and guards formula-like notes');
 
   // wipe, then restore (Replace) through action sheets
@@ -171,7 +174,7 @@ console.log('Part A: web build');
   await pg.reload(); await ready(pg);
   await tab(pg, 'progress');
   ok(await pg.isVisible('#progEmpty') && /Log your first day/.test(await pg.textContent('#progEmpty')), 'empty state invites the first log (no blank screen)');
-  await tab(pg, 'setup');
+  await gear(pg);
   await pg.setInputFiles('#restoreFile', jsonPath);
   await pg.waitForSelector('.asheet');
   ok(/has 3 logged days/.test(await pg.textContent('.asheet .ah')), 'confirmation shows number of days in the file', await pg.textContent('.asheet .ah'));
@@ -180,11 +183,12 @@ console.log('Part A: web build');
   ok((await pg.$$('.asheet .ab')).length === 3 && await pg.$eval('.asheet .ab:has-text("Replace everything")', e => e.classList.contains('destructive')), 'second step: Merge / Replace everything (red) / Cancel');
   await actionChoose(pg, 'Replace everything');
   await waitMsg(pg);
-  ok(same(await stored(pg), before), 'after restore, stored data is identical to the backup (all days + settings)');
+  { const after = await stored(pg), diffs = []; const df = (x, y, p) => { if (typeof x !== 'object' || x === null || typeof y !== 'object' || y === null) { if (JSON.stringify(x) !== JSON.stringify(y)) diffs.push(p + ' ' + JSON.stringify(x) + ' vs ' + JSON.stringify(y)); return; } for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) df(x[k], y[k], p + '.' + k); }; df(before, after, ''); ok(same(after, before), 'after restore, stored data is identical to the backup (all days + settings)', diffs.slice(0, 5)); }
   await tab(pg, 'progress'); await pg.waitForTimeout(300);
   ok((await pg.textContent('#sDays')) !== '0', 'Progress shows the restored days');
   await tab(pg, 'setup');
-  ok((await pg.textContent('#setHabits')).includes('Cycling') && (await pg.textContent('#setRules')).includes('No chips') && (await pg.textContent('#setHabits .swipe:nth-child(1)')).includes('9,500'), 'targets, custom item and rule restored in Plan');
+  ok((await pg.textContent('#planSections')).includes('Cycling') && (await pg.textContent('#planSections')).includes('No chips') && (await pg.textContent('#planSections .swipe[data-id="steps"]')).includes('9,500'), 'habits, custom habits and edited target restored in Plan');
+  await gear(pg);
 
   // merge: newer updatedAt wins per day
   await pg.setInputFiles('#restoreFile', { name: 'older.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ version: 1, settings: before.settings, days: {
@@ -228,17 +232,17 @@ console.log('Sheets and gestures');
   await skipOnboarding(ctx);
   const pg = await newPage(ctx, errs);
   await pg.goto(base); await ready(pg);
-  await pg.click('#habitList .hcard:nth-child(3)'); await pg.waitForSelector('.sheet-wrap.in');
+  await pg.click(`${cardSel(3)} .hc-main`); await pg.waitForSelector('.sheet-wrap.in');
   ok(await pg.isVisible('.sheet .grabber') && (await pg.textContent('.sheet-head')).includes('Cancel') && (await pg.textContent('.sheet-head')).includes('Done'), 'sheet has a grabber, Cancel and Done');
   await pg.waitForTimeout(500); // let the slide-in finish
   const g = await (await pg.$('.sheet .grabber')).boundingBox();
   await pg.mouse.move(g.x + g.width / 2, g.y + 4); await pg.mouse.down(); await pg.mouse.move(g.x + g.width / 2, g.y + 260, { steps: 8 }); await pg.mouse.up();
   await sheetGone(pg);
   ok(true, 'swiping down on the grabber dismisses the sheet');
-  await pg.click('#habitList .hcard:nth-child(3)'); await pg.waitForSelector('.sheet-wrap.in');
+  await pg.click(`${cardSel(3)} .hc-main`); await pg.waitForSelector('.sheet-wrap.in');
   await pg.keyboard.press('Escape'); await sheetGone(pg);
   ok(true, 'Escape dismisses a sheet');
-  await pg.click('#habitList .hcard:nth-child(3)'); await pg.waitForSelector('.sheet-wrap.in');
+  await pg.click(`${cardSel(3)} .hc-main`); await pg.waitForSelector('.sheet-wrap.in');
   await pg.mouse.click(180, 60); await sheetGone(pg);
   ok(true, 'tapping the dimmed area dismisses a sheet');
   await settle(pg);
@@ -254,25 +258,48 @@ console.log('Onboarding');
   const ctx = await browser.newContext({ viewport: { width: 360, height: 800 } });
   const pg = await newPage(ctx, errs);
   await pg.goto(base); await pg.waitForSelector('.onb');
-  ok((await pg.$$('.onb-page')).length === 3 && await pg.isVisible('#onbSkip'), 'first launch shows a 3-page intro with Skip');
+  ok((await pg.$$('.onb-page')).length === 6 && await pg.isVisible('#onbSkip'), 'first launch shows welcome, starter plan, targets, reminder, height and BMI scale with Skip', (await pg.$$('.onb-page')).length);
   ok(/Get back to your best, one day at a time\./.test(await pg.textContent('.onb-page:nth-child(1)')), 'page 1 explains what the app does');
   await pg.click('#onbNext');
-  ok(/Set your targets/.test(await pg.textContent('.onb-page:nth-child(2)')), 'page 2: set your targets');
-  await pg.fill('.onb-page:nth-child(2) .row:nth-child(1) input', '9000');
+  ok(/Pick a starting plan/.test(await pg.textContent('.onb-page:nth-child(2)')) && (await pg.$$('.onb-page:nth-child(2) .planopt')).length === 4, 'page 2: four starter plans');
+  ok(await pg.$eval('#onbNext', b => b.disabled), 'Next waits until a plan is picked');
+  await pg.click('#plan-beginner'); await pg.click('#onbNext');
+  ok(/Set your targets/.test(await pg.textContent('.onb-page:nth-child(3)')), 'page 3: set your targets');
+  ok((await pg.$$('.onb-page:nth-child(3) .row')).length === 6, 'targets page lists the plan\'s six number targets', (await pg.$$('.onb-page:nth-child(3) .row')).length);
+  await pg.fill('.onb-page:nth-child(3) .row:nth-child(1) input', '9000');
   await pg.click('#onbNext');
-  ok(/Never miss a day/.test(await pg.textContent('.onb-page:nth-child(3)')) && await pg.isVisible('#onbRemind') && await pg.isVisible('#onbLater'), 'page 3: reminder with "Not now"');
-  await pg.click('#onbLater'); await pg.waitForFunction(() => !document.querySelector('.onb'));
+  ok(/Never miss a day/.test(await pg.textContent('.onb-page:nth-child(4)')) && await pg.isVisible('#onbRemOn'), 'page 4: reminder switch');
+  await pg.click('#onbRemOn'); await pg.click('#onbNext');
+  ok(/Your height/.test(await pg.textContent('.onb-page:nth-child(5)')), 'page 5: height');
+  await pg.fill('#onbHeight', '90'); await pg.click('#onbNext');
+  ok(/between 100 and 230/.test(await pg.textContent('#onbHeightErr')), 'an impossible height is refused');
+  await pg.fill('#onbHeight', '180'); await pg.click('#onbNext');
+  ok(/BMI scale/.test(await pg.textContent('.onb-page:nth-child(6)')) && /South, East or Southeast Asian/.test(await pg.textContent('.onb-page:nth-child(6)')), 'page 6: BMI scale with the Asian-background line, right after height');
+  ok(await pg.getAttribute('#scale-standard', 'aria-checked') === 'true', 'Standard is the default scale');
+  await pg.click('#scale-asian');
+  await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'));
   await settle(pg);
   const d = await stored(pg);
-  ok(d && d.settings.habits[0].target === 9000, 'targets edited in the intro are saved');
+  ok(d && d.settings.habits.map(h => h.id).join() === 'steps,pushups,squats,plank,water,sleep,weight,waist' && d.settings.habits.find(h => h.id === 'steps').target === 9000, 'the chosen plan and the edited target are saved (weight and waist stay available, hidden)', d.settings.habits.map(h => h.id));
+  ok(d.settings.body.heightCm === 180 && d.settings.body.scale === 'asian', 'height and BMI scale are saved in the settings', d.settings.body);
   ok(await pg.evaluate(() => localStorage.getItem('CapacitorStorage.comeback_onboarded') === '1'), 'intro is marked as seen');
   await pg.reload(); await ready(pg); await pg.waitForTimeout(400);
   ok(!(await pg.$('.onb')), 'intro does not come back');
-  await tab(pg, 'setup'); await pg.click('#replayIntro');
-  await pg.waitForSelector('.onb'); await pg.click('#onbSkip'); await pg.waitForFunction(() => !document.querySelector('.onb'));
-  ok(true, '"Show intro again" in Plan, and Skip closes it');
+  await gear(pg); await pg.click('#replayIntro');
+  await pg.waitForSelector('.onb'); await pg.click('#onbNext'); await pg.waitForFunction(() => !document.querySelector('.onb'));
+  ok(true, '"Show intro again" in Settings replays the welcome page only');
   ok(errs.length === 0, 'no JS errors (onboarding)', errs);
   await ctx.close();
+  // skipping the whole intro keeps the default plan and the Standard scale
+  const c2 = await browser.newContext({ viewport: { width: 360, height: 800 } });
+  const p2 = await newPage(c2, errs);
+  await p2.goto(base); await p2.waitForSelector('.onb'); await p2.click('#onbSkip');
+  await p2.waitForSelector('#onbHeight', { state: 'visible' });
+  await p2.click('#onbNext'); await p2.click('#onbStart'); await p2.waitForFunction(() => !document.querySelector('.onb'));
+  await settle(p2);
+  const d2 = await p2.evaluate(() => ({ n: settings.habits.length, body: settings.body }));
+  ok(d2.n === 14 && d2.body.heightCm === null && d2.body.scale === 'standard', 'skipping keeps the full default plan, no height, Standard scale', d2);
+  await c2.close();
 }
 
 /* ---------- Progress screen ---------- */
@@ -343,14 +370,14 @@ console.log('Positive reinforcement');
   };
   let { ctx, pg } = await mk(false);
   ok(/3-day streak/.test(await pg.textContent('#streakLine')), 'streak shown on Today', await pg.textContent('#streakLine'));
-  await setHabit(pg, 2, 2);
+  await setHabit(pg, 'b', 2);
   await pg.waitForTimeout(150);
   ok(await pg.$eval('#ring', e => e.classList.contains('done')) && /Strong day\. Your comeback is on track\./.test(await pg.textContent('#toastMsg')), 'completing every target and rule closes the ring and says so');
   ok(!!(await pg.$('.confetti')), 'a short confetti moment plays');
   ok((await pg.textContent('#ringCap')) === 'All done' && (await pg.textContent('#headScore')) === '100%', 'ring reads 100% / All done');
   await ctx.close();
   ({ ctx, pg } = await mk(true));
-  await setHabit(pg, 2, 2); await pg.waitForTimeout(150);
+  await setHabit(pg, 'b', 2); await pg.waitForTimeout(150);
   ok(!(await pg.$('.confetti')) && await pg.$eval('#ring', e => e.classList.contains('done')), 'reduced motion: no confetti, the completion still shows');
   await ctx.close();
   // streak milestone + goal hit wording
@@ -362,7 +389,7 @@ console.log('Positive reinforcement');
     return { version: 1, settings, days: { [daysAgo(1)]: day(daysAgo(1), { a: 10, b: 2 }, { r: true }), [daysAgo(2)]: day(daysAgo(2), { a: 10, b: 2 }, { r: true }) } };
   })());
   const p3 = await newPage(ctx3, errs); await p3.goto(base); await ready(p3);
-  await setHabit(p3, 1, 10); await toggleRule(p3, 1); await p3.waitForTimeout(150);
+  await setHabit(p3, 'a', 10); await toggleRule(p3, 'r'); await p3.waitForTimeout(150);
   ok(/3-day streak/.test(await p3.textContent('#toastMsg')), 'a streak milestone is celebrated ("3-day streak")', await p3.textContent('#toastMsg'));
   await ctx3.close();
   const ctx4 = await browser.newContext({ viewport: { width: 360, height: 800 } });
@@ -370,7 +397,7 @@ console.log('Positive reinforcement');
   const p4 = await newPage(ctx4, errs); await p4.goto(base); await ready(p4);
   await setHabit(p4, 2, 30); await p4.waitForTimeout(150);
   ok(/Brisk walk goal hit/.test(await p4.textContent('#toastMsg')), 'reaching a target says "<item> goal hit"', await p4.textContent('#toastMsg'));
-  ok(!/miss|fail|bad|lazy|shame/i.test(await p4.content().then(h => h.replace(/<script[\s\S]*?<\/script>/g, ''))), 'no guilt language anywhere in the page');
+  { const html4 = (await p4.content()).replace(/<script[\s\S]*?<\/script>/g, ''); ok(!/\bmiss(ed|ing)?\b|fail|bad|lazy|shame/i.test(html4), 'no guilt language anywhere in the page', (() => { const i = html4.search(/\bmiss(ed|ing)?\b|fail|bad|lazy|shame/i); return i < 0 ? '' : html4.slice(Math.max(0, i - 60), i + 60); })()); }
   ok(/Not logged|Start again|Log a day to start/.test(await p4.textContent('#streakLine')), 'neutral wording for no streak', await p4.textContent('#streakLine'));
   await ctx4.close();
   ok(errs.length === 0, 'no JS errors (celebrations)', errs);
@@ -386,7 +413,8 @@ console.log('Accessibility and theming');
   await ctx.addInitScript(d => { if (!localStorage.getItem('__d')) { localStorage.setItem('__d', '1'); localStorage.setItem('CapacitorStorage.comeback', JSON.stringify(d)); } }, data);
   const pg = await newPage(ctx, errs); await pg.goto(base); await ready(pg); await pg.waitForTimeout(500);
   const audit = async tabName => {
-    await tab(pg, tabName); await pg.waitForTimeout(500);
+    if (tabName === 'settings') await gear(pg); else await tab(pg, tabName);
+    await pg.waitForTimeout(500);
     return pg.evaluate(() => {
       const bad = [], small = [];
       const vis = e => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && !e.closest('[hidden]') && e.closest('.screen.on, .tabbar, .navbar'); };
@@ -395,34 +423,35 @@ console.log('Accessibility and theming');
         const lab = e.getAttribute('aria-label') || (e.labels && e.labels[0] && e.labels[0].textContent.trim()) || e.textContent.trim() || e.getAttribute('placeholder');
         if (!lab) bad.push(e.outerHTML.slice(0, 90));
       });
-      document.querySelectorAll('.tab,.row,.hcard,.iconbtn,.txtbtn,.btn,.seg button,.hc,.key,.step,.daypill').forEach(e => {
+      document.querySelectorAll('.tab,.row,.hcard,.hc-main,.cbtn,.drow,.tsec-title-btn,.iconbtn,.txtbtn,.btn,.seg button,.hc,.key,.step,.daypill').forEach(e => {
         if (!vis(e)) return; const r = e.getBoundingClientRect();
         if (Math.min(r.width, r.height) < 43.5) small.push(e.className + ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
       });
       return { bad, small };
     });
   };
-  for (const t of ['today', 'progress', 'setup']) {
+  for (const t of ['today', 'progress', 'setup', 'settings']) {
     const r = await audit(t);
     ok(r.bad.length === 0, `every control on ${t} has an accessible name`, r.bad);
     ok(r.small.length === 0, `every tap target on ${t} is at least 44x44`, r.small);
   }
   // sheets too
-  await tab(pg, 'today'); await pg.click('#habitList .hcard:not([data-id="steps"])'); await pg.waitForSelector('.keypad');
+  await tab(pg, 'today'); await pg.click('#sections .hcard:not([data-id="steps"]) .hc-main'); await pg.waitForSelector('.keypad');
   const sh = await pg.evaluate(() => [...document.querySelectorAll('.sheet button')].map(b => { const r = b.getBoundingClientRect(); return { n: b.getAttribute('aria-label') || b.textContent.trim(), w: r.width, h: r.height }; }).filter(x => !x.n || Math.min(x.w, x.h) < 43.5));
   ok(sh.length === 0, 'number sheet: named controls, 44px+ targets', sh);
   await pg.keyboard.press('Escape'); await sheetGone(pg);
   ok(await pg.$eval('#ring', e => e.getAttribute('role') === 'img' && /score \d+ percent/.test(e.getAttribute('aria-label'))), 'ring has a spoken summary', await pg.getAttribute('#ring', 'aria-label'));
-  ok(await pg.$eval('#habitList .hcard:not([data-id="steps"])', e => /of .* \w+/.test(e.getAttribute('aria-label'))) && await pg.$eval('#habitList .hcard[data-id="steps"]', e => /Steps/.test(e.getAttribute('aria-label'))), 'habit cards describe value and target (Steps card is described too)');
-  ok(await pg.$eval('#ruleList input.switch', e => e.getAttribute('role') === 'switch'), 'rules are real switches');
+  ok(await pg.$eval('#sections .hcard:not([data-id="steps"]) .hc-main', e => /of .* \w+/.test(e.getAttribute('aria-label'))) && await pg.$eval('#sections .hcard[data-id="steps"] .hc-main', e => /Steps/.test(e.getAttribute('aria-label'))), 'habit cards describe value and target (Steps card is described too)');
+  ok(await pg.$eval('#sections .yrow input.switch', e => e.getAttribute('role') === 'switch'), 'rules are real switches');
   // status is never colour alone: heat cells and pills carry text
   await tab(pg, 'progress');
   ok(await pg.$$eval('#heat .hc', cs => cs.every(c => /percent|not logged/.test(c.getAttribute('aria-label')))) && await pg.$$eval('#logList .pill', ps => ps.every(p => /%$/.test(p.textContent))), 'calendar cells and score pills state their value in text, not colour alone');
   ok(await pg.$eval('.legend', l => /80% or more/.test(l.textContent) && /Under 40%/.test(l.textContent)), 'legend names each status');
   // large text (130%)
   await pg.addStyleTag({ content: 'html{font-size:130%}' }); await pg.waitForTimeout(500);
-  for (const t of ['today', 'progress', 'setup']) {
-    await tab(pg, t); await pg.waitForTimeout(500);
+  for (const t of ['today', 'progress', 'setup', 'settings']) {
+    if (t === 'settings') await gear(pg); else await tab(pg, t);
+    await pg.waitForTimeout(500);
     const o = await pg.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     ok(o <= 0, `no horizontal overflow at 130% text on ${t}`, o);
   }
@@ -457,7 +486,7 @@ console.log('Part B: mocked native bridge');
     }
   });
   await pg.goto(base); await ready(pg);
-  await tab(pg, 'setup');
+  await gear(pg);
   ok((await pg.textContent('#storeNote')).includes('Documents/Comeback'), 'native mode note mentions Documents/Comeback');
   ok((await pg.textContent('#lastBackup')) === 'Last backup: never', 'Last backup shows "never" at first');
 
@@ -469,7 +498,7 @@ console.log('Part B: mocked native bridge');
   await pg.waitForFunction(() => !document.getElementById('lastBackup').textContent.includes('never'));
   let m = await mock();
   const pref = JSON.parse(m.prefs.comeback);
-  ok(pref.version === 1 && pref.days[tk], 'Preferences holds the data object (version 1) after a change');
+  ok(pref.version === 2 && pref.settings.v === 2 && pref.days[tk], 'Preferences holds the data object (version 2) after a change');
   const auto = m.fs['DOCUMENTS/Comeback/comeback-autobackup.json'];
   ok(auto && same(JSON.parse(auto), pref), 'Documents/Comeback/comeback-autobackup.json written with full data');
   ok(m.fs[`DOCUMENTS/Comeback/comeback-autobackup-${tk}.json`] === auto, "today's dated copy written");
@@ -485,7 +514,7 @@ console.log('Part B: mocked native bridge');
   // failures are visible
   await pg.evaluate(() => window.__mock.set('failWrite', true));
   await setNote(pg, 'second save'); await settle(pg);
-  await tab(pg, 'setup'); await waitMsg(pg);
+  await gear(pg); await waitMsg(pg);
   const e1 = await bkMsg(pg);
   ok(e1.bad && /Automatic backup failed: EACCES/.test(e1.text), 'failed auto backup shows an inline error', e1.text);
   await pg.evaluate(() => { document.getElementById('bkMsg').textContent = ''; });
@@ -525,7 +554,7 @@ console.log('Part B: mocked native bridge');
   ok(same(JSON.parse(m.fs['DOCUMENTS/Comeback/comeback-autobackup.json']), JSON.parse(m.prefs.comeback)), 'auto backup refreshed after restore');
 
   // reminder: denied, then granted
-  await tab(pg, 'setup');
+  await gear(pg);
   await pg.evaluate(() => window.__mock.set('requestResult', 'denied'));
   await pg.click('#remOn'); await pg.waitForFunction(() => document.getElementById('remMsg').textContent.length > 0);
   const r1 = await pg.$eval('#remMsg', e => ({ t: e.textContent, bad: e.classList.contains('bad') }));
@@ -540,21 +569,23 @@ console.log('Part B: mocked native bridge');
   sch = (await calls('schedule')).pop().a.notifications[0];
   ok(sch.schedule.on.hour === 7 && sch.schedule.on.minute === 30, 'changing the time reschedules', sch.schedule);
   const nBefore = (await calls('schedule')).length;
-  await pg.reload(); await ready(pg); await tab(pg, 'setup'); await pg.waitForTimeout(400);
+  await pg.reload(); await ready(pg); await gear(pg); await pg.waitForTimeout(400);
   ok((await pg.isChecked('#remOn')) && (await pg.inputValue('#remTime')) === '07:30' && (await calls('schedule')).length === nBefore + 1, 'reminder settings survive a restart and are re-armed');
   await pg.uncheck('#remOn'); await pg.waitForFunction(() => /off/i.test(document.getElementById('remMsg').textContent));
   ok(!JSON.parse((await mock()).prefs.comeback_meta).reminder.enabled, 'turning the reminder off cancels it');
 
   // back button: sheet first, then Today, then exit
-  await tab(pg, 'progress');
+  await tab(pg, 'progress'); await gear(pg);
+  await pg.evaluate(() => window.__mock.fire('backButton'));
+  ok((await pg.getAttribute('.tab[data-tab="progress"]', 'aria-current')) === 'page' && (await mock()).exit === 0, 'back from Settings returns to the screen it was opened from');
   await pg.evaluate(() => window.__mock.fire('backButton'));
   ok((await pg.getAttribute('.tab[data-tab="today"]', 'aria-current')) === 'page' && (await mock()).exit === 0, 'back from another tab goes to Today first');
-  await pg.click('#habitList .hcard:nth-child(1)'); await pg.waitForSelector('.sheet-wrap.in');
+  await pg.click(`${cardSel(1)} .hc-main`); await pg.waitForSelector('.sheet-wrap.in');
   await pg.evaluate(() => window.__mock.fire('backButton')); await sheetGone(pg);
   ok((await mock()).exit === 0, 'back closes an open sheet first');
   await pg.evaluate(() => window.__mock.fire('backButton'));
   ok((await mock()).exit === 1, 'back on Today exits the app');
-  await tab(pg, 'setup'); await pg.click('#addRuleRow'); await pg.waitForSelector('.sheet-wrap.in');
+  await tab(pg, 'setup'); await pg.click('#addHabitRow'); await pg.waitForSelector('.sheet-wrap.in');
   await pg.evaluate(() => window.__mock.fire('localNotificationActionPerformed', { actionId: 'tap' }));
   await sheetGone(pg);
   ok((await pg.getAttribute('.tab[data-tab="today"]', 'aria-current')) === 'page', 'tapping the notification closes sheets and opens Today');

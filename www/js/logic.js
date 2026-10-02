@@ -1,23 +1,8 @@
 /* Data, storage, backup, reminder and cloud-sync logic. No layout code lives here: the UI hooks it calls
    (setMsg, askModal, refreshAll, renderAccount, ...) are defined in ui.js. */
-const DEFAULT_SETTINGS={
-  habits:[
-    {id:'steps',name:'Steps',unit:'steps',target:8000},
-    {id:'walk',name:'Brisk walk',unit:'min',target:30},
-    {id:'pushups',name:'Pushups',unit:'reps',target:30},
-    {id:'pullups',name:'Pull-ups',unit:'reps',target:5},
-    {id:'squats',name:'Squats',unit:'reps',target:30},
-    {id:'plank',name:'Plank',unit:'sec',target:60},
-    {id:'water',name:'Water',unit:'litres',target:2.5},
-    {id:'sleep',name:'Sleep',unit:'hours',target:7}
-  ],
-  rules:[
-    {id:'nofried',name:'No fried food (zinger, fries, samosa)'},
-    {id:'nosugar',name:'No cold drinks, juice or sugar in tea'},
-    {id:'nomaida',name:'No maida (buns, naan, bakery)'},
-    {id:'nolate',name:'Nothing eaten after 10 pm'}
-  ]
-};
+/* The plan (habits with a type, section and schedule; sections; body settings; units) lives in core.js. The default is what
+   every earlier version shipped with, moved into the new structure. */
+const DEFAULT_SETTINGS=Core.defaultSettings();
 let settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 let days={};
 let store=null;
@@ -33,13 +18,13 @@ const nice=s=>parse(s).toLocaleDateString(undefined,{weekday:'short',day:'numeri
 const r1=n=>Math.round(n*10)/10;
 const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30)+'-'+Date.now().toString(36);
 
+/* Score for one day (0-100). Only habits that were due that day count; a day with nothing due scores 0 here (see Core.dayScore for null). */
 function scoreOf(d){
   if(!d)return null;
-  const parts=[];
-  settings.habits.forEach(h=>{const v=Number((d.vals||{})[h.id]||0);parts.push(h.target>0?Math.min(v/h.target,1):0)});
-  settings.rules.forEach(r=>parts.push((d.rules||{})[r.id]?1:0));
-  if(!parts.length)return 0;
-  return Math.round(parts.reduce((a,b)=>a+b,0)/parts.length*100);
+  const k=d.date||current;
+  const all=days[k]===d?days:Object.assign({},days,{[k]:d});
+  const sc=Core.dayScore(settings,all,k);
+  return sc==null?0:sc;
 }
 /* ---------- platform ---------- */
 const Native=window.ComebackNative||{isNative:false};
@@ -56,29 +41,20 @@ const errText=e=>String((e&&(e.message||e.errorMessage))||e||'Unknown error');
 const clone=o=>JSON.parse(JSON.stringify(o));
 
 /* ---------- data shape ----------
-   { version:1, settings:{habits:[...],rules:[...]}, days:{ "YYYY-MM-DD":{vals,rules,weight,waist,note,date,updatedAt} } } */
+   { version:2, settings:{v:2,habits:[{id,name,icon,type,unit,target,section,schedule}],sections,body,units,prefs},
+     days:{ "YYYY-MM-DD":{vals,rules,weight,waist,note,date,updatedAt} } }
+   Count, duration and steps habits keep their number in a day's "vals"; Yes/No habits keep a tick in "rules" (so every day
+   record from an earlier version stays valid); weight and waist are the day's "weight" and "waist". Version 1 data (backups,
+   the phone's saved copy, the cloud) is migrated into this structure whenever it is read. */
 const DATA_KEY='comeback', META_KEY='comeback_meta', MIGRATED_KEY='comeback_migrated';
-const buildData=()=>({version:1,settings,days});
+const buildData=()=>({version:2,settings,days});
 const ID_RE=/^[A-Za-z0-9_-]{1,64}$/, DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
 const num=v=>typeof v==='number'&&isFinite(v);
 
 function validDateKey(k){if(!DATE_RE.test(k))return false;const d=parse(k);return ymd(d)===k}
 
-function normalizeSettings(s){
-  if(!s||typeof s!=='object'||!Array.isArray(s.habits)||!Array.isArray(s.rules))throw new Error('The backup is missing its settings (habits and rules).');
-  const seen=new Set();
-  const habits=s.habits.map((h,i)=>{
-    if(!h||typeof h.id!=='string'||!ID_RE.test(h.id)||typeof h.name!=='string'||!h.name.trim())throw new Error('Habit #'+(i+1)+' in the backup is not valid.');
-    if(!num(h.target)||h.target<=0)throw new Error('Habit "'+h.name.slice(0,40)+'" has an invalid target.');
-    return{id:h.id,name:h.name,unit:typeof h.unit==='string'&&h.unit?h.unit:'times',target:h.target};
-  }).filter(h=>!seen.has(h.id)&&seen.add(h.id));
-  const seenR=new Set();
-  const rules=s.rules.map((r,i)=>{
-    if(!r||typeof r.id!=='string'||!ID_RE.test(r.id)||typeof r.name!=='string'||!r.name.trim())throw new Error('Rule #'+(i+1)+' in the backup is not valid.');
-    return{id:r.id,name:r.name};
-  }).filter(r=>!seenR.has(r.id)&&seenR.add(r.id));
-  return{habits,rules};
-}
+/* Settings in either structure -> the current one (the cloud copy may still be the old one). */
+function normalizeSettings(s){return Core.migrateSettings(s).settings}
 /* Optional per-day step-tracking details: { source:'auto'|'manual', counted, distance_km, filtered, hourly:[24] } */
 function normalizeStepsMeta(m,k){
   if(m==null)return undefined;
@@ -108,12 +84,13 @@ function normalizeDay(k,d){
 /* Throws an Error with a readable message when the object is not a Comeback backup. */
 function normalizeData(obj){
   if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error("This isn't a Comeback backup (expected a JSON object).");
-  if(obj.version!=null&&obj.version!==1)throw new Error(typeof obj.version==='number'&&obj.version>1?'This backup was made by a newer version of Comeback (version '+obj.version+'). Update the app first.':'Unknown backup version: '+esc(String(obj.version)).slice(0,20)+'.');
-  const settings=normalizeSettings(obj.settings);
+  if(obj.version!=null&&obj.version!==1&&obj.version!==2)throw new Error(typeof obj.version==='number'&&obj.version>2?'This backup was made by a newer version of Comeback (version '+obj.version+'). Update the app first.':'Unknown backup version: '+esc(String(obj.version)).slice(0,20)+'.');
+  const mig=Core.migrateSettings(obj.settings);
   if(!obj.days||typeof obj.days!=='object'||Array.isArray(obj.days))throw new Error("The backup is missing its 'days' section.");
   const outDays={};
   Object.keys(obj.days).forEach(k=>{outDays[k]=normalizeDay(k,obj.days[k])});
-  return{version:1,settings,days:outDays};
+  Core.applyIdMap(outDays,mig.idMap);
+  return{version:2,settings:mig.settings,days:outDays};
 }
 
 function mergeData(local,inc){
@@ -124,15 +101,24 @@ function mergeData(local,inc){
     else if((d.updatedAt||0)>(cur.updatedAt||0)){outDays[k]=d;updated++}
     else kept++;
   });
-  const hs=local.settings.habits.slice(),rs=local.settings.rules.slice();
-  inc.settings.habits.forEach(h=>{if(!hs.some(x=>x.id===h.id))hs.push(h)});
-  inc.settings.rules.forEach(r=>{if(!rs.some(x=>x.id===r.id))rs.push(r)});
-  return{data:{version:1,settings:{habits:hs,rules:rs},days:outDays},added,updated,kept};
+  // habits and sections the backup has and this phone lacks are added; what is here (order, targets, schedules, units) wins
+  const ls=local.settings,merged=clone(ls);
+  inc.settings.habits.forEach(h=>{if(!merged.habits.some(x=>x.id===h.id)){merged.habits.push(clone(h));Core.ensureSection(merged,h.section,((inc.settings.sections||[]).find(x=>x.id===h.section)||{}).name)}});
+  (inc.settings.sections||[]).forEach(x=>{if(!merged.sections.some(y=>y.id===x.id))merged.sections.push(clone(x))});
+  if(merged.body.heightCm==null&&inc.settings.body&&inc.settings.body.heightCm!=null)merged.body.heightCm=inc.settings.body.heightCm;
+  return{data:{version:2,settings:merged,days:outDays},added,updated,kept};
 }
 
 /* ---------- storage (Capacitor Preferences) ---------- */
-let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'},steps:{heightCm:180,strictness:'balanced',sensitivity:'normal',useLocation:false,enabledAt:null,setupShown:false},nudges:[]};
+let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'},steps:{heightCm:180,strictness:'balanced',sensitivity:'normal',useLocation:false,enabledAt:null,setupShown:false},nudges:[],suggestSnooze:{}};
 let loadProblem='';
+/* Height used to live in this phone's step settings. It is now part of the synced settings (and is the BMI height). */
+function adoptDeviceHeight(){
+  if(settings.body.heightCm!=null||meta.steps.enabledAt==null)return false;
+  const hh=meta.steps.heightCm;
+  if(!(num(hh)&&hh>=100&&hh<=230))return false;
+  settings.body.heightCm=hh;return true;
+}
 const prefGet=async k=>(await Prefs.get({key:k})).value;
 const prefSet=(k,v)=>Prefs.set({key:k,value:v});
 
@@ -181,12 +167,13 @@ store={
       }
       if(!loadProblem)await prefSet(MIGRATED_KEY,'1');
     }
-    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupShown:!!st.setupShown}}if(Array.isArray(mm.nudges))meta.nudges=mm.nudges.filter(t=>typeof t==='string').slice(-20);if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
+    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupShown:!!st.setupShown}}if(Array.isArray(mm.nudges))meta.nudges=mm.nudges.filter(t=>typeof t==='string').slice(-20);if(mm.suggestSnooze&&typeof mm.suggestSnooze==='object'&&!Array.isArray(mm.suggestSnooze)){const o={};Object.keys(mm.suggestSnooze).forEach(k=>{if(ID_RE.test(k)&&DATE_RE.test(String(mm.suggestSnooze[k])))o[k]=mm.suggestSnooze[k]});meta.suggestSnooze=o}if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
     try{const sv=await prefGet(SYNC_KEY);if(sv){const ss=JSON.parse(sv);sync.signedIn=!!ss.signedIn;sync.userId=typeof ss.userId==='string'?ss.userId:null;sync.email=typeof ss.email==='string'?ss.email:'';sync.lastSyncAt=num(ss.lastSyncAt)?ss.lastSyncAt:null;sync.settingsUpdatedAt=num(ss.settingsUpdatedAt)?ss.settingsUpdatedAt:0;sync.pendingDays=Array.isArray(ss.pendingDays)?ss.pendingDays.filter(k=>typeof k==='string'):[];sync.pendingSettings=!!ss.pendingSettings}}catch(e){}
     if(raw==null)return{migrated};
     try{
-      const norm=normalizeData(JSON.parse(raw));
-      return{data:norm,migrated};
+      const parsed=JSON.parse(raw);
+      const norm=normalizeData(parsed);
+      return{data:norm,migrated,upgraded:!(parsed&&parsed.version===2&&parsed.settings&&parsed.settings.v===2)};
     }catch(e){
       // keep the unreadable copy instead of overwriting it with an empty one
       try{await prefSet('comeback_unreadable_'+Date.now(),raw)}catch(e2){}
@@ -263,13 +250,13 @@ function csvCell(v){
 /* 'counted' = read by the phone. 'manual' only ever appears on days entered by hand before steps became phone-only; those rows keep it. */
 function stepsSourceOf(d){return d.steps_meta?(d.steps_meta.source==='auto'?'counted':'manual'):(d.vals&&d.vals.steps!=null?'manual':'')}
 function buildCsv(){
-  const head=['Date','Score %'].concat(settings.habits.map(h=>h.name+' ('+h.unit+')'),settings.rules.map(r=>r.name),['Steps source','Distance (km)','Filtered steps','Weight (kg)','Waist (cm)','Note']);
+  const cols=settings.habits.filter(h=>h.type!=='measure');
+  const head=['Date','Score %'].concat(cols.map(h=>h.type==='yesno'?h.name:h.name+' ('+h.unit+')'),['Steps source','Distance (km)','Filtered steps','Weight (kg)','Waist (cm)','BMI','Note']);
   const rows=Object.keys(days).sort().map(k=>{
-    const d=days[k];
+    const d=days[k],b=Core.bmi(d.weight,settings.body.heightCm);
     return [k,scoreOf(d)].concat(
-      settings.habits.map(h=>d.vals&&d.vals[h.id]!=null?d.vals[h.id]:''),
-      settings.rules.map(r=>d.rules&&d.rules[r.id]?'yes':'no'),
-      [stepsSourceOf(d),d.steps_meta?d.steps_meta.distance_km:'',d.steps_meta?d.steps_meta.filtered:'',d.weight==null?'':d.weight,d.waist==null?'':d.waist,d.note||'']);
+      cols.map(h=>h.type==='yesno'?(d.rules&&d.rules[h.id]?'yes':'no'):(d.vals&&d.vals[h.id]!=null?d.vals[h.id]:'')),
+      [stepsSourceOf(d),d.steps_meta?d.steps_meta.distance_km:'',d.steps_meta?d.steps_meta.filtered:'',d.weight==null?'':d.weight,d.waist==null?'':d.waist,b==null?'':Core.bmiRound(b),d.note||'']);
   });
   return '﻿'+[head].concat(rows).map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n';
 }
@@ -297,7 +284,7 @@ async function restoreFromFile(file){
     inc=normalizeData(obj);
   }catch(e){setMsg('bkMsg',"Couldn't restore: "+errText(e),true);return}
   const n=Object.keys(inc.days).length;
-  const body=(file.name||'This file')+' has '+n+' logged '+(n===1?'day':'days')+(n?' ('+range(Object.keys(inc.days))+')':'')+', '+inc.settings.habits.length+(inc.settings.habits.length===1?' item':' items')+' and '+inc.settings.rules.length+(inc.settings.rules.length===1?' rule':' rules')+'. This phone has '+Object.keys(days).length+' logged days.';
+  const body=(file.name||'This file')+' has '+n+' logged '+(n===1?'day':'days')+(n?' ('+range(Object.keys(inc.days))+')':'')+', '+inc.settings.habits.filter(h=>h.type!=='measure').length+' habits and rules. This phone has '+Object.keys(days).length+' logged days.';
   if(await askModal('Restore this backup?',body,[{label:'Continue',value:'go'},{label:'Cancel',value:'cancel'}])!=='go')return;
   const mode=await askModal('How should it be restored?','Merge keeps what is on this phone and adds the backup. If a day is in both, the newer save wins. Replace everything deletes what is on this phone and uses only the backup.'+(signedIn()?' The restored data is also sent to your cloud copy; days that exist only in the cloud will come back on the next sync.':''),[{label:'Merge',value:'merge'},{label:'Replace everything',value:'replace',cls:'danger'},{label:'Cancel',value:'cancel'}]);
   if(mode!=='merge'&&mode!=='replace')return;
@@ -440,7 +427,7 @@ async function pullAndMerge(){
   if(!sync.settingsUpdatedAt&&!isDefaultSettings())sync.settingsUpdatedAt=Date.now();
   const cts=srow?Date.parse(srow.updated_at):null;
   if(srow&&cts>sync.settingsUpdatedAt){
-    try{settings=normalizeSettings(srow.data);sync.settingsUpdatedAt=cts;sync.pendingSettings=false;changed=true}catch(e){skipped++}
+    try{settings=normalizeSettings(srow.data);sync.settingsUpdatedAt=cts;sync.pendingSettings=false;changed=true;if(adoptDeviceHeight())sync.pendingSettings=true}catch(e){skipped++}
   }else if(!srow||sync.settingsUpdatedAt>cts)sync.pendingSettings=true;
   else sync.pendingSettings=false;
   // everything the cloud lacks or has an older copy of still has to go up

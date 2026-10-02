@@ -5,10 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const NAMES = ['footprints', 'timer', 'dumbbell', 'droplets', 'moon', 'bell', 'cloud', 'cloud-off', 'user', 'log-out', 'download', 'upload', 'table',
-  'chevron-right', 'chevron-left', 'chevron-down', 'plus', 'minus', 'x', 'check', 'calendar', 'scale', 'ruler', 'pencil', 'trash-2',
-  'grip-vertical', 'target', 'trophy', 'flame', 'sun', 'trending-up', 'list-checks', 'shield-check', 'info', 'refresh-cw', 'wifi-off',
-  'sparkles', 'history', 'smartphone', 'car', 'triangle-alert', 'battery-low', 'map-pin', 'circle-check', 'delete', 'file-text', 'notebook-pen', 'clock', 'activity', 'lock', 'mail', 'circle-plus', 'zap', 'list'];
+const NAMES = ['footprints', 'timer', 'dumbbell', 'droplets', 'moon', 'bell', 'cloud', 'cloud-off', 'user', 'log-out', 'download', 'upload', 'table', 'chevron-right', 'chevron-left', 'chevron-down', 'plus', 'minus', 'x', 'check', 'calendar', 'scale', 'ruler', 'pencil', 'trash-2', 'grip-vertical', 'target', 'trophy', 'flame', 'sun', 'trending-up', 'list-checks', 'shield-check', 'info', 'refresh-cw', 'wifi-off', 'sparkles', 'history', 'smartphone', 'car', 'triangle-alert', 'battery-low', 'map-pin', 'circle-check', 'delete', 'file-text', 'notebook-pen', 'clock', 'activity', 'lock', 'mail', 'circle-plus', 'zap', 'list', 'bike', 'person-standing', 'apple', 'carrot', 'pill', 'book-open', 'brain', 'utensils', 'candy-off', 'beef', 'salad', 'sandwich', 'coffee', 'cup-soda', 'heart', 'sunrise', 'armchair', 'accessibility', 'flower-2', 'mountain', 'waves', 'cookie', 'leaf', 'phone-off', 'bed-double', 'stretch-horizontal', 'glass-water', 'ban', 'lightbulb', 'settings', 'eye-off', 'eye', 'search', 'chevron-up', 'sliders-horizontal', 'calendar-days', 'repeat', 'arrow-left', 'layers', 'calculator', 'gauge', 'heart-pulse', 'trending-down', 'square-pen', 'folder-plus', 'list-plus'];
 const out = {};
 for (const n of NAMES) {
   const svg = fs.readFileSync(path.join(root, 'node_modules/lucide-static/icons', n + '.svg'), 'utf8');

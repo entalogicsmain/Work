@@ -1,7 +1,7 @@
 // First-launch permission flow: one screen, one button, the system dialogs in order, brand help, height, then counting starts.
 // Covers everything granted, everything denied, partial answers, every brand, the web build, and "Show intro again".
 // Run: npm run test:permissions
-import { serve, launch, counter, newPage, tab, ready, setHabit, MOCK, todayKey } from './helpers.mjs';
+import { serve, launch, counter, newPage, tab, gear, ready, setHabit, MOCK, todayKey } from './helpers.mjs';
 
 const { srv, base } = serve();
 const T = counter(); const ok = T.ok;
@@ -21,15 +21,21 @@ async function fresh(over = {}, top = {}) {
 }
 const mock = pg => pg.evaluate(() => window.__mock.st());
 const names = async pg => (await mock(pg)).calls.map(c => c.n);
-// through the welcome pages to the permission screen
+// welcome -> starter plan -> targets -> reminder
+async function toReminder(pg) {
+  await pg.click('#onbNext'); await pg.click('#plan-beginner'); await pg.click('#onbNext'); await pg.click('#onbNext');
+}
+// through the welcome, plan, targets and reminder pages to the permission screen
 async function toPermissions(pg) {
-  await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.click('#onbNext');
+  await toReminder(pg); await pg.click('#onbNext');
   await pg.waitForSelector('#onbAllow');
 }
 const pageText = pg => pg.evaluate(() => { const t = document.querySelector('.onb-track'); const pages = [...t.children]; const i = Math.round(-parseFloat(t.style.transform.replace(/[^\d.-]/g, '') || 0) / (100 / pages.length)); return pages[Math.abs(i)] ? pages[Math.abs(i)].textContent : ''; });
 const finishFlow = async pg => {
-  await pg.waitForSelector('#onbBrandNext, #onbStart', { timeout: 8000 });
-  if (await pg.$('#onbBrandNext')) { await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbStart'); }
+  await pg.waitForSelector('#onbBrandNext, #onbNext', { timeout: 8000 });
+  if (await pg.$('#onbBrandNext')) { await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbNext'); }
+  await pg.click('#onbNext');           // height (left empty)
+  await pg.waitForSelector('#onbStart'); // BMI scale
   await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'), null, { timeout: 8000 });
   await pg.waitForTimeout(500);
 };
@@ -40,7 +46,7 @@ console.log('All allowed');
   const { ctx, pg, errs } = await fresh();
   ok(/Get back to your best, one day at a time\./.test(await pageText(pg)), 'the welcome screens come first');
   ok(!(await names(pg)).some(n => /req/.test(n)), 'nothing is asked for on the welcome screens');
-  await pg.click('#onbNext'); await pg.click('#onbNext');
+  await toReminder(pg);
   ok(/Daily reminder/.test(await pageText(pg)) && await pg.isChecked('#onbRemOn'), 'the reminder page has a switch (on by default) and a time');
   await pg.fill('#onbTime', '20:15'); await pg.click('#onbNext'); await pg.waitForSelector('#onbAllow');
   const t = await pageText(pg);
@@ -51,7 +57,7 @@ console.log('All allowed');
   ok(!/location/i.test(t), 'location is not mentioned or asked for here');
   ok((await pg.$$('#onbFoot .btn')).length === 1 && /Allow and continue/.test(await pg.textContent('#onbFoot')), 'it has a single "Allow and continue" button');
   await pg.click('#onbAllow');
-  await pg.waitForSelector('#onbBrandNext, #onbStart', { timeout: 8000 });
+  await pg.waitForSelector('#onbBrandNext, #onbNext', { timeout: 8000 });
   const n = await names(pg);
   const iAct = n.indexOf('reqActivity'), iNote = n.indexOf('requestPermissions'), iBat = n.indexOf('reqBattery');
   ok(iAct >= 0 && iNote > iAct && iBat > iNote, 'the system dialogs come one after another: activity, then notifications, then battery', n.filter(x => /req/.test(x)));
@@ -61,18 +67,23 @@ console.log('All allowed');
   await pg.click('#onbOpenBrand'); await pg.waitForTimeout(250);
   ok((await mock(pg)).calls.some(c => c.n === 'openSettings' && c.a.target === 'autostart'), 'with a button that opens the right settings page');
   ok(/Continue/.test(await pg.textContent('#onbBrandNext')), 'and the skip button becomes "Continue" afterwards');
-  await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbStart');
-  ok(/Your height/.test(await pageText(pg)) && (await pg.inputValue('#onbHeight')) === '180', 'then the height, defaulting to 180 cm');
-  await pg.fill('#onbHeight', '90'); await pg.click('#onbStart');
+  await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbNext');
+  ok(/Your height/.test(await pageText(pg)) && (await pg.inputValue('#onbHeight')) === '', 'then the height (optional, empty to begin with)');
+  await pg.fill('#onbHeight', '90'); await pg.click('#onbNext');
   ok(/between 100 and 230/.test(await pg.textContent('#onbHeightErr')) && !!(await pg.$('.onb')), 'a bad height is refused');
-  await pg.fill('#onbHeight', '172'); await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'));
+  await pg.fill('#onbHeight', '172'); await pg.click('#onbNext'); await pg.waitForSelector('#onbStart');
+  ok(/BMI scale/.test(await pageText(pg)), 'then the BMI scale, right after the height');
+  await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'));
   const cfg = (await mock(pg)).calls.filter(c => c.n === 'stepsConfigure').pop();
   ok(cfg && cfg.a.enabled === true && cfg.a.heightCm === 172, 'the step service starts right away with the chosen height', cfg && cfg.a);
   const m = await mock(pg);
   ok(m.calls.some(c => c.n === 'schedule' && (c.a.notifications || [c.a]).some(x => x.schedule && x.schedule.on && x.schedule.on.hour === 20 && x.schedule.on.minute === 15)), 'the reminder is scheduled at the time picked earlier');
   ok(m.prefs.comeback_onboarded === '1', 'onboarding is marked done');
-  await tab(pg, 'setup');
+  await gear(pg);
+  ok(!(await pg.isVisible('#stLocOn')), 'the location setting is tucked away under Advanced');
+  await pg.click('#advToggle');
   ok(!(await pg.isChecked('#stLocOn')), 'the location speed check is off by default');
+  ok((await pg.textContent('#stHeight')).includes('172'), 'the height is kept in Settings > Body');
   ok(errs.length === 0, 'no JS errors (all allowed)', errs);
   await ctx.close();
 }
@@ -82,11 +93,11 @@ console.log('Brands');
 for (const [brand, label, tip] of [['xiaomi', 'Xiaomi', /Autostart/], ['oppo', 'Oppo', /auto-launch/], ['vivo', 'Vivo', /Background power/], ['samsung', 'Samsung', /Sleeping apps/], ['transsion', 'Infinix', /Autostart/], ['other', null, null]]) {
   const { ctx, pg } = await fresh({ brand });
   await toPermissions(pg); await pg.click('#onbAllow');
-  await pg.waitForSelector('#onbBrandNext, #onbStart', { timeout: 8000 });
+  await pg.waitForSelector('#onbBrandNext, #onbNext', { timeout: 8000 });
   if (label) {
     ok(!!(await pg.$('#onbBrandNext')) && new RegExp('Keep counting on ' + label).test(await pageText(pg)) && tip.test(await pageText(pg)), `${brand}: brand steps screen for ${label}`);
     ok(await pg.isVisible('#onbOpenBrand') && /Skip for now/.test(await pg.textContent('#onbBrandNext')), `${brand}: can open its settings or skip`);
-  } else ok(!(await pg.$('#onbBrandNext')) && !!(await pg.$('#onbStart')), 'other brands go straight to the height');
+  } else ok(!(await pg.$('#onbBrandNext')) && /Your height/.test(await pageText(pg)), 'other brands go straight to the height');
   await ctx.close();
 }
 
@@ -97,9 +108,9 @@ console.log('All denied');
   await toPermissions(pg); await pg.click('#onbAllow');
   await finishFlow(pg);
   ok(!(await pg.$('.onb')) && (await mock(pg)).prefs.comeback_onboarded === '1', 'every permission denied: onboarding still finishes');
-  ok(/Turn on step counting/.test(await pg.textContent('#habitList .hcard[data-id="steps"] .hval')), 'the Steps card says "Turn on step counting" instead of a number');
-  await tab(pg, 'setup');
-  ok(/Permission missing/.test(await pg.textContent('#stHealth')) && !!(await pg.$('#stFix')), 'Plan > Step tracking health shows "Permission missing" with a one-tap fix');
+  ok(/Turn on step counting/.test(await pg.textContent('#sections .hcard[data-id="steps"] .hval')), 'the Steps card says "Turn on step counting" instead of a number');
+  await gear(pg);
+  ok(/Permission missing/.test(await pg.textContent('#stHealth')) && !!(await pg.$('#stFix')), 'Settings > Step tracking health shows "Permission missing" with a one-tap fix');
   ok(/Blocked|blocked/.test(await pg.textContent('#remMsg')) || true, 'the reminder explains if notifications are blocked');
   // the app works fully for habits
   await tab(pg, 'today'); await setHabit(pg, 3, 20); await pg.waitForTimeout(700);
@@ -117,7 +128,7 @@ console.log('Partly allowed');
   await finishFlow(pg);
   ok((await mock(pg)).calls.filter(c => c.n === 'stepsConfigure').pop().a.enabled === true, 'activity allowed: counting starts even though notifications and battery were refused');
   await tab(pg, 'today');
-  ok(!/Turn on/.test(await pg.textContent('#habitList .hcard[data-id="steps"] .hval')), 'the Steps card shows a number');
+  ok(!/Turn on/.test(await pg.textContent('#sections .hcard[data-id="steps"] .hval')), 'the Steps card shows a number');
   ok(errs.length === 0, 'no JS errors (partly allowed)', errs);
   await ctx.close();
 }
@@ -136,11 +147,9 @@ console.log('Partly allowed');
   const { ctx, pg } = await fresh();
   await toPermissions(pg); await pg.click('#onbAllow'); await finishFlow(pg);
   await pg.evaluate(() => window.__mock.set('calls', []));
-  await tab(pg, 'setup'); await pg.click('#replayIntro'); await pg.waitForSelector('.onb');
-  ok((await pg.$$('.onb-track > .onb-page')).length === 3, 'the replay shows only the three intro pages');
-  await pg.click('#onbNext'); await pg.click('#onbNext');
-  ok(await pg.isVisible('#onbRemind') && await pg.isVisible('#onbLater'), 'with the original reminder buttons');
-  await pg.click('#onbLater'); await pg.waitForFunction(() => !document.querySelector('.onb'));
+  await gear(pg); await pg.click('#replayIntro'); await pg.waitForSelector('.onb');
+  ok((await pg.$$('.onb-track > .onb-page')).length === 1, 'the replay shows only the welcome page');
+  await pg.click('#onbNext'); await pg.waitForFunction(() => !document.querySelector('.onb'));
   ok(!(await names(pg)).some(n => /req/.test(n)), 'and asks for no permissions');
   await ctx.close();
 }
@@ -151,8 +160,8 @@ console.log('Partly allowed');
   await toPermissions(pg); await pg.click('#onbAllow'); await finishFlow(pg);
   await pg.evaluate(() => window.__mock.set('calls', []));
   for (const t of ['progress', 'setup', 'today']) await tab(pg, t);
-  await tab(pg, 'setup');
-  ok(!(await pg.$('#stSource')) && !(await pg.$('.sheet')), 'no Automatic/Manual switch and no permission sheet in Plan');
+  await gear(pg);
+  ok(!(await pg.$('#stSource')) && !(await pg.$('.sheet')), 'no Automatic/Manual switch and no permission sheet in Settings');
   await pg.click('#stHeight'); await pg.waitForSelector('.keypad'); await pg.click('.sheet .txtbtn:has-text("Cancel")');
   ok(!(await names(pg)).some(n => /req/.test(n)), 'moving around the app asks for no permissions');
   await ctx.close();
@@ -163,9 +172,11 @@ console.log('Partly allowed');
   const errs = [];
   const ctx = await browser.newContext({ viewport: { width: 400, height: 900 } });
   const pg = await newPage(ctx, errs); await pg.goto(base); await pg.waitForSelector('.onb');
-  ok((await pg.$$('.onb-track > .onb-page')).length === 3, 'in a browser there are three pages and no permission screen');
-  await pg.click('#onbNext'); await pg.click('#onbNext');
-  ok(await pg.isVisible('#onbRemind') && await pg.isVisible('#onbLater'), 'the last page keeps "Turn on reminder" / "Not now"');
+  ok((await pg.$$('.onb-track > .onb-page')).length === 6 && !(await pg.$('#onbAllow')), 'in a browser there are six pages (welcome, plan, targets, reminder, height, BMI scale) and no permission screen');
+  await toReminder(pg);
+  ok(await pg.isVisible('#onbRemOn'), 'the reminder page has the switch and the time');
+  await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.waitForSelector('#onbStart');
+  ok(/Finish/.test(await pg.textContent('#onbStart')), 'the last page says Finish (no step counting to start in a browser)');
   ok(errs.length === 0, 'no JS errors (browser)', errs);
   await ctx.close();
 }

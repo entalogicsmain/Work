@@ -9,8 +9,8 @@ const stepsPlugin=()=>IS_NATIVE&&Native.Steps?Native.Steps:null;
 const stepsAvailable=()=>!!stepsPlugin();
 /** Counting has been switched on for this phone (the permission screen was completed, even if some answers were No). */
 const stepsAuto=()=>stepsAvailable()&&meta.steps.enabledAt!=null;
-const stepsHabit=()=>settings.habits.find(h=>h.id==='steps');
-const strideCm=()=>meta.steps.heightCm*0.415;
+const stepsHabit=()=>settings.habits.find(h=>h.type==='steps');
+const strideCm=()=>stepHeightCm()*0.415;
 const kmFor=n=>Math.round(n*strideCm()/100000*100)/100;
 const fmtKm=k=>(Math.round(k*10)/10).toLocaleString(undefined,{maximumFractionDigits:1})+'\u00A0km'; // non-breaking so "4 km" never splits across lines
 const stepsEnabledDay=()=>meta.steps.enabledAt?ymd(new Date(meta.steps.enabledAt)):null;
@@ -119,7 +119,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)stepsOnBack
 
 async function configureSteps(extra){
   const s=meta.steps;
-  return stepsPlugin().configure(Object.assign({enabled:meta.steps.enabledAt!=null,heightCm:s.heightCm,strictness:s.strictness,sensitivity:s.sensitivity,useLocation:s.useLocation},extra||{}));
+  return stepsPlugin().configure(Object.assign({enabled:meta.steps.enabledAt!=null,heightCm:Math.round(stepHeightCm()),strictness:s.strictness,sensitivity:s.sensitivity,useLocation:s.useLocation},extra||{}));
 }
 async function initSteps(){
   if(!stepsAvailable())return;
@@ -187,7 +187,8 @@ async function requestAllStepPermissions(){
 /** Switch counting on (or re-apply settings). The service starts right away when Physical activity is allowed. */
 async function enableStepCounting(heightCm){
   if(!stepsAvailable())return;
-  meta.steps=Object.assign({},meta.steps,{heightCm:heightCm||meta.steps.heightCm,enabledAt:meta.steps.enabledAt||Date.now(),setupShown:true});
+  meta.steps=Object.assign({},meta.steps,{heightCm:heightCm?Math.round(heightCm):meta.steps.heightCm,enabledAt:meta.steps.enabledAt||Date.now(),setupShown:true});
+  if(heightCm&&settings.body.heightCm!==heightCm){settings.body.heightCm=heightCm;try{await saveSettingsQuiet()}catch(e){}}
   await saveStepMeta();
   try{stepStatus=await configureSteps();stepHealthKey=(stepStatus&&stepStatus.health)||stepHealthKey}catch(e){}
   startStepsLoop();
@@ -233,15 +234,6 @@ async function batterySetup(){
   }
 }
 
-function askHeight(){
-  return new Promise(res=>{
-    let ok=false;
-    numberSheet({title:'Your height',value:meta.steps.heightCm,unitLine:'cm · used to estimate distance',step:1,min:0,
-      validate:v=>v==null||v<100||v>230?'Enter a height between 100 and 230 cm':'',
-      onDone:v=>{ok=true;res(v)},onCancel:()=>{if(!ok)res(null)}});
-  });
-}
-
 /** Tapped from the Today card or Plan when counting is off or lacks a permission. */
 async function turnOnStepCounting(){
   if(!stepsAvailable())return;
@@ -276,55 +268,6 @@ async function fixStepHealth(){
   }else if(k==='paused_battery'){
     await batterySetup();setTimeout(reread,500);
   }
-}
-
-function renderStepGroup(fetchStatus){
-  const head=$('stepHead'),g=$('stepGroup'),foot=$('stepFoot'),msg=$('stMsg');
-  const show=stepsAvailable()&&!!stepsHabit();
-  [head,g,foot,msg].forEach(e=>{if(e)e.hidden=!show});
-  if(!show)return;
-  if(fetchStatus!==false)stepsPlugin().getStatus().then(s=>{stepStatus=s;stepHealthKey=s.health||stepHealthKey;renderStepGroup(false)}).catch(()=>{});
-  g.innerHTML='';
-  const auto=stepsAuto();
-  if(!auto){
-    g.appendChild(stepRow({id:'stTurnOn',icon:'footprints',tint:'orange',label:'Turn on step counting',chev:true,sub:'Counts steps with your phone\'s motion sensor.',onTap:turnOnStepCounting}));
-    foot.textContent='Steps come only from your phone. Nothing is shared with other apps.';
-    return;
-  }
-  g.appendChild(stepRow({id:'stHeight',icon:'user',label:'Height',val:meta.steps.heightCm+' cm',chev:true,sub:'Used to estimate distance',onTap:async()=>{
-    const v=await askHeight();if(v==null)return;
-    meta.steps.heightCm=v;await saveStepMeta();try{await configureSteps()}catch(e){}
-    renderStepGroup(false);renderToday(true);if(activeTab==='progress')renderProgress();
-  }}));
-  g.appendChild(stepRow({id:'stStrict',icon:'shield-check',label:'Detection',val:STRICT_NAME[meta.steps.strictness],chev:true,sub:'How careful to be about false steps',onTap:async()=>{
-    const r=await actionSheet({title:'Detection strictness',message:'Relaxed counts shorter walks but may count a few extra steps on bumpy rides. Strict needs a longer steady walk and filters more.',
-      actions:['relaxed','balanced','strict'].map(k=>({label:STRICT_NAME[k]+(meta.steps.strictness===k?'  ✓':''),value:k}))});
-    if(r==='cancel')return;
-    meta.steps.strictness=r;await saveStepMeta();try{await configureSteps()}catch(e){}renderStepGroup(false);
-  }}));
-  if(stepStatus&&stepStatus.source==='accelerometer'){
-    g.appendChild(stepRow({id:'stSens',icon:'activity',label:'Sensitivity',val:SENS_NAME[meta.steps.sensitivity],chev:true,sub:'This phone has no step counter chip, so steps come from the accelerometer',onTap:async()=>{
-      const r=await actionSheet({title:'Sensitivity',message:'Higher counts gentler steps (phone in hand). Lower ignores light movement.',actions:['low','normal','high'].map(k=>({label:SENS_NAME[k]+(meta.steps.sensitivity===k?'  ✓':''),value:k}))});
-      if(r==='cancel')return;
-      meta.steps.sensitivity=r;await saveStepMeta();try{await configureSteps()}catch(e){}renderStepGroup(false);
-    }}));
-  }
-  // location (optional speed check): off by default, asked for only when switched on
-  const loc=h('<label class="row" id="stLoc"><span class="row-ic"></span><span class="row-body"><span class="row-label">Use location to improve accuracy in vehicles</span><span class="row-sub">Off by default. Speed above about 15 km/h for 30 seconds pauses counting.</span></span><input type="checkbox" class="switch" role="switch" id="stLocOn" aria-label="Use location to improve accuracy in vehicles"></label>');
-  loc.querySelector('.row-ic').innerHTML=icon('map-pin');
-  const box=loc.querySelector('input');box.checked=!!meta.steps.useLocation;
-  box.addEventListener('change',()=>setStepLocation(box.checked,box));
-  g.appendChild(loc);
-  // health
-  const hk=HEALTH_TEXT[stepHealthKey]?stepHealthKey:'working';
-  const hi=HEALTH_ICON[hk];
-  g.appendChild(stepRow({id:'stHealth',static:true,icon:hi[0],tint:hi[1],label:'Step tracking health',sub:HEALTH_TEXT[hk]}));
-  if(hk==='permission_missing')g.appendChild(stepRow({id:'stFix',icon:'shield-check',label:'Allow permission',onTap:fixStepHealth}));
-  if(hk==='paused_battery')g.appendChild(stepRow({id:'stFix',icon:'battery-low',label:'Fix battery settings',onTap:fixStepHealth}));
-  const todayMeta=days[todayStr()]&&days[todayStr()].steps_meta;
-  const filt=(stepStatus&&stepStatus.filteredToday)!=null?stepStatus.filteredToday:0;
-  g.appendChild(stepRow({id:'stFiltered',static:true,icon:'car',label:'Steps filtered out today',sub:'Vehicle vibration and short shuffles are not counted',val:String(todayMeta?todayMeta.filtered:filt)}));
-  foot.textContent='Steps are counted by your phone all day, even when the app is closed. They can\'t be typed in. The daily target is in Daily targets above.';
 }
 
 async function setStepLocation(on,box){
@@ -372,7 +315,7 @@ function stepsDetailSheet(k){
   }
   const g=h('<div class="group" style="margin:0 0 var(--s3)"></div>');
   const row=(label,val,sub)=>{const r=h('<div class="row"><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="row-val"></span></div>');r.querySelector('.row-label').textContent=label;const s=r.querySelector('.row-sub');if(sub)s.textContent=sub;else s.remove();r.querySelector('.row-val').textContent=val;g.appendChild(r)};
-  if(v>0||kind==='value')row('Distance',v>0?'About '+fmtKm(kmFor(v)):'–','Estimated from your height ('+meta.steps.heightCm+' cm)');
+  if(v>0||kind==='value')row('Distance',v>0?'About '+fmtKm(kmFor(v)):'–','Estimated from your height ('+fmtHeight(stepHeightCm())+')');
   if(lab)row('Source',lab==='counted'?'Counted by phone':MANUAL_OLD);
   if(m&&lab==='counted')row('Filtered out',fmt(m.filtered||0),'Vehicle vibration and short shuffles are not counted');
   else if(isToday&&stepsAuto())row('Filtered out',fmt((stepStatus&&stepStatus.filteredToday)||0),'Vehicle vibration and short shuffles are not counted');

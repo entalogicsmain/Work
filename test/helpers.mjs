@@ -44,8 +44,15 @@ export async function newPage(ctx, errs, opts = {}) {
 // skips onboarding unless asked to show it
 export const skipOnboarding = ctx => ctx.addInitScript(() => { if (!localStorage.getItem('__ob')) { localStorage.setItem('__ob', '1'); localStorage.setItem('CapacitorStorage.comeback_onboarded', '1'); } });
 
+// Settings opens from the gear in the top bar (it is not a tab)
+export const gear = async pg => { if (await pg.isVisible('#gearBtn')) await pg.click('#gearBtn'); await pg.waitForSelector('#p-settings.on'); };
 export const tab = (pg, t) => pg.click(`.tab[data-tab="${t}"]`);
-export const ready = pg => pg.waitForSelector('#habitList .hcard', { state: 'attached' });
+// the original eight habits by their old position on Today (1 = Steps), and the four original food rules
+export const HABIT_IDS = ['steps', 'walk', 'pushups', 'pullups', 'squats', 'plank', 'water', 'sleep'];
+export const RULE_IDS = ['nofried', 'nosugar', 'nomaida', 'nolate'];
+export const hid = i => typeof i === 'number' ? HABIT_IDS[i - 1] : i;
+export const cardSel = i => `#sections .hcard[data-id="${hid(i)}"]`;
+export const ready = pg => pg.waitForSelector('#sections .hcard', { state: 'attached' });
 export const stored = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('CapacitorStorage.comeback')));
 export const sheetGone = pg => pg.waitForFunction(() => !document.querySelector('.sheet-wrap'), null, { timeout: 5000 });
 export const settle = pg => pg.waitForTimeout(750); // auto-save debounce (400ms) + write
@@ -54,13 +61,19 @@ export async function enterNumber(pg, text) {
   for (const ch of String(text)) await pg.click(`.keypad .key[aria-label="${ch === '.' ? 'Decimal point' : ch}"]`);
 }
 export async function setHabit(pg, idx, value) {
-  await pg.click(`#habitList .hcard:nth-child(${idx})`);
+  await pg.click(`${cardSel(idx)} .hc-main`);
   await pg.waitForSelector('.keypad');
   await enterNumber(pg, value);
   await pg.click('.sheet .txtbtn.strong');
   await sheetGone(pg);
 }
+// the Body and notes section starts collapsed; open it (and keep it open)
+export async function openBody(pg) {
+  const t = '.tsec[data-sec="body"] .tsec-toggle[aria-expanded="false"]';
+  if (await pg.$(t)) { await pg.click(t); await pg.waitForSelector('.tsec[data-sec="body"] .tsec-toggle[aria-expanded="true"]'); }
+}
 export async function setBody(pg, which, value) {
+  await openBody(pg);
   await pg.click(which === 'weight' ? '#rowWeight' : '#rowWaist');
   await pg.waitForSelector('.keypad');
   await enterNumber(pg, value);
@@ -68,12 +81,13 @@ export async function setBody(pg, which, value) {
   await sheetGone(pg);
 }
 export async function setNote(pg, text) {
+  await openBody(pg);
   await pg.click('#rowNote');
   await pg.fill('#noteTa', text);
   await pg.click('.sheet .txtbtn.strong');
   await sheetGone(pg);
 }
-export async function toggleRule(pg, idx) { await pg.click(`#ruleList .row:nth-child(${idx})`); }
+export async function toggleRule(pg, idx) { await pg.click(`#sections .yrow[data-id="${typeof idx === 'number' ? RULE_IDS[idx - 1] : idx}"] .row`); }
 export async function goDate(pg, date) {
   await tab(pg, 'today');
   await pg.click('#dayLabel');

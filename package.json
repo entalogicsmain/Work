@@ -19,7 +19,8 @@
     "test:rename": "node test/rename-test.mjs",
     "test:responsive": "node test/responsive-test.mjs",
     "test:permissions": "node test/permissions-test.mjs",
-    "test:refresh": "node test/refresh-test.mjs"
+    "test:refresh": "node test/refresh-test.mjs",
+    "test:core": "node test/core-test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

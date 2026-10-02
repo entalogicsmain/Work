@@ -123,15 +123,6 @@ async function flushSave(){
 
 /* ================= day data helpers ================= */
 function blankDay(){return{vals:{},rules:{},weight:null,waist:null,note:'',date:current,updatedAt:0}}
-function dayMetrics(d){
-  const vals=(d&&d.vals)||{},rl=(d&&d.rules)||{};
-  const hm=settings.habits.filter(x=>x.target>0&&Number(vals[x.id]||0)>=x.target).length;
-  const rk=settings.rules.filter(r=>rl[r.id]).length;
-  return{score:d?scoreOf(d):0,hMet:hm,hTotal:settings.habits.length,rKept:rk,rTotal:settings.rules.length,
-    full:!!d&&hm===settings.habits.length&&rk===settings.rules.length&&(settings.habits.length+settings.rules.length)>0};
-}
-function streak(){let n=0;const d=new Date();if(!days[ymd(d)])d.setDate(d.getDate()-1);while(days[ymd(d)]&&scoreOf(days[ymd(d)])>=50){n++;d.setDate(d.getDate()-1)}return n}
-const addDays=(k,n)=>{const d=parse(k);d.setDate(d.getDate()+n);return ymd(d)};
 /* The comeback starts with the first day that has anything logged. */
 function firstLogKey(){
   let first=null;
@@ -148,37 +139,17 @@ function comebackDay(k){
   return Math.round((parse(k)-parse(f))/864e5)+1;
 }
 const GENTLE_RESTART='Every comeback has restarts. Start again today.';
-function bestStreak(){
-  const ks=Object.keys(days).filter(k=>scoreOf(days[k])>=50).sort();let best=0,run=0,prev=null;
-  ks.forEach(k=>{run=prev&&addDays(prev,1)===k?run+1:1;if(run>best)best=run;prev=k});
-  return best;
-}
-function lastValue(key){
-  const ks=Object.keys(days).filter(k=>k<current&&days[k][key]!=null).sort();
-  return ks.length?days[ks[ks.length-1]][key]:null;
-}
-const HICON={steps:'footprints',walk:'timer',pushups:'dumbbell',pullups:'dumbbell',squats:'dumbbell',plank:'timer',water:'droplets',sleep:'moon'};
-const UICON={steps:'footprints',min:'timer',sec:'timer',reps:'dumbbell',litres:'droplets',hours:'moon'};
-const hIcon=x=>HICON[x.id]||UICON[x.unit]||'target';
-const stepFor=x=>x.unit==='steps'?500:(x.target<10?0.5:5);
-function presetsFor(x){
-  const u=x.unit;
-  if(u==='steps')return[500,1000];if(u==='reps')return[5,10];if(u==='min')return[5,10];if(u==='sec')return[10,30];
-  if(u==='litres')return[0.25,0.5];if(u==='hours')return[0.5,1];
-  const s=stepFor(x);return[s,s*2];
-}
-
 /* One change = one auto-saved write, one undo step, and (maybe) a small celebration. */
-function commitDay(label,mutate,quiet){
-  const k=current;
+function commitDay(label,mutate,quiet,forKey){
+  const k=forKey||current;
   const prev=days[k]?clone(days[k]):null;
-  const before=dayMetrics(prev),streakBefore=streak();
-  const d=prev?clone(prev):blankDay();
+  const before=dayMetrics(prev,k),streakBefore=streak();
+  const d=prev?clone(prev):Object.assign(blankDay(),{date:k});
   mutate(d);
   d.date=k;d.updatedAt=Date.now();
   days[k]=d;
   scheduleSave(k);
-  const after=dayMetrics(d),streakAfter=streak();
+  const after=dayMetrics(d,k),streakAfter=streak();
   renderToday(true);renderProgress();
   const undo=()=>{
     if(prev){days[k]=Object.assign(clone(prev),{updatedAt:Date.now()})}
@@ -190,7 +161,7 @@ function commitDay(label,mutate,quiet){
   if(after.full&&!before.full){msg='Strong day. Your comeback is on track.';ic='sparkles';ok=true;celebrate()}
   else{
     const MILE=[3,5,7,10,14,21,30,50,100];
-    const newlyMet=settings.habits.filter(x=>x.target>0&&Number((d.vals||{})[x.id]||0)>=x.target&&!(prev&&Number((prev.vals||{})[x.id]||0)>=x.target));
+    const newlyMet=settings.habits.filter(x=>(x.type==='count'||x.type==='duration'||x.type==='steps')&&Core.isMet(x,d)&&!Core.isMet(x,prev));
     if(streakAfter>streakBefore&&MILE.includes(streakAfter)){msg=streakAfter+'-day streak';ic='flame';ok=true;haptic('success')}
     else if(newlyMet.length){msg=newlyMet[0].name+' goal hit';ic='trophy';ok=true;haptic('success')}
   }
@@ -245,169 +216,8 @@ function numberSheet(o){
   return sheet;
 }
 
-/* ================= Today ================= */
-const C=2*Math.PI*52;
-let habitSig='',ringAnimated=false,ringOff=C;
-function dayTitle(k){
-  const d=parse(k);
-  return{h1:d.toLocaleDateString(undefined,{day:'numeric',month:'long'}),weekday:d.toLocaleDateString(undefined,{weekday:'long'})};
-}
-function relLabel(k){
-  const t=todayStr();if(k===t)return'Today';
-  const y=ymd(new Date(Date.now()-864e5));if(k===y)return'Yesterday';
-  return nice(k);
-}
-function renderToday(inPlace){
-  const d=days[current],isToday=current===todayStr(),m=dayMetrics(d);
-  const tt=dayTitle(current);
-  $('todayTitle').textContent=tt.h1;
-  const cd=comebackDay(current);
-  $('todaySub').textContent=cd>0?'Day '+cd+' of your comeback'+(isToday?'':' · '+tt.weekday):tt.weekday+(d?'':' · Not logged');
-  $('dayLabelText').textContent=relLabel(current);
-  $('nextDay').disabled=current>=todayStr();
-  if(activeTab==='today')$('navTitle').textContent=tt.h1;
-
-  // ring
-  const prg=$('ringPrg');
-  ringOff=C*(1-m.score/100);
-  if(!ringAnimated){prg.style.strokeDashoffset=C;requestAnimationFrame(()=>requestAnimationFrame(()=>{prg.style.strokeDashoffset=ringOff}));ringAnimated=true}
-  else prg.style.strokeDashoffset=ringOff;
-  prg.style.opacity=m.score>0?'1':'0';
-  $('headScore').textContent=(d?m.score:0)+'%';
-  $('ringCap').textContent=m.full?'All done':(isToday?'of today':'of the day');
-  $('ring').classList.toggle('done',m.full);
-  $('ring').setAttribute('aria-label',(isToday?"Today's":'This day\'s')+' score '+(d?m.score:0)+' percent. '+m.hMet+' of '+m.hTotal+' targets met, '+m.rKept+' of '+m.rTotal+' rules kept.');
-  const ct=$('chipTargets');ct.classList.toggle('ok',m.hTotal>0&&m.hMet===m.hTotal);ct.querySelector('span').textContent=m.hMet+' of '+m.hTotal+' targets';
-  const cr=$('chipRules');cr.classList.toggle('ok',m.rTotal>0&&m.rKept===m.rTotal);cr.querySelector('span').textContent=m.rKept+' of '+m.rTotal+' rules';
-  const st=streak(),best=bestStreak();
-  $('streakLine').querySelector('span').textContent=st>0?st+'-day streak':(best>0?'Start again today':'Log a day to start a streak');
-  $('todayHint').textContent=!d?(isToday?(st===0&&best>0?GENTLE_RESTART:'Nothing logged yet. Tap a target to start.'):'This day was not logged. You can fill it in now.'):(m.full?'Strong day. Your comeback is on track.':'');
-  $('todayHint').hidden=!$('todayHint').textContent;
-
-  // habit cards
-  const sig=settings.habits.map(x=>[x.id,x.name,x.unit,x.target].join('|')).join('~');
-  const list=$('habitList');
-  if(sig!==habitSig||!inPlace&&!list.children.length){habitSig=sig;buildHabitCards()}
-  settings.habits.forEach((x,i)=>{
-    const card=list.children[i];if(!card)return;
-    const v=Number(((d&&d.vals)||{})[x.id]||0),met=x.target>0&&v>=x.target;
-    card.classList.toggle('met',met);
-    card.querySelector('.hval').textContent=fmt(v);
-    card.querySelector('.bar i').style.width=Math.min(100,x.target>0?v/x.target*100:0)+'%';
-    card.querySelector('.met-ic').innerHTML=met?icon('circle-check','sm'):'';
-    const src=card.querySelector('.hsrc');src.innerHTML='';
-    if(x.id==='steps'){renderStepsCard(card,x,v,current);return}
-    card.classList.remove('steps-off');
-    card.setAttribute('aria-label',x.name+', '+fmt(v)+' of '+fmt(x.target)+' '+x.unit+(met?', target met':'')+'. Tap to edit.');
-  });
-
-  // rules
-  const rl=$('ruleList');
-  const rsig=settings.rules.map(r=>r.id+'|'+r.name).join('~');
-  if(rl.dataset.sig!==rsig){
-    rl.dataset.sig=rsig;rl.innerHTML='';
-    settings.rules.forEach(r=>{
-      const row=h('<label class="row rule-row"><span class="row-label"></span><input type="checkbox" class="switch" role="switch"></label>');
-      row.querySelector('.row-label').textContent=r.name;
-      const sw=row.querySelector('input');sw.setAttribute('aria-label',r.name);sw.dataset.id=r.id;
-      sw.addEventListener('change',()=>{commitDay(r.name+(sw.checked?': kept':': not kept'),dd=>{dd.rules[r.id]=sw.checked})});
-      rl.appendChild(row);
-    });
-    if(!settings.rules.length)rl.appendChild(h('<div class="row"><span class="row-label muted">No rules yet. Add some in Plan.</span></div>'));
-  }
-  rl.querySelectorAll('input.switch').forEach(sw=>{sw.checked=!!((d&&d.rules)||{})[sw.dataset.id]});
-
-  // body + note
-  const bl=$('bodyList');
-  if(!bl.children.length){
-    bl.appendChild(h('<button class="row" id="rowWeight"><span class="row-ic"><svg data-ic="scale"></svg></span><span class="row-body"><span class="row-label">Weight</span></span><span class="row-val"></span><svg data-ic="chevron-right" class="chev"></svg></button>'));
-    bl.appendChild(h('<button class="row" id="rowWaist"><span class="row-ic"><svg data-ic="ruler"></svg></span><span class="row-body"><span class="row-label">Waist</span></span><span class="row-val"></span><svg data-ic="chevron-right" class="chev"></svg></button>'));
-    $('rowWeight').addEventListener('click',()=>bodySheet('weight'));$('rowWaist').addEventListener('click',()=>bodySheet('waist'));
-    $('noteList').appendChild(h('<button class="row" id="rowNote"><span class="row-ic"><svg data-ic="notebook-pen"></svg></span><span class="row-body"><span class="row-label">Note</span><span class="row-sub" id="noteSub"></span></span><svg data-ic="chevron-right" class="chev"></svg></button>'));
-    $('rowNote').addEventListener('click',noteSheet);
-  }
-  const body=(key,unit,id)=>{const v=d&&d[key]!=null?d[key]:null,last=lastValue(key);const el=$(id).querySelector('.row-val');
-    if(v!=null){el.textContent=fmt(v)+' '+unit;el.style.color='var(--label)'}
-    else{el.textContent=last!=null?'Last: '+fmt(last)+' '+unit:'Add';el.style.color=''}
-    $(id).setAttribute('aria-label',(key==='weight'?'Weight':'Waist')+', '+(v!=null?fmt(v)+' '+unit:'not set')+'. Tap to edit.')};
-  body('weight','kg','rowWeight');body('waist','cm','rowWaist');
-  const note=(d&&d.note)||'';const ns=$('noteSub');ns.textContent=note?note.split('\n')[0]:'What you ate, how you felt.';ns.style.color=note?'var(--label)':'';
-}
-function setHabitValue(d,x,v){if(v==null)delete d.vals[x.id];else d.vals[x.id]=v}
-/* The Steps card is read-only: the phone's count, the target, progress and distance. Tap = details (or setup when counting is off). */
-function renderStepsCard(card,x,v,k){
-  const kind=stepsCardKind(k),hv=card.querySelector('.hval'),src=card.querySelector('.hsrc'),met=x.target>0&&v>=x.target;
-  const off=kind==='turnon'||kind==='phoneonly';
-  card.classList.toggle('steps-off',off);
-  let aria;
-  if(kind==='turnon'){hv.textContent='Turn on step counting';card.querySelector('.bar i').style.width='0%';card.querySelector('.met-ic').innerHTML='';aria='Steps. Turn on step counting. Tap to set it up.'}
-  else if(kind==='phoneonly'){hv.textContent='–';src.innerHTML=icon('smartphone')+'<span>Counted in the Android app</span>';aria='Steps. Counted in the Android app.'}
-  else{
-    hv.textContent=fmt(v);
-    const lab=stepsLabelFor(k),km=v>0?' · '+fmtKm(kmFor(v)):'';
-    if(lab){src.innerHTML=icon(lab==='counted'?'smartphone':'pencil')+'<span></span>';src.querySelector('span').textContent=(lab==='counted'?'Counted by phone':MANUAL_OLD)+km}
-    aria='Steps, '+fmt(v)+' of '+fmt(x.target)+' '+x.unit+(met?', target met':'')+(lab==='counted'?', counted by phone':lab==='manual'?', entered manually (old)':'')+(v>0?', about '+fmtKm(kmFor(v)):'')+'. Tap for details.';
-  }
-  card.setAttribute('aria-label',aria);
-}
-function buildHabitCards(){
-  const list=$('habitList');list.innerHTML='';
-  settings.habits.forEach(x=>{
-    const c=h('<button class="hcard"><span class="hcard-top"><span class="hico"></span><span class="met-ic"></span></span><span class="hname"></span><span class="hval num"></span><span class="htgt"></span><span class="hsrc"></span><span class="bar"><i></i></span></button>');
-    c.querySelector('.hico').innerHTML=icon(hIcon(x),'sm');
-    c.querySelector('.hname').textContent=x.name;c.querySelector('.htgt').textContent='of '+fmt(x.target)+' '+x.unit;
-    c.dataset.id=x.id;
-    let timer=null,long=false;
-    if(x.id!=='steps')c.addEventListener('pointerdown',()=>{long=false;clearTimeout(timer);timer=setTimeout(()=>{long=true;haptic('medium');habitPresets(x)},520)});
-    ['pointerup','pointerleave','pointercancel','pointermove'].forEach(ev=>c.addEventListener(ev,e=>{if(ev==='pointermove'&&Math.abs(e.movementX)+Math.abs(e.movementY)<3)return;clearTimeout(timer)}));
-    c.addEventListener('click',e=>{if(long){long=false;e.preventDefault();return}if(x.id==='steps'){stepsCardTap();return}habitSheet(x)});
-    c.addEventListener('contextmenu',e=>e.preventDefault());
-    list.appendChild(c);
-  });
-}
-function curVal(x){const d=days[current];return d&&d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null}
-function stepsCardTap(){if(stepsCardKind(current)==='turnon'){haptic('light');turnOnStepCounting();return}stepsDetailSheet(current)}
-function habitSheet(x){
-  const p=presetsFor(x);
-  const unitLine='of '+fmt(x.target)+' '+x.unit;
-  numberSheet({title:x.name,value:curVal(x),unitLine,step:stepFor(x),
-    presets:p.map(a=>({label:'+'+fmt(a),apply:v=>v+a})).concat([{label:'Target',set:x.target}]),
-    onDone:v=>{if(v===curVal(x))return;commitDay(x.name+' updated',d=>{setHabitValue(d,x,v)})}});
-}
-function habitPresets(x){
-  const p=presetsFor(x),v=Number(curVal(x)||0);
-  actionSheet({title:x.name,message:fmt(v)+' of '+fmt(x.target)+' '+x.unit,actions:[
-    {label:'Add '+fmt(p[0])+' '+x.unit,value:'a'},{label:'Add '+fmt(p[1])+' '+x.unit,value:'b'},{label:'Set to target ('+fmt(x.target)+')',value:'t'}
-  ]}).then(r=>{
-    if(r==='a')commitDay(x.name+' +'+fmt(p[0]),d=>{setHabitValue(d,x,r1((d.vals[x.id]||0)+p[0]))});
-    else if(r==='b')commitDay(x.name+' +'+fmt(p[1]),d=>{setHabitValue(d,x,r1((d.vals[x.id]||0)+p[1]))});
-    else if(r==='t')commitDay(x.name+' set to target',d=>{setHabitValue(d,x,x.target)});
-  });
-}
-function bodySheet(key){
-  const isW=key==='weight',unit=isW?'kg':'cm',d=days[current],last=lastValue(key);
-  numberSheet({title:isW?'Weight':'Waist',value:d&&d[key]!=null?d[key]:null,unitLine:unit+(isW?' · weigh in the morning, before eating':' · every 2 weeks is enough'),step:isW?0.1:0.5,
-    placeholder:last!=null?fmt(last):'0',
-    presets:last!=null?[{label:'Use last ('+fmt(last)+')',set:last}]:[],
-    validate:v=>v==null?'':(isW?(v<30||v>250?'Check the weight value':''):(v<40||v>200?'Check the waist value':'')),
-    onDone:v=>{const cur=d&&d[key]!=null?d[key]:null;if(v===cur)return;commitDay((isW?'Weight':'Waist')+' saved',dd=>{dd[key]=v})}});
-}
-function noteSheet(){
-  const d=days[current];
-  const root=h('<div class="field"><label for="noteTa">Note</label><div class="box"><textarea id="noteTa" data-focus placeholder="Had daal and roti for lunch, walked after dinner, skipped the late snack."></textarea></div></div>');
-  const ta=root.querySelector('textarea');ta.value=(d&&d.note)||'';
-  openSheet({title:'Note',content:root,onDone:()=>{const v=ta.value.trim();if(v===((d&&d.note)||''))return;commitDay('Note saved',dd=>{dd.note=v})}});
-}
-function dateSheet(){
-  const root=h('<div><div class="field"><label for="dateIn">Day</label><div class="box"><input type="date" id="dateIn" data-focus></div></div><button class="btn secondary" id="dateToday">Go to today</button></div>');
-  const inp=root.querySelector('input');inp.value=current;inp.max=todayStr();
-  const sh=openSheet({title:'Choose a day',content:root,onDone:()=>{if(inp.value&&inp.value<=todayStr())goTo(inp.value)}});
-  root.querySelector('#dateToday').addEventListener('click',()=>{sh.close('cancel');goTo(todayStr())});
-}
-function goTo(k){flushSave();current=k;renderToday();window.scrollTo(0,0)}
 $('prevDay').addEventListener('click',()=>{const d=parse(current);d.setDate(d.getDate()-1);goTo(ymd(d));haptic('light')});
 $('nextDay').addEventListener('click',()=>{const d=parse(current);d.setDate(d.getDate()+1);if(ymd(d)<=todayStr()){goTo(ymd(d));haptic('light')}});
-$('dayLabel').addEventListener('click',dateSheet);
 
 /* ================= Progress ================= */
 let period=30,metric='score',chart=null;
@@ -415,15 +225,17 @@ const rangeKeys=n=>{const out=[],t=todayStr();for(let i=n-1;i>=0;i--)out.push(ad
 const RANGE_NAME={7:'week',30:'month',90:'3 months'};
 function metricInfo(m){
   if(m==='score')return{name:'Daily score',unit:'%',get:d=>scoreOf(d)};
-  if(m==='weight')return{name:'Weight',unit:'kg',get:d=>d.weight};
-  if(m==='waist')return{name:'Waist',unit:'cm',get:d=>d.waist};
-  const x=settings.habits.find(q=>'h:'+q.id===m);
-  if(x)return{name:x.name,unit:x.unit,get:d=>d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null,target:x.target,note:x.id==='steps'?k=>{const l=stepsLabelFor(k);return l==='counted'?'Counted by phone':l==='manual'?MANUAL_OLD:''}:null};
+  if(m==='weight')return{name:'Weight',unit:wUnit(),get:d=>d.weight==null?null:r1(toDispWeight(d.weight))};
+  if(m==='waist')return{name:'Waist',unit:lUnit(),get:d=>d.waist==null?null:r1(toDispWaist(d.waist))};
+  const x=settings.habits.find(q=>'h:'+q.id===m&&(q.type==='count'||q.type==='duration'||q.type==='steps'));
+  if(x)return{name:x.name,unit:x.unit,get:d=>d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null,target:x.target,note:x.type==='steps'?k=>{const l=stepsLabelFor(k);return l==='counted'?'Counted by phone':l==='manual'?MANUAL_OLD:''}:null};
   return metricInfo('score');
 }
 function changeIn(keys,key){
   const ks=keys.filter(k=>days[k]&&days[k][key]!=null);
-  return ks.length<2?null:r1(days[ks[ks.length-1]][key]-days[ks[0]][key]);
+  if(ks.length<2)return null;
+  const conv=key==='weight'?toDispWeight:toDispWaist;
+  return r1(conv(days[ks[ks.length-1]][key])-conv(days[ks[0]][key]));
 }
 const signed=(n,u)=>(n>0?'+':n<0?'−':'')+fmt(Math.abs(n))+' '+u;
 function scoreClass(s){return s>=80?'g':s>=40?'o':'r'}
@@ -438,18 +250,18 @@ function renderProgress(){
   $('sStreak').textContent=st+(st===1?' day':' days');
   $('sDays').textContent=inR.length;$('sDaysSub').textContent='in the last '+RANGE_NAME[period];
   const wc=changeIn(rk,'weight'),wa=changeIn(rk,'waist');
-  $('sWeight').textContent=wc==null?'–':signed(wc,'kg');$('sWeightSub').textContent=wc==null?'Needs 2 entries':'this '+RANGE_NAME[period];
-  $('sWaist').textContent=wa==null?'–':signed(wa,'cm');$('sWaistSub').textContent=wa==null?'Needs 2 entries':'this '+RANGE_NAME[period];
+  $('sWeight').textContent=wc==null?'–':signed(wc,wUnit());$('sWeightSub').textContent=wc==null?'Needs 2 entries':'this '+RANGE_NAME[period];
+  $('sWaist').textContent=wa==null?'–':signed(wa,lUnit());$('sWaistSub').textContent=wa==null?'Needs 2 entries':'this '+RANGE_NAME[period];
   const withSteps=rk.filter(k=>days[k]&&days[k].vals&&days[k].vals.steps!=null);
   if(withSteps.length){
     const avg=Math.round(withSteps.reduce((a,k)=>a+days[k].vals.steps,0)/withSteps.length);
     $('sAvgSteps').textContent=fmt(avg);$('sAvgStepsSub').textContent='over '+withSteps.length+(withSteps.length===1?' day':' days');
-    $('sAvgDist').textContent=fmtKm(kmFor(avg));$('sAvgDistSub').textContent='a day, at '+meta.steps.heightCm+' cm tall';
+    $('sAvgDist').textContent=fmtKm(kmFor(avg));$('sAvgDistSub').textContent='a day, at '+fmtHeight(stepHeightCm())+' tall';
   }else{$('sAvgSteps').textContent='–';$('sAvgStepsSub').textContent='No steps logged yet';$('sAvgDist').textContent='–';$('sAvgDistSub').textContent=''}
   $('streakNote').textContent=st>0?(best>st?'Your best streak was '+best+' days.':'This is your best streak yet.'):(best>0?GENTLE_RESTART+' Your best streak was '+best+' days.':'Log a day to start your streak.');
 
   // metric chips
-  const opts=[['score','Score'],['weight','Weight'],['waist','Waist']].concat(settings.habits.map(x=>['h:'+x.id,x.name]));
+  const opts=[['score','Score'],['weight','Weight'],['waist','Waist']].concat(settings.habits.filter(x=>x.type==='count'||x.type==='duration'||x.type==='steps').map(x=>['h:'+x.id,x.name]));
   if(!opts.some(o=>o[0]===metric))metric='score';
   const ch=$('chips');
   if(ch.dataset.sig!==opts.map(o=>o.join('=')).join('|')){
@@ -457,7 +269,7 @@ function renderProgress(){
     opts.forEach(o=>{const b=h('<button class="chip"></button>');b.textContent=o[1];b.dataset.metric=o[0];b.addEventListener('click',()=>{metric=o[0];haptic('light');renderProgress()});ch.appendChild(b)});
   }
   ch.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.metric===metric)));
-  drawChart();drawHoursChart();
+  drawChart();drawHoursChart();renderBmiCard();
 
   // calendar heat map: soft rounded squares, one per day
   const cells=period===7?7:period===30?35:91;
@@ -479,8 +291,8 @@ function renderProgress(){
     const sc=scoreOf(days[k]),d=days[k];
     const row=h('<button class="row"><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="pill"></span><svg data-ic="chevron-right" class="chev"></svg></button>');
     row.querySelector('.row-label').textContent=nice(k);
-    const bits=settings.habits.filter(x=>d.vals&&d.vals[x.id]!=null).map(x=>x.name+' '+fmt(d.vals[x.id])+(x.id==='steps'&&stepsLabelFor(k)==='manual'?' ('+MANUAL_OLD+')':''));
-    if(d.weight!=null)bits.push(fmt(d.weight)+' kg');
+    const bits=settings.habits.filter(x=>(x.type==='count'||x.type==='duration'||x.type==='steps')&&d.vals&&d.vals[x.id]!=null).map(x=>x.name+' '+fmt(d.vals[x.id])+(x.type==='steps'&&stepsLabelFor(k)==='manual'?' ('+MANUAL_OLD+')':''));
+    if(d.weight!=null)bits.push(fmtWeight(d.weight));
     row.querySelector('.row-sub').textContent=bits.join(', ')+(d.note?(bits.length?' · ':'')+d.note:'');
     if(!row.querySelector('.row-sub').textContent)row.querySelector('.row-sub').remove();else row.querySelector('.row-sub').classList.add('clamp');
     const pill=row.querySelector('.pill');pill.textContent=sc+'%';pill.classList.add(scoreClass(sc));
@@ -555,20 +367,23 @@ function daySheet(k){
     const top=h('<div class="card" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span class="t-head"></span><span class="pill"></span></div>');
     top.querySelector('.t-head').textContent='Daily score';const pl=top.querySelector('.pill');pl.textContent=sc+'%';pl.classList.add(scoreClass(sc));root.appendChild(top);
     const g1=h('<div class="group" style="margin-bottom:12px"></div>');
-    settings.habits.forEach(x=>{const v=Number((d.vals||{})[x.id]||0),met=x.target>0&&v>=x.target;
+    const cardHabits=settings.habits.filter(x=>(x.type==='count'||x.type==='duration'||x.type==='steps')&&!x.hidden&&(Core.isShown(x,k,days)));
+    cardHabits.forEach(x=>{const v=Number((d.vals||{})[x.id]||0),met=x.target>0&&v>=x.target;
       const r=h('<div class="row"><span class="row-body"><span class="row-label"></span></span><span class="row-val"></span></div>');
       r.querySelector('.row-label').textContent=x.name;
-      if(x.id==='steps'&&stepsLabelFor(k)==='manual'){const sb=h('<span class="row-sub"></span>');sb.textContent=MANUAL_OLD;r.querySelector('.row-body').appendChild(sb)}
+      if(x.type==='steps'&&stepsLabelFor(k)==='manual'){const sb=h('<span class="row-sub"></span>');sb.textContent=MANUAL_OLD;r.querySelector('.row-body').appendChild(sb)}
       const val=r.querySelector('.row-val');val.innerHTML=(met?icon('circle-check','sm')+' ':'');val.appendChild(document.createTextNode(fmt(v)+' / '+fmt(x.target)+' '+x.unit));val.style.color=met?'var(--green)':'';val.style.maxWidth='70%';g1.appendChild(r)});
-    root.appendChild(g1);
-    if(settings.rules.length){
+    if(cardHabits.length)root.appendChild(g1);
+    const yn=settings.habits.filter(x=>x.type==='yesno'&&!x.hidden&&Core.isShown(x,k,days));
+    if(yn.length){
       const g2=h('<div class="group" style="margin-bottom:12px"></div>');
-      settings.rules.forEach(x=>{const kept=!!(d.rules||{})[x.id];
+      yn.forEach(x=>{const kept=!!(d.rules||{})[x.id];
         const r=h('<div class="row"><span class="row-body"><span class="row-label"></span></span><span class="row-val"></span></div>');
-        r.querySelector('.row-label').textContent=x.name;const val=r.querySelector('.row-val');val.innerHTML=icon(kept?'check':'minus','sm')+' ';val.appendChild(document.createTextNode(kept?'Kept':'Not kept'));val.style.color=kept?'var(--green)':'';g2.appendChild(r)});
+        r.querySelector('.row-label').textContent=x.name;const val=r.querySelector('.row-val');val.innerHTML=icon(kept?'check':'minus','sm')+' ';val.appendChild(document.createTextNode(kept?'Done':'Not done'));val.style.color=kept?'var(--green)':'';g2.appendChild(r)});
       root.appendChild(g2);
     }
-    const bits=[];if(d.weight!=null)bits.push(['Weight',fmt(d.weight)+' kg']);if(d.waist!=null)bits.push(['Waist',fmt(d.waist)+' cm']);
+    const bits=[];if(d.weight!=null)bits.push(['Weight',fmtWeight(d.weight)]);if(d.waist!=null)bits.push(['Waist',fmtWaist(d.waist)]);
+    const bb=d.weight!=null&&heightCm()!=null?Core.bmi(d.weight,heightCm()):null;if(bb!=null)bits.push(['BMI',Core.bmiRound(bb).toFixed(1)+' · '+catName(Core.bmiCategory(bb,bmiScale()))]);
     if(bits.length){const g3=h('<div class="group" style="margin-bottom:12px"></div>');bits.forEach(b=>{const r=h('<div class="row"><span class="row-body"><span class="row-label"></span></span><span class="row-val"></span></div>');r.querySelector('.row-label').textContent=b[0];r.querySelector('.row-val').textContent=b[1];g3.appendChild(r)});root.appendChild(g3)}
     if(d.note){const c=h('<div class="card" style="margin-bottom:12px"><span class="t-foot muted">Note</span><p style="margin:4px 0 0;overflow-wrap:anywhere"></p></div>');c.querySelector('p').textContent=d.note;root.appendChild(c)}
   }
@@ -580,118 +395,7 @@ function daySheet(k){
 document.querySelectorAll('#seg button').forEach(b=>b.addEventListener('click',()=>{period=Number(b.dataset.range);haptic('light');renderProgress()}));
 $('progGo').addEventListener('click',()=>showTab('today'));
 
-/* ================= Plan ================= */
-let reorderMode=false;
-function attachSwipe(sw,row,del){
-  let sx=0,sy=0,base=0,locked=false,tracking=false,open=false,suppress=false;
-  const W=()=>parseFloat(getComputedStyle(document.documentElement).fontSize)*5.5;
-  row.addEventListener('pointerdown',e=>{if(reorderMode||e.target.closest('.handle'))return;tracking=true;locked=false;sx=e.clientX;sy=e.clientY;base=open?-W():0});
-  row.addEventListener('pointermove',e=>{
-    if(!tracking)return;const dx=e.clientX-sx,dy=e.clientY-sy;
-    if(!locked){if(Math.abs(dy)>10&&Math.abs(dy)>Math.abs(dx)){tracking=false;return}if(Math.abs(dx)>8){locked=true;sw.classList.add('drag');try{row.setPointerCapture(e.pointerId)}catch(x){}}}
-    if(locked)row.style.transform='translateX('+clamp(base+dx,-W()-24,0)+'px)';
-  });
-  const end=e=>{
-    if(!tracking)return;tracking=false;
-    if(locked){const fin=base+(e.clientX-sx);open=fin<-W()/2;row.style.transform=open?'translateX(-'+W()+'px)':'';sw.classList.remove('drag');suppress=true;setTimeout(()=>suppress=false,60);if(open)haptic('light')}
-  };
-  row.addEventListener('pointerup',end);row.addEventListener('pointercancel',end);
-  row.addEventListener('click',e=>{if(suppress){e.stopImmediatePropagation();e.preventDefault();return}if(open){e.stopImmediatePropagation();open=false;row.style.transform=''}},true);
-  sw.querySelector('.swipe-del').addEventListener('click',()=>{del()});
-}
-function swipeRow(o){
-  const sw=h('<div class="swipe"><button class="swipe-del" aria-label="Remove"></button><div class="row" role="button" tabindex="0"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span></span><span class="row-val"></span><svg data-ic="chevron-right" class="chev"></svg><span class="handle" role="button"></span></div></div>');
-  sw.dataset.id=o.id;
-  sw.querySelector('.swipe-del').innerHTML=icon('trash-2','sm')+'<span>Remove</span>';
-  const row=sw.querySelector('.row');
-  row.querySelector('.row-ic').innerHTML=icon(o.icon);row.querySelector('.row-label').textContent=o.label;
-  const v=row.querySelector('.row-val');if(o.val)v.textContent=o.val;else v.remove();
-  const hd=row.querySelector('.handle');hd.innerHTML=icon('grip-vertical');hd.setAttribute('aria-label','Reorder '+o.label);
-  if(!o.reorder)hd.remove();
-  row.setAttribute('aria-label',o.label+(o.val?', '+o.val:'')+'. Tap to edit.');
-  row.addEventListener('click',()=>{if(!reorderMode)o.onTap()});
-  row.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&!reorderMode){e.preventDefault();o.onTap()}});
-  attachSwipe(sw,row,o.onDelete);
-  if(o.reorder)attachReorder(sw,hd);
-  return sw;
-}
-function attachReorder(sw,handle){
-  handle.addEventListener('pointerdown',e=>{
-    if(!reorderMode)return;e.preventDefault();e.stopPropagation();
-    handle.setPointerCapture(e.pointerId);sw.classList.add('dragging');haptic('medium');
-    let startY=e.clientY;
-    const move=ev=>{
-      let dy=ev.clientY-startY;
-      const next=sw.nextElementSibling,prev=sw.previousElementSibling;
-      if(next&&next.classList.contains('swipe')&&dy>next.offsetHeight/2){sw.parentNode.insertBefore(next,sw);startY+=next.offsetHeight;dy=ev.clientY-startY;haptic('light')}
-      else if(prev&&prev.classList.contains('swipe')&&dy<-prev.offsetHeight/2){sw.parentNode.insertBefore(sw,prev);startY-=prev.offsetHeight;dy=ev.clientY-startY;haptic('light')}
-      sw.style.transform='translateY('+dy+'px)';
-    };
-    const up=()=>{
-      handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',up);handle.removeEventListener('pointercancel',up);
-      sw.classList.remove('dragging');sw.style.transform='';
-      const order=[...$('setHabits').querySelectorAll('.swipe')].map(x=>x.dataset.id);
-      if(order.join()!==settings.habits.map(x=>x.id).join()){settings.habits=order.map(id=>settings.habits.find(x=>x.id===id));persistSettings('Order updated')}
-    };
-    handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',up);handle.addEventListener('pointercancel',up);
-  });
-}
-function addRow(label,onTap,id){
-  const b=h('<button class="row add-row"><span class="row-ic"></span><span class="row-body"><span class="row-label" style="color:var(--accent)"></span></span></button>');
-  b.querySelector('.row-ic').innerHTML=icon('plus');b.querySelector('.row-label').textContent=label;b.addEventListener('click',onTap);if(id)b.id=id;return b;
-}
-function renderSetup(){
-  const sh=$('setHabits');sh.innerHTML='';sh.classList.toggle('reorder',reorderMode);
-  settings.habits.forEach(x=>sh.appendChild(swipeRow({id:x.id,icon:hIcon(x),label:x.name,val:fmt(x.target)+' '+x.unit,reorder:true,onTap:()=>habitForm(x),onDelete:()=>removeHabit(x)})));
-  if(!reorderMode)sh.appendChild(addRow('Add target',()=>habitForm(null),'addHabitRow'));
-  const sr=$('setRules');sr.innerHTML='';
-  settings.rules.forEach(r=>sr.appendChild(swipeRow({id:r.id,icon:'circle-check',label:r.name,onTap:()=>ruleForm(r),onDelete:()=>removeRule(r)})));
-  sr.appendChild(addRow('Add rule',()=>ruleForm(null),'addRuleRow'));
-  renderStepGroup();
-  $('reorderBtn').textContent=reorderMode?'Done':'Reorder';
-  $('reorderBtn').setAttribute('aria-pressed',String(reorderMode));
-  $('storeNote').textContent=IS_NATIVE?'Entries are saved on this phone and copied to Documents/Comeback after every change.':'Entries are saved in this browser only.';
-  $('bkHint').textContent=IS_NATIVE?'Your entries live on this phone. A copy is also saved to Documents/Comeback after every change. Export one to keep it somewhere safe.':'Your entries live in this browser. Export a copy to keep it somewhere safe.';
-}
-async function persistSettings(msg){
-  try{await store.persist();flashSaved();toast(msg);autoBackup();markSettingsDirty();syncSoon(false)}
-  catch(e){toast("Couldn't save. Try again.",{icon:'x'})}
-  renderSetup();renderToday();renderProgress();
-}
-async function confirmRemove(name,what){
-  return(await actionSheet({title:'Remove '+name+'?',message:what||'Past entries stay saved.',actions:[{label:'Remove',value:'rm',destructive:true}]}))==='rm';
-}
-async function removeHabit(x){if(!(await confirmRemove(x.name)))return;settings.habits=settings.habits.filter(q=>q.id!==x.id);await persistSettings('Removed '+x.name)}
-async function removeRule(r){if(!(await confirmRemove('this rule','Past entries stay saved.')))return;settings.rules=settings.rules.filter(q=>q.id!==r.id);await persistSettings('Rule removed')}
-function formSheet(o){
-  const root=h('<div>'+o.fields.map(f=>'<div class="field"><label for="'+f.id+'">'+esc(f.label)+'</label><div class="box"><input id="'+f.id+'" '+(f.type?'type="'+f.type+'" inputmode="decimal" ':'')+'placeholder="'+esc(f.ph||'')+'"'+(f.focus?' data-focus':'')+' autocomplete="off"></div></div>').join('')+'<div class="err" id="fErr" role="alert"></div>'+(o.remove?'<button class="btn secondary" id="fRemove" style="color:var(--red)">'+esc(o.remove.label)+'</button>':'')+'</div>');
-  o.fields.forEach(f=>{root.querySelector('#'+f.id).value=f.value==null?'':f.value});
-  const err=root.querySelector('#fErr');
-  root.querySelectorAll('input').forEach(i=>i.addEventListener('input',()=>err.textContent=''));
-  if(o.extraButton){const eb=h('<button class="btn secondary" style="margin-bottom:var(--s3)"></button>');eb.textContent=o.extraButton.label;eb.addEventListener('click',o.extraButton.onClick);root.insertBefore(eb,err)}
-  const sh=openSheet({title:o.title,content:root,onDone:()=>{const v={};o.fields.forEach(f=>v[f.id]=root.querySelector('#'+f.id).value.trim());const e=o.validate(v);if(e){err.textContent=e;haptic('light');return false}o.onDone(v)}});
-  if(o.remove)root.querySelector('#fRemove').addEventListener('click',async()=>{if(await o.remove.confirm()){sh.close('cancel');o.remove.run()}});
-  return sh;
-}
-function habitForm(x){
-  formSheet({title:x?'Edit target':'New target',
-    fields:[{id:'fName',label:'Name',ph:'Pull-ups',value:x&&x.name,focus:!x},{id:'fTarget',label:'Daily target',ph:'10',type:'number',value:x&&x.target,focus:!!x},{id:'fUnit',label:'Unit',ph:'reps',value:x&&x.unit}],
-    validate:v=>!v.fName?'Enter a name first':!(Number(v.fTarget)>0)?(x?'Target must be above 0':'Enter a daily target above 0'):'',
-    onDone:v=>{
-      if(x){x.name=v.fName;x.target=Number(v.fTarget);x.unit=v.fUnit||x.unit;persistSettings('Target updated')}
-      else{settings.habits.push({id:slug(v.fName),name:v.fName,unit:v.fUnit||'times',target:Number(v.fTarget)});persistSettings('Added '+v.fName)}
-    },
-    remove:x?{label:'Remove target',confirm:()=>confirmRemove(x.name),run:()=>{settings.habits=settings.habits.filter(q=>q.id!==x.id);persistSettings('Removed '+x.name)}}:null});
-}
-function ruleForm(r){
-  formSheet({title:r?'Edit rule':'New rule',fields:[{id:'fName',label:'Rule',ph:'No mithai',value:r&&r.name,focus:true}],
-    validate:v=>!v.fName?'Enter a rule first':'',
-    onDone:v=>{if(r){r.name=v.fName;persistSettings('Rule updated')}else{settings.rules.push({id:slug(v.fName),name:v.fName});persistSettings('Rule added')}},
-    remove:r?{label:'Remove rule',confirm:()=>confirmRemove('this rule'),run:()=>{settings.rules=settings.rules.filter(q=>q.id!==r.id);persistSettings('Rule removed')}}:null});
-}
-$('reorderBtn').addEventListener('click',()=>{reorderMode=!reorderMode;haptic('light');renderSetup()});
-
-/* ---------- account and sync (rows on the Plan screen) ---------- */
+/* ---------- account and sync (rows on the Settings screen) ---------- */
 function renderSyncStatus(){
   const el=$('syncStatus'),n=pendingCount();
   if(!signedIn()){el.textContent='';return}
@@ -734,15 +438,18 @@ function refreshAll(){renderToday();renderProgress();renderSetup();showLastBacku
 /* ================= onboarding ================= */
 const ONB_KEY='comeback_onboarded';
 let onb=null;
-/* Onboarding. mode 'full' = first launch: welcome, targets, reminder, then (Android app) one permission screen, brand help, height.
-   mode 'permissions' = existing users who still need the permission screen once. mode 'replay' = "Show intro again" (welcome pages only). */
+/* Onboarding. mode 'full' = first launch: welcome, starter plan, targets, reminder, then (Android app) one permission screen and brand help,
+   then height and BMI scale. mode 'permissions' = existing users who still need the permission screen once (permissions, brand help, height).
+   mode 'replay' = "Show intro again" (welcome page only). */
 function showPermissionSetup(){showOnboarding({mode:'permissions'})}
 function showOnboarding(opts){
   if(onb)return;
   const mode=(opts&&opts.mode)||'replay';
-  const stepFlow=stepsAvailable()&&mode!=='replay';   // permission screen, brand help and height only exist in the Android app
+  const full=mode==='full';
+  const stepFlow=stepsAvailable()&&mode!=='replay';   // permission screen and brand help only exist in the Android app
   const intro=mode!=='permissions';
   const edits={};
+  let chosenScale=settings.body.scale||'standard',chosenHeight=null,chosenPlan=null;
   const root=h('<div class="onb" role="dialog" aria-modal="true" aria-label="'+(intro?'Welcome to Comeback':'Set up step counting')+'"><div class="onb-top"><button class="txtbtn" id="onbSkip">Skip</button></div><div class="onb-pages"><div class="onb-track" id="onbTrack"></div></div><div class="dots" id="onbDots" aria-hidden="true"></div><div class="onb-foot" id="onbFoot"></div></div>');
   const track=root.querySelector('#onbTrack'),foot=root.querySelector('#onbFoot'),dotsEl=root.querySelector('#onbDots');
   const pages=[];   // [{id,el}]
@@ -755,22 +462,43 @@ function showOnboarding(opts){
     track.style.transform='translateX(-'+(page*100/pages.length)+'%)';
   }
   const art=(el,name)=>{el.querySelector('.onb-art').innerHTML=icon(name);return el};
-  let page=0,permResult=null,reminderSwitch=null;
+  let page=0,permResult=null,reminderSwitch=null,nextBtn=null;
 
-  if(intro){
-    addPage('welcome',art(h('<div class="onb-page"><div class="onb-art"></div><h2>Get back to your best, one day at a time.</h2><p>Tap a target to log your workouts and water. Steps are counted by your phone. Switch on the rules you kept. Everything saves by itself, and you can undo any change.</p></div>'),'trending-up'));
-    const p2=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Set your targets</h2><p>These are a starting point. Change a number now or later in Plan.</p><div class="group" id="onbTargets"></div></div>'),'target');
-    settings.habits.forEach(x=>{
+  const targetHabits=()=>settings.habits.filter(x=>!x.hidden&&(x.type==='count'||x.type==='duration'||x.type==='steps'));
+  function buildTargets(){
+    const box=root.querySelector('#onbTargets');if(!box)return;
+    box.innerHTML='';
+    Object.keys(edits).forEach(k=>delete edits[k]);
+    const list=targetHabits();
+    if(!list.length){box.appendChild(h('<div class="row"><span class="row-label muted">No count targets in this plan. Add habits any time from Plan.</span></div>'));return}
+    list.forEach(x=>{
       const r=h('<label class="row"><span class="row-label"></span><input class="numin" type="number" inputmode="decimal"></label>');
       r.querySelector('.row-label').textContent=x.name+' ('+x.unit+')';const i=r.querySelector('input');i.value=x.target;i.setAttribute('aria-label',x.name+' daily target');
-      i.addEventListener('input',()=>{edits[x.id]=Number(i.value)});p2.querySelector('#onbTargets').appendChild(r);
+      i.addEventListener('input',()=>{edits[x.id]=Number(i.value)});box.appendChild(r);
     });
+  }
+
+  if(intro){
+    addPage('welcome',art(h('<div class="onb-page"><div class="onb-art"></div><h2>Get back to your best, one day at a time.</h2><p>Tap a card to log your workouts and water. Steps are counted by your phone. Tick the rules you kept. Everything saves by itself, and you can undo any change.</p></div>'),'trending-up'));
+  }
+  if(full){
+    const pl=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Pick a starting plan</h2><p>You can change everything later in Plan.</p><div class="group ic plan-pick" id="onbPlans" role="radiogroup" aria-label="Starter plan"></div></div>'),'sparkles');
+    Core.STARTER_PLANS.forEach(p=>{
+      const r=h('<button class="row planopt" role="radio" aria-checked="false"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="radio" aria-hidden="true"></span></button>');
+      r.dataset.plan=p.id;r.id='plan-'+p.id;
+      r.querySelector('.row-ic').innerHTML=icon(p.icon);r.querySelector('.row-label').textContent=p.name;r.querySelector('.row-sub').textContent=p.blurb;
+      r.addEventListener('click',()=>{
+        haptic('light');chosenPlan=p.id;
+        pl.querySelectorAll('.planopt').forEach(b=>{const on=b===r;b.setAttribute('aria-checked',String(on));b.classList.toggle('sel',on)});
+        if(nextBtn)nextBtn.disabled=false;
+      });
+      pl.querySelector('#onbPlans').appendChild(r);
+    });
+    addPage('plan',pl);
+    const p2=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Set your targets</h2><p>These are a starting point. Change a number now or later in Plan.</p><div class="group" id="onbTargets"></div></div>'),'target');
     addPage('targets',p2);
-    const p3=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Never miss a day</h2><p>Get one gentle reminder a day. Pick the time that suits you. You can turn it off anytime in Plan.</p><div class="group"><label class="row"><span class="row-label">Reminder time</span><input type="time" id="onbTime" value="21:00" aria-label="Reminder time"></label></div></div>'),'bell');
-    if(stepFlow){
-      const sw=h('<label class="row"><span class="row-label">Daily reminder</span><input type="checkbox" class="switch" role="switch" id="onbRemOn" aria-label="Daily reminder" checked></label>');
-      p3.querySelector('.group').insertBefore(sw,p3.querySelector('.group').firstChild);reminderSwitch=sw.querySelector('input');
-    }
+    const p3=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Never miss a day</h2><p>Get one gentle reminder a day. Pick the time that suits you. You can change it any time in Settings.</p><div class="group"><label class="row"><span class="row-label">Daily reminder</span><input type="checkbox" class="switch" role="switch" id="onbRemOn" aria-label="Daily reminder" checked></label><label class="row"><span class="row-label">Reminder time</span><input type="time" id="onbTime" value="21:00" aria-label="Reminder time"></label></div></div>'),'bell');
+    reminderSwitch=p3.querySelector('#onbRemOn');
     addPage('reminder',p3);
   }
   if(stepFlow){
@@ -780,32 +508,67 @@ function showOnboarding(opts){
       row.querySelector('.row-ic').innerHTML=icon(r[0]);row.querySelector('.row-label').textContent=r[1];row.querySelector('.row-sub').textContent=r[2];pp.querySelector('#onbPerms').appendChild(row);
     });
     addPage('perm',pp);
-    const ph=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Your height</h2><p>Used to estimate how far you walk. You can change it any time in Plan.</p><div class="group"><label class="row"><span class="row-label">Height (cm)</span><input class="numin" id="onbHeight" type="number" inputmode="numeric" aria-label="Height in centimetres"></label></div><p class="err" id="onbHeightErr" role="alert"></p></div>'),'user');
-    ph.querySelector('#onbHeight').value=meta.steps.heightCm;
+  }
+  if(full||stepFlow){
+    const ph=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Your height</h2><p>'+(full?'Used for your BMI and to estimate how far you walk. You can skip this and add it later in Settings.':'Used to estimate how far you walk. You can change it any time in Settings.')+'</p><div class="group"><label class="row"><span class="row-label">Height (cm)</span><input class="numin" id="onbHeight" type="number" inputmode="decimal" aria-label="Height in centimetres"></label></div><p class="err" id="onbHeightErr" role="alert"></p></div>'),'user');
+    ph.querySelector('#onbHeight').value=settings.body.heightCm!=null?r1(settings.body.heightCm):(full?'':meta.steps.heightCm);
     addPage('height',ph);
+  }
+  if(full){
+    const ps=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Pick a BMI scale</h2><p>Healthy ranges differ a little by background. The Asian scale is recommended if you are of South, East or Southeast Asian background.</p><div class="group ic plan-pick" id="onbScales" role="radiogroup" aria-label="BMI scale"></div></div>'),'activity');
+    [['standard','Standard (WHO)','Healthy range 18.5 to 24.9'],['asian','Asian (WHO Asia-Pacific)','Healthy range 18.5 to 22.9']].forEach(sc=>{
+      const r=h('<button class="row planopt" role="radio"><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="radio" aria-hidden="true"></span></button>');
+      r.id='scale-'+sc[0];r.querySelector('.row-label').textContent=sc[1];r.querySelector('.row-sub').textContent=sc[2];
+      r.addEventListener('click',()=>{haptic('light');chosenScale=sc[0];ps.querySelectorAll('.planopt').forEach(b=>{const on=b.id==='scale-'+chosenScale;b.setAttribute('aria-checked',String(on));b.classList.toggle('sel',on)})});
+      ps.querySelector('#onbScales').appendChild(r);
+    });
+    ps.querySelectorAll('.planopt').forEach(b=>{const on=b.id==='scale-'+chosenScale;b.setAttribute('aria-checked',String(on));b.classList.toggle('sel',on)});
+    addPage('scale',ps);
   }
   hydrate(root);
 
   async function finish(applyReminder){
+    let changed=false;
     const ch=Object.keys(edits).filter(id=>edits[id]>0&&settings.habits.find(x=>x.id===id&&x.target!==edits[id]));
-    if(ch.length){ch.forEach(id=>{settings.habits.find(x=>x.id===id).target=edits[id]});await persistSettings('Targets saved')}
+    if(ch.length){ch.forEach(id=>{settings.habits.find(x=>x.id===id).target=edits[id]});changed=true}
+    if(full){
+      if(chosenHeight!=null&&settings.body.heightCm!==chosenHeight){settings.body.heightCm=chosenHeight;meta.steps.heightCm=Math.round(chosenHeight);changed=true}
+      if(settings.body.scale!==chosenScale){settings.body.scale=chosenScale;changed=true}
+    }
+    if(changed)await persistSettings();
     if(applyReminder){$('remTime').value=root.querySelector('#onbTime')?root.querySelector('#onbTime').value||'21:00':'21:00';$('remOn').checked=true;await setReminder(true)}
     try{await prefSet(ONB_KEY,'1')}catch(e){}
+    refreshAll();
     root.style.opacity='0';root.style.transition='opacity .25s';setTimeout(()=>{root.remove();onb=null},reduced()?20:260);
   }
   const btn=(label,id,cls,fn)=>{const b=h('<button class="btn'+(cls?' '+cls:'')+'" id="'+id+'"></button>');b.textContent=label;b.addEventListener('click',fn);foot.appendChild(b);return b};
+  /* reads the height box. Returns {ok, cm} where cm is null when it was left empty */
+  function readHeight(){
+    const v=root.querySelector('#onbHeight').value.trim(),err=root.querySelector('#onbHeightErr');
+    if(v===''){err.textContent='';return{ok:true,cm:null}}
+    const n=Number(v);
+    if(!(n>=100&&n<=230)){err.textContent='Enter a height between 100 and 230 cm';haptic('light');return{ok:false}}
+    err.textContent='';return{ok:true,cm:Math.round(n*10)/10};
+  }
+  async function startAndFinish(){
+    if(stepFlow)await enableStepCounting(chosenHeight!=null?Math.round(chosenHeight):undefined);
+    await finish(!!(reminderSwitch&&reminderSwitch.checked));
+  }
   function go(n){
     page=clamp(n,0,pages.length-1);layout();
-    foot.innerHTML='';
+    foot.innerHTML='';nextBtn=null;
     const id=pages[page].id;
-    if(id==='welcome'||id==='targets')btn('Next','onbNext','',()=>go(page+1));
-    else if(id==='reminder'){
-      if(stepFlow)btn('Next','onbNext','',()=>go(page+1));
-      else{
-        btn('Turn on reminder','onbRemind','',()=>finish(true));
-        btn('Not now','onbLater','secondary',()=>finish(false));
-      }
+    if(id==='welcome')nextBtn=btn(full?'Next':'Got it','onbNext','',()=>{if(full)go(page+1);else finish(false)});
+    else if(id==='plan'){
+      nextBtn=btn('Next','onbNext','',()=>{
+        if(!chosenPlan)return;
+        Core.applyStarterPlan(settings,chosenPlan);
+        buildTargets();go(page+1);
+      });
+      nextBtn.disabled=!chosenPlan;
     }
+    else if(id==='targets')nextBtn=btn('Next','onbNext','',()=>go(page+1));
+    else if(id==='reminder')nextBtn=btn('Next','onbNext','',()=>go(page+1));
     else if(id==='perm'){
       const b=btn('Allow and continue','onbAllow','',async()=>{
         b.disabled=true;b.textContent='Asking…';
@@ -831,32 +594,41 @@ function showOnboarding(opts){
       btn('Skip for now','onbBrandNext','secondary',()=>go(page+1));
     }
     else if(id==='height'){
-      btn('Start counting','onbStart','',async()=>{
-        const v=Number(root.querySelector('#onbHeight').value),err=root.querySelector('#onbHeightErr');
-        if(!(v>=100&&v<=230)){err.textContent='Enter a height between 100 and 230 cm';haptic('light');return}
-        err.textContent='';
-        await enableStepCounting(Math.round(v));
-        await finish(!!(reminderSwitch&&reminderSwitch.checked));
-      });
+      if(full){
+        btn('Next','onbNext','',()=>{const r=readHeight();if(!r.ok)return;chosenHeight=r.cm;go(page+1)});
+      }else{
+        btn('Start counting','onbStart','',async()=>{const r=readHeight();if(!r.ok)return;chosenHeight=r.cm;await startAndFinish()});
+      }
     }
-    root.querySelector('#onbSkip').hidden=!(id==='welcome'||id==='targets')||(mode==='permissions');
+    else if(id==='scale'){
+      btn(stepFlow?'Start counting':'Finish','onbStart','',startAndFinish);
+    }
+    root.querySelector('#onbSkip').hidden=!(id==='welcome'||id==='plan'||id==='targets')||(mode==='permissions')||mode==='replay';
   }
-  root.querySelector('#onbSkip').addEventListener('click',()=>{if(stepFlow)go(idx('perm'));else finish(false)});
+  root.querySelector('#onbSkip').addEventListener('click',()=>{
+    if(stepFlow&&idx('perm')>=0)go(idx('perm'));
+    else if(full&&idx('height')>=0)go(idx('height'));
+    else finish(false);
+  });
   onb={back(){if(page>0)go(page-1);else finish(false)}};
   document.body.appendChild(root);go(0);
 }
 
 /* ================= tabs, nav bar, native glue ================= */
-const scrollPos={today:0,progress:0,setup:0};
+const scrollPos={today:0,progress:0,setup:0,settings:0};
 function updateNav(){
   const t=document.querySelector('.screen.on .large-title');if(!t)return;
   const nb=$('navbar'),bottom=t.getBoundingClientRect().bottom;
   nb.classList.toggle('compact',bottom<nb.offsetHeight+6);
 }
 function showTab(t){
+  if(t!=='today'&&typeof editing!=='undefined'&&editing)exitEdit();
   scrollPos[activeTab]=window.scrollY;activeTab=t;
   document.querySelectorAll('.screen').forEach(p=>p.classList.toggle('on',p.id==='p-'+t));
   document.querySelectorAll('.tab').forEach(b=>{if(b.dataset.tab===t)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+  const inSettings=t==='settings';
+  $('navBack').hidden=!inSettings;$('gearBtn').hidden=inSettings;
+  document.body.classList.toggle('in-settings',inSettings);
   window.scrollTo(0,scrollPos[t]||0);
   $('navTitle').textContent=document.querySelector('.screen.on .large-title').textContent;
   updateNav();
@@ -885,6 +657,8 @@ function initNativeGlue(){
   Native.App.addListener('backButton',()=>{
     if(closeTopLayer())return;
     if(onb){onb.back();return}
+    if(editing){exitEdit();return}
+    if(activeTab==='settings'){closeSettings();return}
     if(activeTab!=='today'){showTab('today');return}
     flushSave();
     Native.App.exitApp();
@@ -895,26 +669,3 @@ function initNativeGlue(){
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeTopLayer()});
 $('replayIntro').addEventListener('click',()=>showOnboarding({mode:'replay'}));
 
-/* ================= start ================= */
-(async function(){
-  hydrate();
-  current=todayStr();lastToday=current;
-  bindLogic();
-  renderToday();renderSetup();showTab('today');
-  initNativeGlue();
-  try{
-    const all=await store.load();
-    if(all.data){settings=all.data.settings;days=all.data.days}
-    if(all.migrated)setMsg('bkMsg','Moved '+all.migrated+' saved '+(all.migrated===1?'day':'days')+' from the old browser storage.');
-  }catch(e){loadProblem="Couldn't read your saved entries: "+errText(e)}
-  refreshAll();
-  if(loadProblem)setMsg('bkMsg',loadProblem,true);
-  initReminder();
-  initSync();
-  initSteps();
-  try{
-    if(await prefGet(ONB_KEY)==null){
-      if(Object.keys(days).length){await prefSet(ONB_KEY,'1');await maybeShowPermissionSetup()}else showOnboarding({mode:'full'});
-    }else await maybeShowPermissionSetup();
-  }catch(e){}
-})();

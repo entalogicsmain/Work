@@ -1,0 +1,172 @@
+/* Settings: account and sync, backup, reminder, step tracking health, permissions, units, body, suggestions, advanced.
+   Opened from the gear in the top bar. Goals (habits, targets, schedules) live in Plan (plan.js). */
+
+let settingsFrom='today';
+function openSettings(){
+  if(activeTab==='settings')return;
+  closeAllLayers();settingsFrom=activeTab;haptic('light');
+  showTab('settings');
+  renderSettings();
+  if(stepsAvailable())renderStepGroup(true);
+}
+function closeSettings(){if(activeTab==='settings')showTab(settingsFrom&&settingsFrom!=='settings'?settingsFrom:'today')}
+$('gearBtn').addEventListener('click',openSettings);
+$('navBack').addEventListener('click',()=>{haptic('light');closeSettings()});
+
+const advOpen={v:false};
+const permState={activity:null,notifications:null,battery:null};
+
+function settingRow(o){return stepRow(o)}
+function switchRow(o){
+  const r=h('<label class="row"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><input type="checkbox" class="switch" role="switch"></label>');
+  r.querySelector('.row-ic').innerHTML=icon(o.icon);
+  r.querySelector('.row-label').textContent=o.label;
+  const sub=r.querySelector('.row-sub');if(o.sub)sub.textContent=o.sub;else sub.remove();
+  const box=r.querySelector('input');box.checked=!!o.on;box.setAttribute('aria-label',o.label);
+  if(o.id)r.id=o.id;if(o.boxId)box.id=o.boxId;
+  box.addEventListener('change',()=>o.onChange(box.checked,box));
+  return r;
+}
+
+/* ---------- step tracking (Android app only) ---------- */
+function renderStepGroup(fetchStatus){
+  const head=$('stepHead'),g=$('stepGroup'),foot=$('stepFoot'),msg=$('stMsg');
+  const show=stepsAvailable()&&!!stepsHabit();
+  [head,g,foot,msg].forEach(e=>{if(e)e.hidden=!show});
+  if(!show){renderPermissions();return}
+  if(fetchStatus!==false)stepsPlugin().getStatus().then(s=>{stepStatus=s;stepHealthKey=s.health||stepHealthKey;renderStepGroup(false)}).catch(()=>{});
+  g.innerHTML='';
+  const auto=stepsAuto();
+  if(!auto){
+    g.appendChild(stepRow({id:'stTurnOn',icon:'footprints',tint:'orange',label:'Turn on step counting',chev:true,sub:'Counts steps with your phone\'s motion sensor.',onTap:turnOnStepCounting}));
+    foot.textContent='Steps come only from your phone. Nothing is shared with other apps.';
+  }else{
+    const hk=HEALTH_TEXT[stepHealthKey]?stepHealthKey:'working';
+    const hi=HEALTH_ICON[hk];
+    g.appendChild(stepRow({id:'stHealth',static:true,icon:hi[0],tint:hi[1],label:'Step tracking health',sub:HEALTH_TEXT[hk]}));
+    if(hk==='permission_missing')g.appendChild(stepRow({id:'stFix',icon:'shield-check',label:'Allow permission',chev:true,onTap:fixStepHealth}));
+    if(hk==='paused_battery')g.appendChild(stepRow({id:'stFix',icon:'battery-low',label:'Fix battery settings',chev:true,onTap:fixStepHealth}));
+    const todayMeta=days[todayStr()]&&days[todayStr()].steps_meta;
+    const filt=(stepStatus&&stepStatus.filteredToday)!=null?stepStatus.filteredToday:0;
+    g.appendChild(stepRow({id:'stFiltered',static:true,icon:'car',label:'Steps filtered out today',sub:'Vehicle vibration and short shuffles are not counted',val:String(todayMeta?todayMeta.filtered:filt)}));
+    foot.textContent='Steps are counted by your phone all day, even when the app is closed. They can\'t be typed in. Set the daily target in Plan.';
+  }
+  renderPermissions();renderAdvanced();
+}
+
+/* ---------- permissions ---------- */
+async function readPermissions(){
+  const P=stepsPlugin();if(!P)return;
+  try{const s=await P.getStatus();permState.activity=!!s.activityPermission}catch(e){}
+  try{if(Native.LocalNotifications){const p=await Native.LocalNotifications.checkPermissions();permState.notifications=p.display==='granted'}}catch(e){}
+  try{const i=await P.getDeviceInfo();permState.battery=!!i.batteryIgnored}catch(e){}
+}
+function renderPermissions(){
+  const head=$('permHead'),g=$('permGroup'),foot=$('permFoot');
+  const show=stepsAvailable();
+  [head,g,foot].forEach(e=>{e.hidden=!show});
+  if(!show)return;
+  g.innerHTML='';
+  const st=v=>v==null?'':v?'Allowed':'Not allowed';
+  const row=(id,ic,label,sub,key,onTap)=>{
+    const r=stepRow({id,icon:ic,tint:permState[key]===false?'orange':permState[key]?'green':'',label,sub,val:st(permState[key]),chev:true,onTap});
+    g.appendChild(r);
+  };
+  row('pmActivity','footprints','Physical activity','Counts your steps.','activity',async()=>{await askStepPermission();await readPermissions();renderPermissions();renderStepGroup(true)});
+  row('pmNotif','bell','Notifications','Daily reminder and the step counter notification.','notifications',async()=>{
+    try{
+      let p=await Native.LocalNotifications.checkPermissions();
+      if(p.display!=='granted')p=await Native.LocalNotifications.requestPermissions();
+      if(p.display!=='granted')try{await stepsPlugin().openSettings({target:'app'})}catch(e){}
+    }catch(e){}
+    await readPermissions();renderPermissions();
+  });
+  row('pmBattery','battery-low','Battery','Lets counting keep running in the background.','battery',async()=>{await batterySetup();await readPermissions();renderPermissions();renderStepGroup(true)});
+  foot.textContent='You can change these here or in Android settings at any time.';
+}
+
+/* ---------- units ---------- */
+function segRow(o){
+  const r=h('<div class="row segrow"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span></span><div class="seg mini" role="radiogroup"></div></div>');
+  r.querySelector('.row-ic').innerHTML=icon(o.icon);
+  r.querySelector('.row-label').textContent=o.label;
+  const seg=r.querySelector('.seg');seg.setAttribute('aria-label',o.label);
+  if(o.id)r.id=o.id;
+  o.options.forEach(op=>{
+    const b=h('<button role="radio"></button>');b.textContent=op.label;b.dataset.v=op.value;if(op.id)b.id=op.id;
+    b.setAttribute('aria-checked',String(op.value===o.value));b.setAttribute('aria-selected',String(op.value===o.value));
+    b.addEventListener('click',()=>{if(op.value!==o.value){haptic('light');o.onPick(op.value)}});
+    seg.appendChild(b);
+  });
+  return r;
+}
+async function setUnits(patch,msg){
+  settings.units=Object.assign({},settings.units,patch);
+  await saveSettingsQuiet();
+  refreshAll();
+  if(msg)toast(msg,{icon:'ruler'});
+}
+function renderUnits(){
+  const g=$('unitGroup');g.innerHTML='';
+  g.appendChild(segRow({id:'unitWeight',icon:'scale',label:'Weight',value:wUnit(),options:[{value:'kg',label:'kg',id:'uKg'},{value:'lb',label:'lb',id:'uLb'}],onPick:v=>setUnits({weight:v})}));
+  g.appendChild(segRow({id:'unitLength',icon:'ruler',label:'Height and waist',value:unitsOf().length,options:[{value:'cm',label:'cm',id:'uCm'},{value:'ftin',label:'ft / in',id:'uFt'}],onPick:v=>setUnits({length:v})}));
+}
+
+/* ---------- body ---------- */
+function renderBodyGroup(){
+  const g=$('bodyGroup');g.innerHTML='';
+  g.appendChild(stepRow({id:'stHeight',icon:'user',label:'Height',val:heightCm()!=null?fmtHeight(heightCm()):'Not set',chev:true,sub:'Used for BMI and to estimate distance walked',onTap:heightSheet}));
+  g.appendChild(segRow({id:'bmiScaleRow',icon:'activity',label:'BMI scale',value:bmiScale(),options:[{value:'standard',label:'Standard',id:'scStd'},{value:'asian',label:'Asian',id:'scAsia'}],onPick:async v=>{
+    settings.body=Object.assign({},settings.body,{scale:v});await saveSettingsQuiet();refreshAll();toast('BMI scale: '+Core.BMI_SCALES[v].name,{icon:'activity'});
+  }}));
+  $('bodyFoot').textContent=bmiScale()==='asian'?'Asian (WHO Asia-Pacific): healthy range 18.5 to 22.9. Often recommended for South, East and Southeast Asian backgrounds.':'Standard (WHO): healthy range 18.5 to 24.9. Choose Asian if your background is South, East or Southeast Asian.';
+}
+
+/* ---------- suggestions ---------- */
+function renderSuggestions(){
+  const g=$('sugGroup');g.innerHTML='';
+  g.appendChild(switchRow({id:'sugRow',boxId:'sugOn',icon:'trending-up',label:'Target suggestions',sub:'Offer to raise a target after 5 good days in a row',on:settings.prefs.suggestions!==false,onChange:async on=>{
+    settings.prefs=Object.assign({},settings.prefs,{suggestions:on});await saveSettingsQuiet();renderToday();
+  }}));
+}
+
+/* ---------- advanced (collapsed) ---------- */
+function renderAdvanced(){
+  const head=$('advHead'),g=$('advGroup'),foot=$('advFoot');
+  const show=stepsAvailable()&&stepsAuto()&&!!stepsHabit();
+  head.hidden=!show;g.hidden=!show;foot.hidden=!show||!advOpen.v;
+  if(!show)return;
+  g.innerHTML='';
+  const tog=h('<button class="row" id="advToggle" aria-expanded="false"><span class="row-ic"></span><span class="row-body"><span class="row-label">Step detection</span><span class="row-sub">Vehicle filter, sensitivity, location</span></span><svg data-ic="chevron-down" class="chev"></svg></button>');
+  tog.querySelector('.row-ic').innerHTML=icon('sliders-horizontal');
+  tog.setAttribute('aria-expanded',String(advOpen.v));tog.classList.toggle('open',advOpen.v);
+  tog.addEventListener('click',()=>{advOpen.v=!advOpen.v;renderAdvanced()});
+  hydrate(tog);g.appendChild(tog);
+  if(!advOpen.v)return;
+  g.appendChild(stepRow({id:'stStrict',icon:'shield-check',label:'Vehicle filter',val:STRICT_NAME[meta.steps.strictness],chev:true,sub:'How careful to be about false steps',onTap:async()=>{
+    const r=await actionSheet({title:'Vehicle filter strictness',message:'Relaxed counts shorter walks but may count a few extra steps on bumpy rides. Strict needs a longer steady walk and filters more.',
+      actions:['relaxed','balanced','strict'].map(k=>({label:STRICT_NAME[k]+(meta.steps.strictness===k?'  ✓':''),value:k}))});
+    if(r==='cancel')return;
+    meta.steps.strictness=r;await saveStepMeta();try{await configureSteps()}catch(e){}renderAdvanced();
+  }}));
+  if(stepStatus&&stepStatus.source==='accelerometer'){
+    g.appendChild(stepRow({id:'stSens',icon:'activity',label:'Accelerometer sensitivity',val:SENS_NAME[meta.steps.sensitivity],chev:true,sub:'This phone has no step counter chip, so steps come from the accelerometer',onTap:async()=>{
+      const r=await actionSheet({title:'Sensitivity',message:'Higher counts gentler steps (phone in hand). Lower ignores light movement.',actions:['low','normal','high'].map(k=>({label:SENS_NAME[k]+(meta.steps.sensitivity===k?'  ✓':''),value:k}))});
+      if(r==='cancel')return;
+      meta.steps.sensitivity=r;await saveStepMeta();try{await configureSteps()}catch(e){}renderAdvanced();
+    }}));
+  }
+  const loc=switchRow({id:'stLoc',boxId:'stLocOn',icon:'map-pin',label:'Use location to improve accuracy in vehicles',sub:'Off by default. Speed above about 15 km/h for 30 seconds pauses counting.',on:!!meta.steps.useLocation,onChange:(on,box)=>setStepLocation(on,box)});
+  g.appendChild(loc);
+  foot.textContent='These are the defaults for most people. Change them only if steps look wrong.';
+}
+
+/* ---------- the whole screen ---------- */
+function renderSettings(){
+  renderAccount();
+  renderUnits();renderBodyGroup();renderSuggestions();
+  renderStepGroup(false);
+  $('storeNote').textContent=IS_NATIVE?'Entries are saved on this phone and copied to Documents/Comeback after every change.':'Entries are saved in this browser only.';
+  $('bkHint').textContent=IS_NATIVE?'Your entries live on this phone. A copy is also saved to Documents/Comeback after every change. Export one to keep it somewhere safe.':'Your entries live in this browser. Export a copy to keep it somewhere safe.';
+  if(stepsAvailable())readPermissions().then(()=>{if(activeTab==='settings')renderPermissions()});
+}
