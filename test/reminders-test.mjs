@@ -46,7 +46,8 @@ const hasIds = (pg, ids) => until(pg, ids => { const p = Object.keys(window.__mo
 const hours = n => { const d = new Date(n.schedule.at); return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const days3 = data => ({ version: 2, settings: data.settings, days: data.days || {} });
 const grant = pg => pg.evaluate(() => { window.__mock.set('perm', 'granted'); });
-const setPref = (pg, k, v) => pg.evaluate(([k, v]) => { const st = window.__mock.st(); st.prefs[k] = v; localStorage.setItem('__mock', JSON.stringify(st)); }, [k, v]);
+// write through the page's own Preferences so a later write by the page cannot overwrite it with an older copy
+const setPref = (pg, k, v) => pg.evaluate(([k, v]) => prefSet(k, v), [k, v]);
 
 /* ================= the evening reminder only comes when something is left ================= */
 console.log('Evening reminder: only if something is left');
@@ -55,7 +56,7 @@ console.log('Evening reminder: only if something is left');
   const meta = { reminder: { enabled: true, time: '21:00' } };
   const { ctx, pg, errs } = await open({ data: days3({ settings: s, days: { [TK]: day(TK, { water: 2 }) } }) });
   await grant(pg);
-  await pg.evaluate(m => { const st = window.__mock.st(); st.prefs.comeback_meta = JSON.stringify(m); localStorage.setItem('__mock', JSON.stringify(st)); }, meta);
+  await pg.evaluate(m => prefSet('comeback_meta', JSON.stringify(m)), meta);
   await pg.reload(); await ready(pg);
   ok(await hasIds(pg, [1001, 1002, 1003]), 'on start the reminder is planned for tonight and the next two days');
   let pl = (await pendingList(pg)).filter(n => n.id >= 1001 && n.id <= 1003).sort((a, b) => a.id - b.id);
@@ -126,7 +127,7 @@ console.log('The morning cue is offered once');
   const ds = {}; for (const k of ['2026-09-29', '2026-09-30', '2026-10-01']) ds[k] = day(k, { water: 1 });
   const { ctx, pg, errs } = await open({ data: days3({ settings: s, days: ds }) });
   await grant(pg);
-  await pg.evaluate(() => { const st = window.__mock.st(); st.prefs.comeback_meta = JSON.stringify({ reminder: { enabled: true, time: '21:00' } }); localStorage.setItem('__mock', JSON.stringify(st)); });
+  await pg.evaluate(() => prefSet('comeback_meta', JSON.stringify({ reminder: { enabled: true, time: '21:00' } })));
   await pg.reload(); await ready(pg);
   await pg.waitForSelector('.asheet', { timeout: 6000 });
   ok(/good-morning nudge/.test(await pg.textContent('.asheet')) && /Not now/.test(await pg.textContent('.asheet')) && /Yes, at 8:00 AM/.test(await pg.textContent('.asheet')), 'after the third logged day, a gentle one-time offer for the morning cue (Not now, or Yes at 8:00 AM)');
