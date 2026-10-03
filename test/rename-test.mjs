@@ -42,7 +42,8 @@ const webKeys = pg => pg.evaluate(() => Object.fromEntries(Object.keys(localStor
   { const mig = JSON.parse(p.comeback);
     ok(same(mig.days, OLD_DATA.days) && mig.version === 2 && mig.settings.v === 2, 'native: old "resetlog" data now lives under "comeback" (days unchanged, settings moved to the new structure)');
     ok(['steps', 'water', 'nofried'].every(id => mig.settings.habits.some(h => h.id === id)) && mig.settings.habits.find(h => h.id === 'nofried').type === 'yesno' && mig.settings.habits.find(h => h.id === 'steps').type === 'steps', 'native: the old targets and the old rule became habits (steps, water, and the rule as Yes/No)'); }
-  ok(same(JSON.parse(p.comeback_meta).reminder, OLD_META.reminder) && JSON.parse(p.comeback_meta).lastBackup === OLD_META.lastBackup, 'native: settings and reminder moved to comeback_meta');
+  // the reminder settings gained "only if something is left" and the morning cue; the old switch and time carry over unchanged
+  ok(JSON.parse(p.comeback_meta).reminder.enabled === OLD_META.reminder.enabled && JSON.parse(p.comeback_meta).reminder.time === OLD_META.reminder.time && JSON.parse(p.comeback_meta).lastBackup === OLD_META.lastBackup, 'native: settings and reminder moved to comeback_meta');
   ok(p.comeback_migrated === '1' && p.comeback_onboarded === '1' && same(JSON.parse(p.comeback_sync), OLD_SYNC), 'native: migrated flag, onboarding flag and sync state moved');
   ok(p.comeback_unreadable_1700 === '{"broken', 'native: a kept unreadable copy moved too');
   ok(!Object.keys(p).some(k => k.startsWith('resetlog')), 'native: every old "resetlog" key was removed', Object.keys(p));

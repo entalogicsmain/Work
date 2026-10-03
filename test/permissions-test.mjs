@@ -77,7 +77,7 @@ console.log('All allowed');
   const cfg = (await mock(pg)).calls.filter(c => c.n === 'stepsConfigure').pop();
   ok(cfg && cfg.a.enabled === true && cfg.a.heightCm === 172, 'the step service starts right away with the chosen height', cfg && cfg.a);
   const m = await mock(pg);
-  ok(m.calls.some(c => c.n === 'schedule' && (c.a.notifications || [c.a]).some(x => x.schedule && x.schedule.on && x.schedule.on.hour === 20 && x.schedule.on.minute === 15)), 'the reminder is scheduled at the time picked earlier');
+  ok(m.calls.some(c => c.n === 'schedule' && (c.a.notifications || [c.a]).some(x => x.schedule && x.schedule.at && new Date(x.schedule.at).getHours() === 20 && new Date(x.schedule.at).getMinutes() === 15)), 'the reminder is scheduled at the time picked earlier (as one-shot notifications)');
   ok(m.prefs.comeback_onboarded === '1', 'onboarding is marked done');
   await gear(pg);
   ok(!(await pg.isVisible('#stLocOn')), 'the location setting is tucked away under Advanced');

@@ -141,6 +141,10 @@ function renderSuggestions(){
   g.appendChild(switchRow({id:'sugRow',boxId:'sugOn',icon:'trending-up',label:'Target suggestions',sub:'Offer to raise a target after 5 good days in a row',on:settings.prefs.suggestions!==false,onChange:async on=>{
     settings.prefs=Object.assign({},settings.prefs,{suggestions:on});await saveSettingsQuiet();renderToday();
   }}));
+  // only people who started with a plan on a new install have the first-week ramp (Core.applyStarterPlan sets it); everyone else never sees this
+  if(settings.prefs.ramp!==undefined)g.appendChild(switchRow({id:'rampRow',boxId:'rampOn',icon:'leaf',label:'Ease me in during the first week',sub:'Shows 3 habits at first, and the rest when you are ready',on:settings.prefs.ramp===true,onChange:async on=>{
+    settings.prefs=Object.assign({},settings.prefs,{ramp:on});await saveSettingsQuiet();renderToday(true);
+  }}));
 }
 
 /* ---------- advanced (collapsed) ---------- */
@@ -174,8 +178,18 @@ function renderAdvanced(){
   foot.textContent='These are the defaults for most people. Change them only if steps look wrong.';
 }
 
+/* ---------- reminder group (markup is in index.html; the logic is in logic.js) ---------- */
+initTime12($('remMornTime'),'Morning cue time');
+function renderReminderGroup(){
+  const r=meta.reminder;
+  $('remOn').checked=!!r.enabled;$('remTime').value=r.time;
+  $('remIfOpen').checked=r.onlyIfOpen!==false;
+  $('remMornOn').checked=!!r.morning.enabled;$('remMornTime').value=r.morning.time;
+}
+
 /* ---------- the whole screen ---------- */
 function renderSettings(){
+  renderReminderGroup();
   renderAccount();
   renderUnits();renderBodyGroup();renderSuggestions();renderAppearance();
   renderStepGroup(false);

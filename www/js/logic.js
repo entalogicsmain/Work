@@ -16,6 +16,7 @@ const parse=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
 const todayStr=()=>ymd(new Date());
 const nice=s=>parse(s).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
 const r1=n=>Math.round(n*10)/10;
+const r2=n=>Math.round(n*100)/100;      // quick-add amounts go down to a quarter
 const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30)+'-'+Date.now().toString(36);
 
 /* Score for one day (0-100). Only habits that were due that day count; a day with nothing due scores 0 here (see Core.dayScore for null). */
@@ -161,7 +162,7 @@ function mergeData(local,inc){
 }
 
 /* ---------- storage (Capacitor Preferences) ---------- */
-let meta={lastBackup:null,reminder:{enabled:false,time:'21:00'},steps:{heightCm:180,strictness:'balanced',sensitivity:'normal',useLocation:false,enabledAt:null,setupShown:false},nudges:[],suggestSnooze:{},heightChecked:false};
+let meta={lastBackup:null,reminder:Core.normalizeReminderMeta(null),reminderIds:[],rampOffered:false,steps:{heightCm:180,strictness:'balanced',sensitivity:'normal',useLocation:false,enabledAt:null,setupShown:false},nudges:[],suggestSnooze:{},heightChecked:false};
 let loadProblem='';
 /* Height used to live in this phone's step settings. It is now part of the synced settings (and is the BMI height). */
 function adoptDeviceHeight(){
@@ -253,7 +254,7 @@ store={
       }
       if(!loadProblem)await prefSet(MIGRATED_KEY,'1');
     }
-    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupShown:!!st.setupShown}}if(Array.isArray(mm.nudges))meta.nudges=mm.nudges.filter(t=>typeof t==='string').slice(-20);if(mm.heightChecked===true)meta.heightChecked=true;if(mm.suggestSnooze&&typeof mm.suggestSnooze==='object'&&!Array.isArray(mm.suggestSnooze)){const o={};Object.keys(mm.suggestSnooze).forEach(k=>{if(ID_RE.test(k)&&DATE_RE.test(String(mm.suggestSnooze[k])))o[k]=mm.suggestSnooze[k]});meta.suggestSnooze=o}if(mm.reminder&&typeof mm.reminder==='object')meta.reminder={enabled:!!mm.reminder.enabled,time:/^\d{2}:\d{2}$/.test(mm.reminder.time)?mm.reminder.time:'21:00'}}}catch(e){}
+    try{const m=await prefGet(META_KEY);if(m){const mm=JSON.parse(m);meta.lastBackup=num(mm.lastBackup)?mm.lastBackup:null;if(mm.steps&&typeof mm.steps==='object'){const st=mm.steps;meta.steps={heightCm:num(st.heightCm)&&st.heightCm>=100&&st.heightCm<=230?st.heightCm:180,strictness:['relaxed','balanced','strict'].includes(st.strictness)?st.strictness:'balanced',sensitivity:['low','normal','high'].includes(st.sensitivity)?st.sensitivity:'normal',useLocation:!!st.useLocation,enabledAt:num(st.enabledAt)?st.enabledAt:null,setupShown:!!st.setupShown}}if(Array.isArray(mm.nudges))meta.nudges=mm.nudges.filter(t=>typeof t==='string').slice(-20);if(mm.heightChecked===true)meta.heightChecked=true;if(mm.suggestSnooze&&typeof mm.suggestSnooze==='object'&&!Array.isArray(mm.suggestSnooze)){const o={};Object.keys(mm.suggestSnooze).forEach(k=>{if(ID_RE.test(k)&&DATE_RE.test(String(mm.suggestSnooze[k])))o[k]=mm.suggestSnooze[k]});meta.suggestSnooze=o}if(mm.reminder&&typeof mm.reminder==='object')meta.reminder=Core.normalizeReminderMeta(mm.reminder);if(Array.isArray(mm.reminderIds))meta.reminderIds=mm.reminderIds.filter(Number.isInteger).slice(0,3000);if(mm.rampOffered===true)meta.rampOffered=true}}catch(e){}
     try{const sv=await prefGet(SYNC_KEY);if(sv){const ss=JSON.parse(sv);sync.signedIn=!!ss.signedIn;sync.userId=typeof ss.userId==='string'?ss.userId:null;sync.email=typeof ss.email==='string'?ss.email:'';sync.lastSyncAt=num(ss.lastSyncAt)?ss.lastSyncAt:null;sync.settingsUpdatedAt=num(ss.settingsUpdatedAt)?ss.settingsUpdatedAt:0;sync.pendingDays=Array.isArray(ss.pendingDays)?ss.pendingDays.filter(k=>typeof k==='string'):[];sync.pendingSettings=!!ss.pendingSettings;sync.seen={};if(ss.seen&&typeof ss.seen==='object'&&!Array.isArray(ss.seen))Object.keys(ss.seen).forEach(k=>{if(num(ss.seen[k]))sync.seen[k]=ss.seen[k]})}}catch(e){}
     if(raw==null)return{migrated};
     try{
@@ -410,6 +411,7 @@ async function restoreFromFile(file){
   setMsg('bkMsg',summary+warn,!!warn);
   autoBackup();
   syncSoon(false);
+  rescheduleReminders();   // the restored plan may hold other habit reminders
 }
 
 /* When the saved copy couldn't be read, Settings > Backup gets a "Recover" row. It offers the copy that was kept through the same
@@ -432,60 +434,145 @@ function showLoadNotice(){
   else if(loadNotice)setMsg('bkMsg',loadNotice,true);
 }
 
-/* ---------- daily reminder ---------- */
-const REM_ID=1001,REM_CHANNEL='daily-reminder';
+/* ---------- reminders ----------
+   Three kinds, all local notifications on one channel: the evening reminder, an optional morning cue, and each habit's own
+   reminders (Plan > a habit > Remind me). What should be scheduled is decided by Core.planReminders (core.js, pure). Because a
+   notification is scheduled ahead, "only remind me if something is left" works by planning one-shot notifications (schedule.at)
+   for today and the next two days and planning again whenever anything changes: rescheduleReminders() runs after every save
+   (flushSave, plan edits, restore, cloud pull), when the app opens and when it comes back. It replaces everything planned
+   before. With that switch off the evening reminder is the old repeating daily one (schedule.on), which needs no re-planning.
+   All of it is inexact and allowed while idle (Doze friendly). If the app is not opened for three days the one-shots run out
+   and the reminders go quiet by themselves, which is deliberate: no nagging. Repeating notifications are only used for
+   per-habit reminders that do not skip when done. */
+const REM_CHANNEL='daily-reminder';
 const LN=()=>Native.LocalNotifications;
-async function scheduleReminder(time){
-  const [h,m]=time.split(':').map(Number);
-  await LN().cancel({notifications:[{id:REM_ID}]});
-  await LN().createChannel({id:REM_CHANNEL,name:'Daily reminder',description:'Reminds you to log your day',importance:4,visibility:1});
-  await LN().schedule({notifications:[{
-    id:REM_ID,title:'Comeback',body:'Time to log today. How did your comeback go?',
-    channelId:REM_CHANNEL,smallIcon:'ic_stat_comeback',
-    schedule:{on:{hour:h,minute:m},allowWhileIdle:true},isExactNotification:false,
-    extra:{tab:'today'}
-  }]});
-}
 const BLOCKED="Notifications are blocked for Comeback. Turn them on in Android Settings > Apps > Comeback > Notifications, then switch this on again.";
+const fmtTime=t=>{const [h,m]=t.split(':').map(Number);return new Date(2000,0,1,h,m).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',hour12:true})};
+const remWanted=()=>{const r=meta.reminder;return r.enabled||r.morning.enabled||settings.habits.some(x=>!x.hidden&&x.remind&&x.remind.times&&x.remind.times.length)};
+async function notifGranted(){try{return(await LN().checkPermissions()).display==='granted'}catch(e){return false}}
+/** Asks for the notification permission when it has not been decided yet. */
+async function ensureNotifPermission(){
+  if(!IS_NATIVE)return false;
+  let p=await LN().checkPermissions();
+  if(p.display!=='granted')p=await LN().requestPermissions();
+  return p.display==='granted';
+}
+const lnSpec=n=>({id:n.id,title:n.title,body:n.body,channelId:REM_CHANNEL,smallIcon:'ic_stat_comeback',
+  schedule:n.at?{at:n.at,allowWhileIdle:true}:{on:n.on,allowWhileIdle:true},isExactNotification:false,extra:{tab:'today'}});
+/* Cancels everything this app scheduled before (the ids are remembered in meta) and schedules what Core.planReminders says now. */
+async function applyReminders(){
+  const old=Array.isArray(meta.reminderIds)?meta.reminderIds:[];
+  let list=[];
+  if(remWanted()&&await notifGranted())list=Core.planReminders(settings,days,meta.reminder,new Date());
+  const ids=new Set(old.concat([1001,1002,1003,1011,1012,1013]));
+  list.forEach(n=>ids.add(n.id));
+  await LN().cancel({notifications:[...ids].map(id=>({id}))});
+  if(list.length){
+    await LN().createChannel({id:REM_CHANNEL,name:'Daily reminder',description:'Reminds you to log your day',importance:4,visibility:1});
+    await LN().schedule({notifications:list.map(lnSpec)});
+  }
+  const nid=list.map(n=>n.id).sort((a,b)=>a-b);
+  if(nid.join()!==old.join()){meta.reminderIds=nid;try{await store.saveMeta()}catch(e){}}
+  return list;
+}
+let remChain=Promise.resolve(),remTimer=null;
+/** Plans the reminders again. Without {now:true} it waits a moment (changes come in bursts) and never reports a failure; with it the
+    returned promise settles when the notifications are scheduled and rejects if that fails. Does nothing outside the Android app. */
+function rescheduleReminders(o){
+  if(!IS_NATIVE)return Promise.resolve([]);
+  clearTimeout(remTimer);
+  const run=()=>{const p=remChain.then(applyReminders);remChain=p.catch(()=>{});return p};
+  if(o&&o.now)return run();
+  remTimer=setTimeout(()=>{run().catch(()=>{})},800);
+  return Promise.resolve([]);
+}
 async function setReminder(on){
   const box=$('remOn');setMsg('remMsg','');
+  const was=meta.reminder.enabled;
   try{
     if(on){
       if(!IS_NATIVE){box.checked=false;setMsg('remMsg','Reminders only work in the Android app.',true);return}
-      let p=await LN().checkPermissions();
-      if(p.display!=='granted')p=await LN().requestPermissions();
-      if(p.display!=='granted'){box.checked=false;meta.reminder.enabled=false;await store.saveMeta();setMsg('remMsg',BLOCKED,true);return}
-      await scheduleReminder($('remTime').value);
-      meta.reminder={enabled:true,time:$('remTime').value};await store.saveMeta();
-      setMsg('remMsg','Reminder set for '+fmtTime($('remTime').value)+' every day.');
+      if(!(await ensureNotifPermission())){box.checked=false;meta.reminder.enabled=false;await store.saveMeta();setMsg('remMsg',BLOCKED,true);return}
+      meta.reminder.enabled=true;meta.reminder.time=$('remTime').value;
+      await rescheduleReminders({now:true});
+      await store.saveMeta();
+      setMsg('remMsg','Reminder set for '+fmtTime(meta.reminder.time)+(meta.reminder.onlyIfOpen?'. It stays quiet when everything is done.':' every day.'));
     }else{
-      if(IS_NATIVE)await LN().cancel({notifications:[{id:REM_ID}]});
-      meta.reminder.enabled=false;await store.saveMeta();
+      meta.reminder.enabled=false;
+      if(IS_NATIVE)await rescheduleReminders({now:true});   // the morning cue and habit reminders stay
+      await store.saveMeta();
       setMsg('remMsg','Reminder is off.');
     }
   }catch(e){
-    box.checked=!on;
+    meta.reminder.enabled=was;box.checked=!on;
     setMsg('remMsg',"Couldn't "+(on?'set':'turn off')+' the reminder: '+errText(e),true);
   }
 }
-const fmtTime=t=>{const [h,m]=t.split(':').map(Number);return new Date(2000,0,1,h,m).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',hour12:true})};
 async function onRemTimeChange(e){
   const t=e.target.value;
   if(!/^\d{2}:\d{2}$/.test(t)){e.target.value=meta.reminder.time;return}
   const was=meta.reminder.time;
   if(!$('remOn').checked){meta.reminder.time=t;try{await store.saveMeta()}catch(x){}return}
-  try{await scheduleReminder(t);meta.reminder.time=t;await store.saveMeta();setMsg('remMsg','Reminder moved to '+fmtTime(t)+' every day.')}
-  catch(x){e.target.value=was;setMsg('remMsg',"Couldn't change the time: "+errText(x),true)}
+  try{meta.reminder.time=t;await rescheduleReminders({now:true});await store.saveMeta();setMsg('remMsg','Reminder moved to '+fmtTime(t)+'.')}
+  catch(x){meta.reminder.time=was;e.target.value=was;setMsg('remMsg',"Couldn't change the time: "+errText(x),true)}
+}
+async function onIfOpenChange(e){
+  const on=e.target.checked,was=meta.reminder.onlyIfOpen;
+  try{
+    meta.reminder.onlyIfOpen=on;await store.saveMeta();
+    if(meta.reminder.enabled)await rescheduleReminders({now:true});
+    setMsg('remMsg',on?'The reminder will stay quiet when everything is done, on a rest day and on a light day.':'The reminder will come every day at '+fmtTime(meta.reminder.time)+'.');
+  }catch(x){meta.reminder.onlyIfOpen=was;e.target.checked=was;setMsg('remMsg',"Couldn't change that: "+errText(x),true)}
+}
+async function setMorning(on){
+  const box=$('remMornOn'),was=meta.reminder.morning.enabled;
+  setMsg('remMsg','');
+  try{
+    if(on){
+      if(!IS_NATIVE){box.checked=false;setMsg('remMsg','Reminders only work in the Android app.',true);return}
+      if(!(await ensureNotifPermission())){box.checked=false;meta.reminder.morning.enabled=false;await store.saveMeta();setMsg('remMsg',BLOCKED,true);return}
+      meta.reminder.morning={enabled:true,time:$('remMornTime').value||meta.reminder.morning.time};
+      box.checked=true;await rescheduleReminders({now:true});await store.saveMeta();
+      setMsg('remMsg','Morning cue set for '+fmtTime(meta.reminder.morning.time)+'. It names the easiest win of the day.');
+    }else{
+      meta.reminder.morning.enabled=false;box.checked=false;
+      if(IS_NATIVE)await rescheduleReminders({now:true});
+      await store.saveMeta();setMsg('remMsg','Morning cue is off.');
+    }
+  }catch(e){meta.reminder.morning.enabled=was;box.checked=was;setMsg('remMsg',"Couldn't change the morning cue: "+errText(e),true)}
+}
+async function onMornTimeChange(e){
+  const t=e.target.value;
+  if(!/^\d{2}:\d{2}$/.test(t)){e.target.value=meta.reminder.morning.time;return}
+  const was=meta.reminder.morning.time;
+  meta.reminder.morning.time=t;
+  if(!meta.reminder.morning.enabled){try{await store.saveMeta()}catch(x){}return}
+  try{await rescheduleReminders({now:true});await store.saveMeta();setMsg('remMsg','Morning cue moved to '+fmtTime(t)+'.')}
+  catch(x){meta.reminder.morning.time=was;e.target.value=was;setMsg('remMsg',"Couldn't change the time: "+errText(x),true)}
+}
+/* Offered once, gently, after the third logged day, to people who already use the evening reminder. */
+function maybeOfferMorning(){
+  const r=meta.reminder;
+  if(!IS_NATIVE||r.morningOffered||r.morning.enabled||!r.enabled||Core.loggedKeys(days).length<3)return;
+  setTimeout(async()=>{
+    if(inOnboarding()||modalOpen()||activeTab!=='today'||meta.reminder.morningOffered||meta.reminder.morning.enabled)return;   // not now: it is offered next time the app opens
+    meta.reminder.morningOffered=true;try{await store.saveMeta()}catch(e){}
+    const pick=await actionSheet({title:'A gentle good-morning nudge?',message:"If it would help, Comeback can send one short note each morning with the easiest win of the day. It's optional, and you can change it any time in Settings.",actions:[{label:'Yes, at '+fmtTime(meta.reminder.morning.time),value:'on'}],cancelLabel:'Not now'});
+    if(pick==='on')await setMorning(true);
+  },2500);
 }
 async function initReminder(){
-  $('remOn').checked=meta.reminder.enabled;$('remTime').value=meta.reminder.time;
-  if(!IS_NATIVE){if(!meta.reminder.enabled)setMsg('remMsg','Reminders only work in the Android app.')}
-  if(!IS_NATIVE||!meta.reminder.enabled)return;
+  renderReminderGroup();
+  if(typeof initTimer==='function')initTimer();   // timer.js: offers to pick up a timer that was left running
+  if(!IS_NATIVE){if(!meta.reminder.enabled)setMsg('remMsg','Reminders only work in the Android app.');return}
   try{
-    const p=await LN().checkPermissions();
-    if(p.display==='granted')await scheduleReminder(meta.reminder.time); // re-arms the alarm after app updates
-    else setMsg('remMsg',BLOCKED,true);
+    if(remWanted()){
+      if(await notifGranted())await rescheduleReminders({now:true});   // plans today and the next days afresh: re-arms after app updates and reboots
+      else if(meta.reminder.enabled)setMsg('remMsg',BLOCKED,true);
+    }
   }catch(e){setMsg('remMsg',"Couldn't check the reminder: "+errText(e),true)}
+  try{Native.App.addListener('appStateChange',s=>{if(s.isActive)rescheduleReminders()})}catch(e){}
+  maybeOfferMorning();
 }
 
 /* ---------- cloud sync (Supabase, optional) ----------
@@ -617,7 +704,7 @@ async function pullAndMerge(){
   }else if(!srow)sync.pendingSettings=true;
   // everything the cloud lacks or holds a different copy of still has to go up (a future timestamp in the cloud is put right too)
   sync.pendingDays=Object.keys(days).filter(k=>!unreadable.has(k)&&(cloud[k]==null||days[k].updatedAt!==cloud[k]));
-  if(changed){await store.persist();refreshAfterCloudChange()}
+  if(changed){await store.persist();refreshAfterCloudChange();rescheduleReminders()}
   if(cloudSettingsFuture)throw new Error('Your cloud settings were saved by a newer version of Comeback. Update the app to sync them.');
   if(skipped)throw new Error(skipped+' cloud '+(skipped===1?'row was':'rows were')+' skipped because it could not be read.');
 }
@@ -769,5 +856,8 @@ function bindLogic(){
   });
   $('remOn').addEventListener('change',e=>setReminder(e.target.checked));
   $('remTime').addEventListener('change',onRemTimeChange);
+  $('remIfOpen').addEventListener('change',onIfOpenChange);
+  $('remMornOn').addEventListener('change',e=>setMorning(e.target.checked));
+  $('remMornTime').addEventListener('change',onMornTimeChange);
   $('syncNowBtn').addEventListener('click',()=>syncSoon(true));
 }

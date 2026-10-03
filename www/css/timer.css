@@ -1,0 +1,52 @@
+/* Timer sheet (www/js/timer.js), plus the small pieces that go with the habit reminders, quick-add chips, anchors and the
+   first-week ramp (bell on a card, form fields in Plan, the "More when you're ready" row). Uses the tokens from app.css, so light,
+   dark and high-contrast follow it. */
+
+/* ---------- timer sheet ---------- */
+.timer{display:flex;flex-direction:column;align-items:center;gap:var(--s4);padding-bottom:var(--s2)}
+.timer-mode{width:100%;margin-bottom:0}
+.timer-ring{position:relative;width:min(15rem,70vw);aspect-ratio:1;flex:none}
+.timer-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.timer-ring .trk{stroke:var(--track)}
+.timer-ring .prg{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .25s linear,stroke .3s}
+.timer-ring.reached .prg{stroke:var(--green)}
+.timer-ring.paused .prg{opacity:.65}
+.timer-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;padding:0 12%;text-align:center}
+.timer-time{font-size:clamp(2.25rem,12vw,3.25rem);font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.timer-sub{font-size:.875rem;color:var(--label2);margin-top:4px;overflow-wrap:anywhere}
+.timer-status{margin:0;min-height:1.5em;text-align:center;font-size:1rem;color:var(--label2);overflow-wrap:anywhere}
+.timer-actions{display:grid;grid-template-columns:1fr;gap:var(--s2);width:100%}
+.timer-actions .btn[hidden],.timer-confirm[hidden]{display:none}
+.timer-confirm{width:100%;display:grid;gap:var(--s2);text-align:center}
+.timer-confirm p{margin:0 0 var(--s2);font-size:1.0625rem;font-weight:600;overflow-wrap:anywhere}
+.cbtn.timerbtn{flex:0 0 auto;min-width:44px;background:var(--accent-soft);color:var(--accent)}
+.cbtn.timerbtn.on{background:var(--accent-fill);color:var(--on-accent)}
+@media (min-width:600px){.timer-actions{grid-template-columns:1fr 1fr}}
+@media (prefers-reduced-motion:reduce){.timer-ring .prg{transition:none}}
+
+/* ---------- Today: reminders, quick-add chips, anchors ---------- */
+.hc-ctl{flex-wrap:wrap}
+.cbtn.chipbtn.quick{flex:1 1 auto;padding:0 10px;font-size:.875rem;line-height:1.15;text-align:center}
+.hbell{display:inline-flex;color:var(--label2);margin-right:auto;margin-left:6px}
+.hbell .ic{width:.875rem;height:.875rem}
+.row-label .hbell{margin:0 0 0 6px;vertical-align:-1px}
+
+/* ---------- first-week ramp ---------- */
+.ramp{display:grid;gap:var(--s3);margin:var(--s3) 0}
+.ramp .group{margin:0}
+.ramp-offer{margin-top:0}
+
+/* ---------- habit form: anchor, quick-add amounts, reminders ---------- */
+.fchips{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s2)}
+.fchip{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border-radius:22px;background:var(--fill);color:var(--label);font-size:.9375rem;font-weight:500;border:1px solid var(--glass-border)}
+.fchip[aria-pressed="true"]{background:var(--accent-fill);color:var(--on-accent);border-color:transparent}
+.fchip .ic{width:.875rem;height:.875rem}
+.fadd{display:flex;gap:var(--s2);align-items:stretch;margin-top:var(--s2)}
+.fadd .box{flex:1;min-width:0}
+.fadd .btn{width:auto;min-height:44px;padding:0 var(--s4)}
+.remlist{display:grid;gap:var(--s2);margin-top:var(--s2)}
+.remrow{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;background:var(--card);border-radius:var(--r-m);padding:var(--s2) var(--s3);border:1px solid var(--glass-border)}
+.remrow .time12{margin-left:0}
+.remrow .iconbtn{margin-left:auto;color:var(--label2)}
+.remnote{margin:var(--s2) var(--s4) 0}
+@media (forced-colors:active){.fchip[aria-pressed="true"],.cbtn.timerbtn.on{outline:2px solid Highlight;outline-offset:-2px}}

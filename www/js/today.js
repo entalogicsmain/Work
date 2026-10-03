@@ -30,12 +30,7 @@ function setHabitValue(d,x,v){
   if(v==null)delete d.vals[x.id];else d.vals[x.id]=v;
 }
 function curVal(x){const d=days[current];const v=Core.hv(x,d);return v==null?null:v}
-function presetsFor(x){
-  const u=x.unit;
-  if(u==='steps')return[500,1000];if(u==='reps')return[5,10];if(/^min/i.test(u))return[5,10];if(/^sec/i.test(u))return[10,30];
-  if(u==='litres')return[0.25,0.5];if(u==='hours')return[0.5,1];
-  const s=Core.stepFor(x);return[s,s*2];
-}
+const presetsFor=x=>Core.presetsFor(x);   // the habit's own quick-add amounts first, else ones that suit its unit (core.js)
 function lastValue(key,before){
   before=before||current;
   const ks=Object.keys(days).filter(k=>k<before&&days[k][key]!=null).sort();
@@ -107,8 +102,10 @@ function renderSuggestion(){
 }
 
 /* ---------- which habits show, and in which shape ---------- */
+/* the first-week ramp (Core.rampVisible) holds some habits back on today's screen only */
+const rampOk=x=>current!==todayStr()||Core.rampVisible(settings,days,todayStr(),x);
 function sectionItems(sec){
-  return settings.habits.filter(x=>x.section===sec.id&&!x.hidden&&(editing||Core.isShown(x,current,days)));
+  return settings.habits.filter(x=>x.section===sec.id&&!x.hidden&&(editing||(Core.isShown(x,current,days)&&rampOk(x))));
 }
 const isCardType=x=>x.type==='count'||x.type==='duration'||x.type==='steps';
 const isDoneCompact=x=>!editing&&isCardType(x)&&!expandedDone.has(x.id)&&Core.isMet(x,days[current])&&!(x.type==='steps'&&stepsCardKind(current)==='turnon');
@@ -131,13 +128,16 @@ function editControls(x){
   hb.addEventListener('keydown',e=>{if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();moveItemByKey(hb.closest('.titem'),e.key==='ArrowUp'?-1:1)}});
   return ec;
 }
+/* The small line under a card or row: the anchor ("After lunch", plain text) and, for flexible schedules, when or how much. */
 function scheduleNote(x,k){
-  const wp=Core.weekProgress(x,k,days);
-  if(wp)return Math.min(wp.done,wp.of)+' of '+wp.of+' this week';
-  const s=Core.normalizeSchedule(x.schedule);
-  if(s.kind==='days'||s.kind==='everyN')return Core.scheduleLabel(s);
-  return '';
+  const wp=Core.weekProgress(x,k,days),s=Core.normalizeSchedule(x.schedule);
+  let note='';
+  if(wp)note=Math.min(wp.done,wp.of)+' of '+wp.of+' this week';
+  else if(s.kind==='days'||s.kind==='everyN')note=Core.scheduleLabel(s);
+  return [x.anchor,note].filter(Boolean).join(' · ');
 }
+const hasReminder=x=>!!(x.remind&&x.remind.times&&x.remind.times.length);
+const reminderText=x=>hasReminder(x)?'reminder at '+x.remind.times.map(Core.fmt12).join(' and '):'';
 function longPressToEdit(el){
   let timer=null,sx=0,sy=0;
   el.addEventListener('pointerdown',e=>{
@@ -167,6 +167,7 @@ function habitCard(x,d,k){
   c.classList.toggle('met',met);
   c.querySelector('.met-ic').innerHTML=met?icon('circle-check','sm'):'';
   const extra=scheduleNote(x,k);
+  if(hasReminder(x)){const bell=h('<span class="hbell" role="img"></span>');bell.innerHTML=icon('bell','sm');bell.setAttribute('aria-label',reminderText(x));c.querySelector('.hico').after(bell)}
   if(x.type==='steps'){
     renderStepsCard(c,x,v,k);
     ctl.remove();
@@ -174,20 +175,28 @@ function habitCard(x,d,k){
     c.querySelector('.hval').textContent=fmt(v);
     if(extra)src.textContent=extra;
     const step=Core.stepFor(x);
-    main.setAttribute('aria-label',x.name+', '+fmt(v)+' of '+fmt(x.target)+' '+x.unit+(met?', target met':'')+(extra?', '+extra:'')+'. Tap to type a number.');
+    main.setAttribute('aria-label',x.name+', '+fmt(v)+' of '+fmt(x.target)+' '+x.unit+(met?', target met':'')+(extra?', '+extra:'')+(hasReminder(x)?', '+reminderText(x):'')+'. Tap to type a number.');
     if(x.type==='count'){
       const mi=h('<button class="cbtn minus"></button>'),pl=h('<button class="cbtn plus"></button>');
       mi.innerHTML=icon('minus','sm');pl.innerHTML=icon('plus','sm');
       mi.setAttribute('aria-label','Remove '+fmt(step)+' '+x.name);pl.setAttribute('aria-label','Add '+fmt(step)+' '+x.name);
       mi.disabled=v<=0;
-      mi.addEventListener('click',()=>{if(v<=0)return;commitDay(x.name+' −'+fmt(step),dd=>{const nv=Math.max(0,r1((dd.vals[x.id]||0)-step));if(nv<=0)delete dd.vals[x.id];else dd.vals[x.id]=nv})});
-      pl.addEventListener('click',()=>commitDay(x.name+' +'+fmt(step),dd=>{dd.vals[x.id]=r1((dd.vals[x.id]||0)+step)}));
-      ctl.appendChild(mi);ctl.appendChild(pl);
+      mi.addEventListener('click',()=>{if(v<=0)return;commitDay(x.name+' −'+fmt(step),dd=>{const nv=Math.max(0,r2((dd.vals[x.id]||0)-step));if(nv<=0)delete dd.vals[x.id];else dd.vals[x.id]=nv})});
+      pl.addEventListener('click',()=>commitDay(x.name+' +'+fmt(step),dd=>{dd.vals[x.id]=r2((dd.vals[x.id]||0)+step)}));
+      ctl.appendChild(mi);
+      if(Core.hasQuickAdd(x)){
+        // water and habits with their own quick-add amounts: one-tap chips ("+1 glass (250 ml)", "+0.25 L") instead of one plain +
+        presetsFor(x).slice(0,2).forEach((a,i)=>{
+          const b=h('<button class="cbtn chipbtn quick'+(i===0?' plus':'')+'"></button>');b.textContent=Core.presetLabel(x,a,true);b.setAttribute('aria-label','Add '+Core.presetLabel(x,a,true).slice(1)+' to '+x.name);
+          b.addEventListener('click',()=>commitDay(x.name+' +'+fmt(a),dd=>{dd.vals[x.id]=r2((dd.vals[x.id]||0)+a)}));ctl.appendChild(b);
+        });
+      }else ctl.appendChild(pl);
     }else{
       presetsFor(x).slice(0,2).forEach(a=>{
         const b=h('<button class="cbtn chipbtn"></button>');b.textContent='+'+fmt(a);b.setAttribute('aria-label','Add '+fmt(a)+' '+x.unit+' to '+x.name);
-        b.addEventListener('click',()=>commitDay(x.name+' +'+fmt(a)+' '+x.unit,dd=>{dd.vals[x.id]=r1((dd.vals[x.id]||0)+a)}));ctl.appendChild(b);
+        b.addEventListener('click',()=>commitDay(x.name+' +'+fmt(a)+' '+x.unit,dd=>{dd.vals[x.id]=r2((dd.vals[x.id]||0)+a)}));ctl.appendChild(b);
       });
+      if(typeof openTimer==='function'&&Core.timerUnit(x))ctl.appendChild(timerButton(x));   // timer.js: a play button that opens the timer
     }
   }
   if(met){
@@ -222,6 +231,7 @@ function yesNoRow(x,d,k){
   r.dataset.id=x.id;r.dataset.type='yesno';
   r.querySelector('.row-ic').innerHTML=icon(x.icon,'sm');
   r.querySelector('.row-label').textContent=x.name;
+  if(hasReminder(x)){const bell=h('<span class="hbell" role="img"></span>');bell.innerHTML=icon('bell','sm');bell.setAttribute('aria-label',reminderText(x));r.querySelector('.row-label').appendChild(bell)}
   const sub=editing&&!Core.isDue(x,k,days)?'Not due today':scheduleNote(x,k);
   const sb=r.querySelector('.row-sub');if(sub)sb.textContent=sub;else sb.remove();
   const sw=r.querySelector('input');sw.checked=on;sw.setAttribute('aria-label',x.name);sw.dataset.id=x.id;
@@ -351,6 +361,8 @@ function renderSections(){
       const e=h('<div class="empty card" id="todayEmpty"><svg data-ic="sparkles"></svg><b class="t-head">Nothing due today</b><p>Add habits from the library, or enjoy the rest.</p><button class="btn small" id="emptyAdd">Add a habit</button></div>');
       e.querySelector('#emptyAdd').addEventListener('click',()=>openLibrary({}));root.insertBefore(e,root.firstChild);
     }
+    const held=current===todayStr()?Core.rampHiddenCount(settings,days,todayStr()):0;
+    if(held)foot.appendChild(rampRow(held));
     const eb=h('<button class="txtbtn" id="editToday"><svg data-ic="sliders-horizontal" class="sm"></svg><span>Edit Today</span></button>');
     eb.addEventListener('click',()=>{haptic('light');enterEdit()});foot.appendChild(eb);
   }else{
@@ -360,6 +372,31 @@ function renderSections(){
   hydrate(root);hydrate(foot);
   renderHiddenTray();
   if(fk){const t=root.querySelector('.titem[data-id="'+fk.id+'"] .'+fk.cls);if(t&&!t.disabled)try{t.focus({preventScroll:true})}catch(e){}}
+}
+
+/* ---------- the first-week ramp: "More when you're ready (N)" and, once on day 4, "Add another habit?" ---------- */
+async function setRamp(patch,toastMsg){
+  settings.prefs=Object.assign({},settings.prefs,patch);
+  await saveSettingsQuiet();renderToday(true);renderSetup();
+  if(toastMsg)toast(toastMsg,{icon:'sparkles'});
+}
+function rampRow(n){
+  const wrap=h('<div class="ramp" id="rampWrap"></div>');
+  if(Core.rampDay(settings,days,todayStr())>=4&&!meta.rampOffered){
+    const c=h('<div class="card suggest ramp-offer" id="rampOffer" role="region" aria-label="Add another habit"><div class="sg-top"><span class="sg-ic"></span><p class="sg-text">Add another habit? You are settling in, so one more could fit.</p></div><div class="sg-actions"><button class="btn small" id="rampAddOne">Add one</button><button class="btn small secondary" id="rampNotNow">Not now</button></div></div>');
+    c.querySelector('.sg-ic').innerHTML=icon('sparkles');
+    const done=async()=>{meta.rampOffered=true;try{await store.saveMeta()}catch(e){}};
+    c.querySelector('#rampAddOne').addEventListener('click',async()=>{haptic('light');await done();await setRamp({rampLimit:Core.rampLimit(settings)+1})});
+    c.querySelector('#rampNotNow').addEventListener('click',async()=>{haptic('light');await done();renderSections()});
+    wrap.appendChild(c);
+  }
+  const g=h('<div class="group ic ramp-group"><button class="row" id="rampMore"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span><span class="row-sub">Keeps your first week light.</span></span><svg data-ic="chevron-down" class="chev"></svg></button></div>');
+  g.querySelector('.row-ic').innerHTML=icon('layers');
+  g.querySelector('.row-label').textContent="More when you're ready ("+n+')';
+  g.querySelector('#rampMore').setAttribute('aria-label',"More when you're ready. Show "+n+(n===1?' more habit.':' more habits.'));
+  g.querySelector('#rampMore').addEventListener('click',()=>{haptic('light');setRamp({ramp:false},'Everything is on Today now. You can ease in again from Settings.')});
+  wrap.appendChild(g);hydrate(wrap);
+  return wrap;
 }
 
 /* ---------- edit mode ---------- */
@@ -497,7 +534,7 @@ function moveSectionByKey(secEl,dir){
 function habitSheet(x){
   const p=presetsFor(x);
   numberSheet({title:x.name,value:curVal(x),unitLine:'of '+fmt(x.target)+' '+x.unit,step:Core.stepFor(x),
-    presets:p.map(a=>({label:'+'+fmt(a),apply:v=>v+a})).concat([{label:'Target',set:x.target}]),
+    presets:p.map(a=>({label:x.type==='count'&&Core.hasQuickAdd(x)?Core.presetLabel(x,a,true):'+'+fmt(a),apply:v=>v+a})).concat([{label:'Target',set:x.target}]),
     onDone:v=>{if(v===curVal(x))return;commitDay(x.name+' updated',d=>{setHabitValue(d,x,v)})}});
 }
 function stepsCardTap(){if(stepsCardKind(current)==='turnon'){haptic('light');turnOnStepCounting();return}stepsDetailSheet(current)}

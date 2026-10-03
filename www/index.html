@@ -7,6 +7,7 @@
 <link rel="icon" href="data:,">
 <title>Comeback</title>
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/timer.css">
 </head>
 <body>
 
@@ -186,8 +187,12 @@
     <div class="group ic" id="remGroup">
       <label class="row"><span class="row-ic"><svg data-ic="bell"></svg></span><span class="row-body"><span class="row-label">Daily reminder</span></span><input type="checkbox" class="switch" role="switch" id="remOn" aria-label="Daily reminder"></label>
       <label class="row"><span class="row-ic"><svg data-ic="clock"></svg></span><span class="row-body"><span class="row-label">Time</span></span><span id="remTime"></span></label>
+      <label class="row" id="remIfOpenRow"><span class="row-ic"><svg data-ic="circle-check"></svg></span><span class="row-body"><span class="row-label">Only remind me if something is left</span><span class="row-sub">Stays quiet when today is done, on a rest day and on a light day.</span></span><input type="checkbox" class="switch" role="switch" id="remIfOpen" aria-label="Only remind me if something is left" checked></label>
+      <label class="row" id="remMornRow"><span class="row-ic"><svg data-ic="sunrise"></svg></span><span class="row-body"><span class="row-label">Morning cue</span><span class="row-sub">One short note with the easiest win of the day.</span></span><input type="checkbox" class="switch" role="switch" id="remMornOn" aria-label="Morning cue"></label>
+      <label class="row" id="remMornTimeRow"><span class="row-ic"><svg data-ic="clock"></svg></span><span class="row-body"><span class="row-label">Morning time</span></span><span id="remMornTime"></span></label>
     </div>
     <div class="group-foot" id="remMsg" role="status"></div>
+    <div class="group-foot">Each habit can also have its own reminders: open it in Plan and use Remind me.</div>
 
     </div>
     <div class="plan-col">
@@ -252,6 +257,7 @@
 <script src="js/logic.js"></script>
 <script src="js/steps.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/timer.js"></script>
 <script src="js/body.js"></script>
 <script src="js/today.js"></script>
 <script src="js/plan.js"></script>
