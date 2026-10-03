@@ -89,19 +89,79 @@ function guessIcon(h,type){
   if(/hour/i.test(h.unit||''))return'moon';
   return'dumbbell';
 }
+const isVolumeUnit=u=>/^(litres?|liters?|l)$/i.test(u||'');
+const isGlassUnit=u=>/^(glass(es)?|cups?)$/i.test(u||'');
+/** The amount one + or − tap changes: the habit's own step, else its first quick-add amount, else one that suits the unit
+    (a quarter litre of water, a glass, a rep). */
 function stepFor(h){
   if(h.step&&h.step>0)return h.step;
   if(h.type==='duration')return/^sec/i.test(h.unit||'')?10:5;
   if(h.type==='count'){
+    if(Array.isArray(h.presets)&&h.presets.length&&h.presets[0]>0)return h.presets[0];
     if(/^(reps|times|rep)$/i.test(h.unit||''))return 1;
+    if(isVolumeUnit(h.unit))return 0.25;
+    if(isGlassUnit(h.unit))return 1;
     return h.target<10?0.5:1;
   }
   return 1;
+}
+/** One-tap amounts for a habit: its own quick-add amounts first, else sensible ones for the unit. */
+function presetsFor(h){
+  if(Array.isArray(h.presets)&&h.presets.length)return h.presets.slice(0,4);
+  const u=h.unit||'';
+  if(u==='steps')return[500,1000];if(u==='reps')return[5,10];if(/^min/i.test(u))return[5,10];if(/^sec/i.test(u))return[10,30];
+  if(isVolumeUnit(u))return[0.25,0.5];if(isGlassUnit(u))return[1,2];if(/^hours?$/i.test(u))return[0.5,1];
+  const s=stepFor(h);return[s,s*2];
+}
+const numStr=n=>String(Math.round(n*100)/100);
+/** Does this habit get text chips (quick-add amounts) on its card instead of one plain + button? */
+const hasQuickAdd=h=>h.type==='count'&&(!!(h.presets&&h.presets.length)||isVolumeUnit(h.unit)||isGlassUnit(h.unit));
+/** Label of a quick-add chip: "+0.25" on a card, "+1 glass (250 ml)" or "+0.25 L" when long. */
+function presetLabel(h,a,long){
+  if(!long)return'+'+numStr(a);
+  if(/^glass(es)?$/i.test(h.unit||''))return'+'+numStr(a)+(a===1?' glass':' glasses')+' ('+Math.round(a*250)+' ml)';
+  if(/^cups?$/i.test(h.unit||''))return'+'+numStr(a)+(a===1?' cup':' cups')+' ('+Math.round(a*240)+' ml)';
+  if(isVolumeUnit(h.unit))return'+'+numStr(a)+' L';
+  return'+'+numStr(a)+(h.unit?' '+h.unit:'');
 }
 function uniqueId(base,taken){
   let id=base,i=2;
   while(taken.has(id)){id=base+'-'+i;i++}
   taken.add(id);return id;
+}
+
+/* ---------- anchors, quick-add amounts and per-habit reminders (optional habit fields) ---------- */
+/** "After lunch": at most 30 characters, one line. Shown as text only. */
+function normalizeAnchor(a){
+  if(typeof a!=='string')return null;
+  const t=a.replace(/[\u0000-\u001f\u007f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,30).trim();
+  return t||null;
+}
+/** Up to 4 positive amounts, smallest first, no repeats (a Count habit's one-tap chips). */
+function normalizePresets(p){
+  if(!Array.isArray(p))return null;
+  const v=[...new Set(p.filter(n=>num(n)&&n>0&&n<=1e6).map(n=>Math.round(n*100)/100).filter(n=>n>0))].sort((a,b)=>a-b).slice(0,4);
+  return v.length?v:null;
+}
+const HM_RE=/^([01]\d|2[0-3]):[0-5]\d$/;
+const hmMinutes=t=>HM_RE.test(t||'')?Number(t.slice(0,2))*60+Number(t.slice(3)):null;
+/** {times:["07:00",...],skipIfDone} with at most 3 valid 24-hour times, sorted and without repeats; null when there is none. */
+function normalizeRemind(r){
+  if(!r||typeof r!=='object'||!Array.isArray(r.times))return null;
+  const times=[...new Set(r.times.filter(t=>typeof t==='string'&&HM_RE.test(t)))].sort().slice(0,3);
+  return times.length?{times,skipIfDone:r.skipIfDone!==false}:null;
+}
+/** "07:00" -> "7:00 AM" (the app only shows a 12-hour clock). */
+function fmt12(t){
+  const m=hmMinutes(t);if(m==null)return'';
+  const h=Math.floor(m/60),mm=m%60;
+  return(h%12===0?12:h%12)+':'+pad(mm)+' '+(h>=12?'PM':'AM');
+}
+/** The reminder settings kept on the phone (Settings > Reminder). Missing parts get their defaults. */
+function normalizeReminderMeta(r){
+  const o=r&&typeof r==='object'?r:{},mo=o.morning&&typeof o.morning==='object'?o.morning:{};
+  return{enabled:!!o.enabled,time:HM_RE.test(o.time)?o.time:'21:00',onlyIfOpen:o.onlyIfOpen!==false,
+    morning:{enabled:!!mo.enabled,time:HM_RE.test(mo.time)?mo.time:'08:00'},morningOffered:o.morningOffered===true};
 }
 
 function normalizeHabit(h,i){
@@ -118,6 +178,9 @@ function normalizeHabit(h,i){
   if(num(h.step)&&h.step>0)out.step=h.step;
   if(h.hidden===true)out.hidden=true;
   if(typeof h.lib==='string')out.lib=h.lib;
+  const an=normalizeAnchor(h.anchor);if(an)out.anchor=an;
+  if(type==='count'||type==='duration'){const pr=normalizePresets(h.presets);if(pr)out.presets=pr}
+  if(type!=='steps'){const rm=normalizeRemind(h.remind);if(rm)out.remind=rm}
   return out;
 }
 
@@ -137,7 +200,11 @@ function normalizeUnits(u){
 }
 function normalizePrefs(p){
   const o=p&&typeof p==='object'?p:{};
-  return{suggestions:o.suggestions!==false};
+  const out={suggestions:o.suggestions!==false};
+  if(o.ramp===true||o.ramp===false)out.ramp=o.ramp;                  // the first-week ramp (set only by onboarding on a new install)
+  if(typeof o.rampStart==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(o.rampStart))out.rampStart=o.rampStart;
+  if(Number.isInteger(o.rampLimit)&&o.rampLimit>=3&&o.rampLimit<=60)out.rampLimit=o.rampLimit;
+  return out;
 }
 
 /** Takes settings in either structure and returns {settings, idMap, wasLegacy}. Safe to run any number of times. */
@@ -439,7 +506,7 @@ const LIBRARY=[
   L('plank','Plank','timer','duration','sec',60,'Strength'),
   L('lunges','Lunges','dumbbell','count','reps',20,'Strength'),
   L('situps','Sit-ups','dumbbell','count','reps',20,'Strength'),
-  L('water','Water','droplets','count','litres',2.5,'Health',{step:0.5}),
+  L('water','Water','droplets','count','litres',2.5,'Health',{presets:[0.25,0.5]}),
   L('sleep','Sleep','moon','count','hours',7,'Health',{step:0.5}),
   L('vitamins','Took vitamins','pill','yesno','',1,'Health'),
   L('weight','Weight','scale','measure','kg',0,'Health',{measure:'weight',section:'body',schedule:{kind:'weekly',times:3}}),
@@ -485,6 +552,7 @@ function habitFromLibrary(settings,lib,over){
   const taken=new Set(settings.habits.map(h=>h.id));
   const h={id:uniqueId(lib.id,taken),name:lib.name,icon:lib.icon,type:lib.type,unit:lib.unit||(lib.type==='yesno'?'':'times'),target:lib.type==='yesno'?1:lib.type==='measure'?0:lib.target,section:lib.section,schedule:normalizeSchedule(lib.schedule),lib:lib.id};
   if(lib.step)h.step=lib.step;
+  if(lib.presets)h.presets=lib.presets.slice();
   if(lib.measure)h.measure=lib.measure;
   return Object.assign(h,over||{});
 }
@@ -507,7 +575,143 @@ function applyStarterPlan(settings,planId){
   // the measurements are always available (Weight and waist), even when the plan does not ask for them
   const hasM=m=>settings.habits.some(h=>h.type==='measure'&&h.measure===m);
   ['weight','waist'].forEach(m=>{if(!hasM(m)){const lib=libEntry(m),h=habitFromLibrary(settings,lib);h.hidden=true;settings.habits.push(h)}});
+  // a new install that picks a real plan starts gently: 3 habits on Today for the first week (Settings > Suggestions turns it off)
+  if(plan.items.length>RAMP_FIRST)settings.prefs=Object.assign({},settings.prefs,{ramp:true,rampStart:ymd(new Date())});
   return settings;
+}
+
+/* ---------- reminders ----------
+   Notifications are scheduled ahead, so "only if something is left" is done by planning them one day at a time (a one-shot
+   notification at an exact time) and planning again whenever anything changes (see logic.js rescheduleReminders). planReminders is
+   pure: it says which notifications should exist right now. Only a short stretch ahead is planned (REM_LOOK days); each re-plan
+   replaces the last. Ids: 1001+day evening, 1011+day morning cue, 2000+habit*40+time*12+slot per-habit (slot 0-2 one-shot days,
+   3-9 a weekday, 10 every day). */
+const REM_LOOK=3,REM_EVENING=1001,REM_MORNING=1011,REM_HABIT=2000,REM_TITLE='Comeback';
+const REM_GENERIC='Time to log today. How did your comeback go?';
+const lc1=s=>{s=String(s||'');return s.length>1&&s[1]===s[1].toUpperCase()&&s[1]!==s[1].toLowerCase()?s:s.charAt(0).toLowerCase()+s.slice(1)};
+const isDurationUnitN=u=>/^(min|mins|minutes?|sec|secs|seconds?)$/i.test(u||'');
+/** "10 min brisk walk", "30 pushups", "2.5 litres of water", "no sugar" */
+function amountPhrase(h,n){
+  const nm=lc1(h.name),u=h.unit||'';
+  if(h.type==='yesno')return nm;
+  const q=numStr(n);
+  if(/^(reps|times|rep)$/i.test(u))return q+' '+nm;
+  if(isDurationUnitN(u))return q+' '+(/^sec/i.test(u)?'sec':'min')+' '+nm;
+  if(isVolumeUnit(u)||isGlassUnit(u)||/^(hours?|ml)$/i.test(u))return q+' '+u+' of '+nm;
+  return q+' '+u+' '+nm;
+}
+/** What is left on day k: the open habits (Steps last, it counts itself), and whether the day is done, a rest day or a light day. */
+function dayOpen(settings,days,k){
+  const d=days[k],parts=dayParts(settings,days,k);
+  const open=parts.filter(p=>!p.met).map(p=>p.h).sort((a,b)=>(a.type==='steps')-(b.type==='steps'));
+  return{open,rest:parts.length===0,complete:parts.length>0&&open.length===0,light:!!(d&&d.light)};
+}
+/** "Water and Brisk walk are still open. A quick one counts." (two names at most) */
+function eveningBody(open){
+  const n=open.map(h=>h.name);
+  const head=n.length===1?n[0]+' is':n.length===2?n[0]+' and '+n[1]+' are':n[0]+', '+n[1]+' and '+(n.length-2)+' more are';
+  return head+' still open. A quick one counts.';
+}
+/** The open Count or Duration habit that is closest to done (then the smallest), else a Yes/No one: {h, text} or null. */
+function easiestOpen(settings,days,k){
+  const d=days[k],open=dayOpen(settings,days,k).open.filter(h=>h.type==='count'||h.type==='duration'||h.type==='yesno');
+  const cd=open.filter(h=>h.type!=='yesno');
+  if(!cd.length){const y=open[0];return y?{h:y,text:amountPhrase(y,1)}:null}
+  const rem=h=>Math.max(0,h.target-Number(hv(h,d)||0)),inMin=h=>/^sec/i.test(h.unit||'')?rem(h)/60:rem(h);
+  const frac=h=>rem(h)/h.target;
+  const best=cd.slice().sort((a,b)=>frac(a)-frac(b)||inMin(a)-inMin(b))[0];
+  return{h:best,text:amountPhrase(best,rem(best))};
+}
+/** The text of a habit's own reminder: "After lunch: 10 min brisk walk." or "Pushups: 30 reps." */
+function habitReminderBody(h){
+  const a=h.anchor;
+  if(h.type==='measure')return a?a+': log your '+lc1(h.name)+'.':h.name+': a quick check-in.';
+  if(h.type==='yesno')return a?a+': '+lc1(h.name)+'.':h.name+': one tap when it is done.';
+  return a?a+': '+amountPhrase(h,h.target)+'.':h.name+': '+numStr(h.target)+' '+(h.unit||'')+'.';
+}
+const atTime=(k,hm)=>{const p=parse(k),m=hmMinutes(hm);p.setHours(Math.floor(m/60),m%60,0,0);return p};
+/** Every notification that should be scheduled at "now": [{id,kind,title,body,at:Date|null,on:{hour,minute,weekday?}|null,habitId?}] */
+function planReminders(settings,days,rem,now,opts){
+  rem=normalizeReminderMeta(rem);
+  const out=[],today=ymd(now),look=(opts&&opts.lookahead)||REM_LOOK;
+  const state={};const st=k=>state[k]||(state[k]=dayOpen(settings,days,k));
+  const future=t=>t.getTime()>now.getTime();
+  const quiet0=s=>s.complete||s.light;   // today only: what is done (or a light day) needs no nudge
+  if(rem.enabled){
+    if(!rem.onlyIfOpen)out.push({id:REM_EVENING,kind:'evening',title:REM_TITLE,body:REM_GENERIC,at:null,on:{hour:Number(rem.time.slice(0,2)),minute:Number(rem.time.slice(3))}});
+    else for(let off=0;off<look;off++){
+      const k=addDays(today,off),t=atTime(k,rem.time);if(!future(t))continue;
+      const s=st(k);if(s.rest||(off===0&&quiet0(s)))continue;
+      out.push({id:REM_EVENING+off,kind:'evening',title:REM_TITLE,body:off===0&&s.open.length?eveningBody(s.open):REM_GENERIC,at:t,on:null});
+    }
+  }
+  if(rem.morning.enabled)for(let off=0;off<look;off++){
+    const k=addDays(today,off),t=atTime(k,rem.morning.time);if(!future(t))continue;
+    const s=st(k);if(s.rest||(off===0&&quiet0(s)))continue;
+    const e=easiestOpen(settings,days,k);if(!e)continue;
+    out.push({id:REM_MORNING+off,kind:'morning',title:REM_TITLE,body:"Good morning. Today's easiest win: "+e.text+'.',at:t,on:null});
+  }
+  settings.habits.forEach((h,idx)=>{
+    const rm=h.hidden||h.type==='steps'?null:normalizeRemind(h.remind);if(!rm)return;
+    const sch=normalizeSchedule(h.schedule),body=habitReminderBody(h);
+    rm.times.forEach((tm,ti)=>{
+      const base=REM_HABIT+idx*40+ti*12,hour=Number(tm.slice(0,2)),minute=Number(tm.slice(3));
+      const mk=(id,extra)=>Object.assign({id,kind:'habit',habitId:h.id,title:REM_TITLE,body,at:null,on:null},extra);
+      if(!rm.skipIfDone&&sch.kind==='daily'){out.push(mk(base+10,{on:{hour,minute}}));return}
+      if(!rm.skipIfDone&&sch.kind==='days'){sch.days.forEach(d=>out.push(mk(base+3+d,{on:{weekday:d+1,hour,minute}})));return}
+      for(let off=0;off<look;off++){
+        const k=addDays(today,off),t=atTime(k,tm);if(!future(t))continue;
+        if(!isShown(h,k,days))continue;
+        if(rm.skipIfDone&&off===0&&(isMet(h,days[k])||st(k).light))continue;
+        out.push(mk(base+off,{at:t}));
+      }
+    });
+  });
+  return out;
+}
+
+/* ---------- the timer for Duration habits ---------- */
+/** 'sec' or 'min' for a Duration habit the timer can add to, else null. */
+const timerUnit=h=>h&&h.type==='duration'?(/^(sec|secs|seconds?)$/i.test(h.unit||'')?'sec':/^(min|mins|minutes?)$/i.test(h.unit||'')?'min':null):null;
+const timerTargetMs=h=>{const u=timerUnit(h);return u==='sec'?h.target*1000:u==='min'?h.target*60000:0};
+/** st: {startedAt, pausedMs, pausedAt}. Always computed from the clock, so it is right after the screen was off or the app was closed. */
+function timerElapsed(st,now){
+  if(!st||!num(st.startedAt))return 0;
+  const end=num(st.pausedAt)?st.pausedAt:now;
+  return Math.max(0,end-st.startedAt-(num(st.pausedMs)?st.pausedMs:0));
+}
+/** What stopping adds to the habit, in its own unit: whole seconds, or minutes to a tenth. {value, ms} (ms is what that value stands for). */
+function timerCredit(h,ms){
+  const u=timerUnit(h);if(!u||!(ms>0))return{value:0,ms:0};
+  if(u==='sec'){const v=Math.round(ms/1000);return{value:v,ms:v*1000}}
+  const v=round1(ms/60000);return{value:v,ms:Math.round(v*60000)};
+}
+/** 0:42, 12:05, 1:02:03 */
+function fmtClock(ms){
+  const t=Math.max(0,Math.floor(ms/1000)),hh=Math.floor(t/3600),mm=Math.floor(t%3600/60),ss=t%60;
+  return hh?hh+':'+pad(mm)+':'+pad(ss):mm+':'+pad(ss);
+}
+
+/* ---------- the first-week ramp (new installs only) ----------
+   settings.prefs.ramp is set only when a starter plan is picked in onboarding. For the first 7 days Today shows 3 habits (the first
+   three of the plan that are due), then a "More when you're ready" row. Anything already logged stays visible. */
+const RAMP_DAYS=7,RAMP_FIRST=3;
+function rampDay(settings,days,today){
+  const p=settings.prefs||{},start=p.rampStart||loggedKeys(days)[0]||today;
+  return Math.max(1,daysBetween(start,today)+1);
+}
+const rampOn=(settings,days,today)=>!!(settings.prefs&&settings.prefs.ramp===true)&&rampDay(settings,days,today)<=RAMP_DAYS;
+const rampLimit=settings=>(settings.prefs&&settings.prefs.rampLimit)||RAMP_FIRST;
+function rampVisible(settings,days,today,habit){
+  if(!rampOn(settings,days,today)||habit.type==='measure'||habit.hidden)return true;
+  if(isLogged(habit,days[today]))return true;
+  const order=settings.habits.filter(h=>!h.hidden&&h.type!=='measure'&&isShown(h,today,days));
+  return order.slice(0,rampLimit(settings)).some(h=>h.id===habit.id)||!order.some(h=>h.id===habit.id);
+}
+/** How many habits the ramp is holding back today. */
+function rampHiddenCount(settings,days,today){
+  if(!rampOn(settings,days,today))return 0;
+  return settings.habits.filter(h=>!h.hidden&&h.type!=='measure'&&isShown(h,today,days)&&!rampVisible(settings,days,today,h)).length;
 }
 
 /* ---------- BMI and units ---------- */
@@ -852,6 +1056,9 @@ return{
   TYPES,WEEKDAYS,WEEK_ORDER,ICONS,DEFAULT_SECTIONS,LEGACY_DEFAULT,LIBRARY,LIB_CATEGORIES,STARTER_PLANS,BMI_SCALES,BMI_CATS,BMI_CAT_NAME,
   normalizeSchedule,scheduleLabel,normalizeHabit,migrateSettings,applyIdMap,defaultSettings,stepFor,uniqueId,
   hv,isMet,isLogged,isDue,isShown,weekProgress,countsForScore,dayParts,dayScore,dayMetrics,hasRecord,loggedKeys,invalidate,currentStreak,bestStreak,daysKept,streakStatus,streakLine,
+  presetsFor,presetLabel,hasQuickAdd,normalizeAnchor,normalizePresets,normalizeRemind,normalizeReminderMeta,fmt12,hmMinutes,
+  REM_LOOK,REM_EVENING,REM_MORNING,REM_HABIT,REM_GENERIC,amountPhrase,dayOpen,eveningBody,easiestOpen,habitReminderBody,planReminders,
+  timerUnit,timerTargetMs,timerElapsed,timerCredit,fmtClock,RAMP_DAYS,RAMP_FIRST,rampDay,rampOn,rampLimit,rampVisible,rampHiddenCount,
   suggestTarget,metStreak,suggestionFor,libEntry,searchLibrary,libHabitIn,habitFromLibrary,addFromLibrary,applyStarterPlan,ensureSection,
   bmi,bmiRound,bmiCategory,healthyRange,distanceToRange,whtr,kgToLb,lbToKg,cmToIn,inToCm,cmToFtIn,ftInToCm,
   normalizeBody,isLight,shieldDays,shieldReady,shieldNote,easeTarget,easeSchedule,easeFor,raiseFor,moveOffDay,weekSummary,weekText,insights,insightsDetailed,

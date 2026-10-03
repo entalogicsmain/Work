@@ -4,7 +4,7 @@
 let reorderMode=false;
 
 async function saveSettingsQuiet(){
-  try{await store.persist();flashSaved();autoBackup();markSettingsDirty();syncSoon(false)}
+  try{await store.persist();flashSaved();autoBackup();markSettingsDirty();syncSoon(false);rescheduleReminders()}
   catch(e){toast("Couldn't save. Try again.",{icon:'x'})}
 }
 async function persistSettings(msg){
@@ -98,7 +98,7 @@ function navRow(o){
 
 /* ---------- the Plan screen ---------- */
 function habitSummary(x){
-  const sch=Core.scheduleLabel(x.schedule);
+  const sch=Core.scheduleLabel(x.schedule)+(x.anchor?' · '+x.anchor:'')+(x.remind&&x.remind.times&&x.remind.times.length?' · Reminder '+x.remind.times.map(Core.fmt12).join(', '):'');
   if(x.type==='yesno')return'Yes/No · '+sch;
   if(x.type==='measure')return sch;
   if(x.type==='steps')return'Automatic · '+sch;
@@ -208,6 +208,15 @@ function openLibrary(opts){
   return sh;
 }
 
+/* A habit that has reminders needs the notification permission (asked now, in the app only); plan the reminders again once it is known. */
+async function reminderPermissionFor(remind){
+  if(!remind||!IS_NATIVE)return;
+  try{
+    if(!(await ensureNotifPermission()))toast("Notifications are off for Comeback, so this reminder can't ring yet. You can turn them on in Android Settings > Apps > Comeback.",{icon:'bell'});
+    else rescheduleReminders({now:true}).catch(()=>{});
+  }catch(e){}
+}
+
 /* ---------- the habit form: create or edit ---------- */
 const TYPE_LABEL={count:'Count',duration:'Duration',yesno:'Yes/No'};
 const TYPE_HELP={count:'A number you add to with + and − (pushups, glasses of water).',duration:'Minutes or seconds with quick presets (plank, a walk).',yesno:'One tap to mark it done (took vitamins, no sugar).'};
@@ -216,12 +225,17 @@ function habitFormSheet(x,opts){
   const isNew=!x,fixed=x&&(x.type==='steps'||x.type==='measure');
   const st={type:x?x.type:'count',icon:x?x.icon:'target',sched:x?Core.normalizeSchedule(x.schedule):{kind:'daily'},show:x?!x.hidden:true};
   if(st.sched.kind==='days')st.sched.days=st.sched.days.slice();
+  st.presets=x&&Array.isArray(x.presets)?x.presets.slice():[];
+  st.remind={times:x&&x.remind?x.remind.times.slice():[],skip:x&&x.remind?x.remind.skipIfDone!==false:true};
   const root=h('<div class="hform"></div>');
   root.innerHTML='<div class="field"><label for="fName">Name</label><div class="box"><input id="fName" placeholder="Pull-ups" autocomplete="off"></div></div>'+
     (fixed?'':'<div class="field"><label id="fTypeLab">Type</label><div class="seg" id="fType" role="radiogroup" aria-labelledby="fTypeLab"></div><p class="t-foot muted" id="fTypeHelp" style="margin:6px var(--s4) 0"></p></div>')+
     '<div class="field"><label id="fIconLab">Icon</label><div class="iconpick" id="fIcons" role="radiogroup" aria-labelledby="fIconLab"></div></div>'+
     '<div id="fNumWrap"><div class="field-row"><div class="field"><label for="fTarget">Target</label><div class="box"><input id="fTarget" type="number" inputmode="decimal" placeholder="10"></div></div><div class="field"><label for="fUnit">Unit</label><div class="box"><input id="fUnit" placeholder="reps" autocomplete="off"></div></div></div></div>'+
     '<div class="field"><label id="fSchedLab">Schedule</label><div class="seg wrap" id="fSched" role="radiogroup" aria-labelledby="fSchedLab"></div><div id="fSchedDetail"></div></div>'+
+    '<div class="field" id="fPresetWrap"><label id="fPresetLab" for="fPresetIn">Quick add amounts</label><div class="fchips" id="fPresetChips" role="group" aria-labelledby="fPresetLab"></div><div class="fadd"><div class="box"><input id="fPresetIn" type="number" inputmode="decimal" min="0" step="any" placeholder="0.25" aria-label="New quick add amount"></div><button class="btn secondary" id="fPresetAdd" type="button">Add</button></div><p class="t-foot muted remnote" id="fPresetHelp"></p></div>'+
+    '<div class="field"><label for="fAnchor">When (optional)</label><div class="box"><input id="fAnchor" maxlength="30" placeholder="After lunch" autocomplete="off"></div><div class="fchips" id="fAnchorChips" role="group" aria-label="Suggested times of day"></div></div>'+
+    '<div class="field" id="fRemWrap"><label id="fRemLab">Remind me</label><div class="remlist" id="fRemList"></div><div class="fchips"><button class="fchip" id="fRemAdd" type="button"></button></div><div class="group" id="fRemSkipGroup" style="margin-top:var(--s3)"><label class="row"><span class="row-body"><span class="row-label">Skip if already done</span><span class="row-sub">No reminder once today\'s target is met</span></span><input type="checkbox" class="switch" role="switch" id="fRemSkip" aria-label="Skip the reminder if already done"></label></div><p class="t-foot muted remnote" id="fRemNote"></p></div>'+
     '<div class="field"><label for="fSection">Section</label><div class="box"><select id="fSection" aria-label="Section"></select></div><div class="box" id="fNewSecBox" hidden style="margin-top:8px"><input id="fNewSec" placeholder="New section name" autocomplete="off" aria-label="New section name"></div></div>'+
     '<div class="group" style="margin-bottom:var(--s3)"><label class="row"><span class="row-label">Show on Today</span><input type="checkbox" class="switch" role="switch" id="fShow" aria-label="Show on Today"></label></div>'+
     '<div class="err" id="fErr" role="alert"></div>'+(isNew?'':'<button class="btn secondary danger-btn" id="fRemove">Remove habit</button>');
@@ -234,7 +248,66 @@ function habitFormSheet(x,opts){
     ['count','duration','yesno'].forEach(k=>{const b=h('<button role="radio"></button>');b.textContent=TYPE_LABEL[k];b.dataset.type=k;b.setAttribute('aria-checked',String(st.type===k));b.setAttribute('aria-selected',String(st.type===k));b.disabled=!isNew&&st.type!==k;b.addEventListener('click',()=>{st.type=k;haptic('light');if(isNew&&!q('#fUnit').value)q('#fUnit').value=k==='duration'?'min':k==='count'?'reps':'';drawType();drawNum()});t.appendChild(b)});
     q('#fTypeHelp').textContent=isNew?TYPE_HELP[st.type]:'The type can\'t be changed once a habit has been logged.';
   }
-  function drawNum(){const hideNum=st.type==='yesno'||(x&&x.type==='measure');q('#fNumWrap').hidden=hideNum;if(x&&x.type==='steps')q('#fUnit').disabled=true}
+  function drawNum(){
+    const hideNum=st.type==='yesno'||(x&&x.type==='measure');q('#fNumWrap').hidden=hideNum;if(x&&x.type==='steps')q('#fUnit').disabled=true;
+    q('#fPresetWrap').hidden=!(st.type==='count'||st.type==='duration');
+    q('#fRemWrap').hidden=st.type==='steps';
+    if(typeof drawPresets==='function'&&q('#fPresetChips'))drawPresets();
+  }
+  // quick-add amounts (Count and Duration): chips you can remove, and a box to add one (up to 4)
+  const unitText=()=>q('#fUnit').value.trim()||(st.type==='duration'?'min':'');
+  function drawPresets(){
+    const w=q('#fPresetChips');w.innerHTML='';
+    st.presets.forEach((a,i)=>{
+      const b=h('<button class="fchip" type="button"></button>');const t=Core.presetLabel({unit:unitText()},a,true);
+      b.textContent=t+' ';b.insertAdjacentHTML('beforeend',icon('x'));b.setAttribute('aria-label','Remove '+t.slice(1));
+      b.addEventListener('click',()=>{st.presets.splice(i,1);haptic('light');drawPresets()});w.appendChild(b);
+    });
+    q('#fPresetAdd').disabled=st.presets.length>=4;
+    q('#fPresetHelp').textContent=st.presets.length?'These show on the card. Tap one to remove it.':'Leave empty to use the usual amounts for this unit. Add up to 4 of your own, such as 0.25 for a glass of water in litres.';
+  }
+  function addPreset(){
+    const inp=q('#fPresetIn'),v=Math.round(Number(inp.value)*100)/100;
+    if(!(v>0)||v>1e6){err.textContent='Enter an amount above 0';inp.focus();return}
+    if(st.presets.length>=4){err.textContent='Up to 4 amounts';return}
+    if(!st.presets.includes(v))st.presets=st.presets.concat(v).sort((a,c)=>a-c);
+    inp.value='';haptic('light');drawPresets();
+  }
+  // anchors: "After lunch" and friends, plain text
+  const ANCHORS=['After waking','After morning tea','After lunch','After dinner','Before bed'];
+  function drawAnchors(){
+    const w=q('#fAnchorChips');w.innerHTML='';const cur=q('#fAnchor').value.trim();
+    ANCHORS.forEach(a=>{const b=h('<button class="fchip" type="button"></button>');b.textContent=a;b.setAttribute('aria-pressed',String(cur===a));
+      b.addEventListener('click',()=>{q('#fAnchor').value=cur===a?'':a;haptic('light');drawAnchors()});w.appendChild(b)});
+  }
+  // reminders for this habit: up to 3 times, 12-hour pickers
+  function drawRem(){
+    const list=q('#fRemList');list.innerHTML='';
+    st.remind.times.forEach((t,i)=>{
+      const row=h('<div class="remrow"><span class="remtime"></span><button class="iconbtn" type="button"></button></div>');
+      const sp=row.querySelector('.remtime');initTime12(sp,'Reminder time '+(i+1));sp.value=t;
+      sp.addEventListener('change',()=>{st.remind.times[i]=sp.value});
+      const rm=row.querySelector('.iconbtn');rm.innerHTML=icon('x');rm.setAttribute('aria-label','Remove reminder time '+(i+1));
+      rm.addEventListener('click',()=>{st.remind.times.splice(i,1);haptic('light');drawRem()});
+      list.appendChild(row);
+    });
+    const add=q('#fRemAdd');add.hidden=st.remind.times.length>=3;
+    add.innerHTML=icon('plus','sm')+'<span></span>';add.querySelector('span').textContent=st.remind.times.length?'Add another time':'Add a reminder time';
+    q('#fRemSkipGroup').hidden=!st.remind.times.length;
+    q('#fRemSkip').checked=st.remind.skip;
+    q('#fRemNote').textContent=!st.remind.times.length?'A gentle nudge at the times you pick. Up to 3 a day.':IS_NATIVE?'Reminders ring on days this habit is due.':'Reminders only ring in the Android app.';
+  }
+  q('#fRemAdd').addEventListener('click',()=>{
+    const used=new Set(st.remind.times),t=['08:00','13:00','19:00','09:00','12:00','18:00'].find(v=>!used.has(v))||'10:00';
+    st.remind.times.push(t);haptic('light');drawRem();
+    const last=[...q('#fRemList').querySelectorAll('select')].pop();if(last)last.focus({preventScroll:true});
+  });
+  q('#fRemSkip').addEventListener('change',e=>{st.remind.skip=e.target.checked});
+  q('#fPresetAdd').addEventListener('click',addPreset);
+  q('#fPresetIn').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addPreset()}});
+  q('#fAnchor').addEventListener('input',drawAnchors);
+  q('#fUnit').addEventListener('input',drawPresets);
+  q('#fAnchor').value=x&&x.anchor?x.anchor:'';
   // icons
   function drawIcons(){
     const w=q('#fIcons');w.innerHTML='';
@@ -270,7 +343,7 @@ function habitFormSheet(x,opts){
   if(!sel.value||sel.value==='')sel.value=settings.sections[0]?settings.sections[0].id:'__new';
   sel.addEventListener('change',()=>{q('#fNewSecBox').hidden=sel.value!=='__new';if(sel.value==='__new')q('#fNewSec').focus()});
   q('#fShow').addEventListener('change',e=>{st.show=e.target.checked});
-  drawType();drawIcons();drawSched();drawNum();
+  drawType();drawIcons();drawSched();drawNum();drawPresets();drawAnchors();drawRem();
   const err=q('#fErr');
   root.querySelectorAll('input').forEach(i=>i.addEventListener('input',()=>err.textContent=''));
   const sh=openSheet({title:isNew?'New habit':'Edit habit',content:root,onDone:()=>{
@@ -286,6 +359,13 @@ function habitFormSheet(x,opts){
       settings.sections.splice(Math.max(0,settings.sections.findIndex(s=>s.id==='body')>=0?settings.sections.findIndex(s=>s.id==='body'):settings.sections.length),0,{id:secId,name:nm});
     }
     const sched=Core.normalizeSchedule(st.sched);
+    const anchor=Core.normalizeAnchor(q('#fAnchor').value),presets=st.type==='count'||st.type==='duration'?Core.normalizePresets(st.presets):null;
+    const remind=st.type==='steps'?null:Core.normalizeRemind({times:st.remind.times,skipIfDone:st.remind.skip});
+    const extras=t=>{
+      if(anchor)t.anchor=anchor;else delete t.anchor;
+      if(presets)t.presets=presets;else delete t.presets;
+      if(remind)t.remind=remind;else delete t.remind;
+    };
     if(x){
       // look the habit up again: a cloud sync while this sheet was open may have replaced the settings (or removed the habit)
       let t=settings.habits.find(z=>z.id===x.id);
@@ -293,13 +373,15 @@ function habitFormSheet(x,opts){
       t.name=name;t.icon=st.icon;t.section=secId;t.schedule=sched;
       if(needNum){t.target=target;if(t.type!=='steps')t.unit=q('#fUnit').value.trim()||t.unit}
       if(st.show)delete t.hidden;else t.hidden=true;
-      persistSettings('Habit updated');
+      extras(t);
+      persistSettings('Habit updated').then(()=>reminderPermissionFor(remind));
     }else{
       const unit=q('#fUnit').value.trim()||(st.type==='duration'?'min':st.type==='count'?'times':'');
       const nh={id:slug(name),name,icon:st.icon,type:st.type,unit,target:st.type==='yesno'?1:target,section:secId,schedule:sched};
       if(!st.show)nh.hidden=true;
+      extras(nh);
       settings.habits.push(nh);
-      persistSettings('Added '+name);
+      persistSettings('Added '+name).then(()=>reminderPermissionFor(remind));
     }
   }});
   if(!isNew)q('#fRemove').addEventListener('click',async()=>{if(await confirmRemove(x.name)){sh.close('cancel');settings.habits=settings.habits.filter(z=>z.id!==x.id);persistSettings('Removed '+x.name)}});

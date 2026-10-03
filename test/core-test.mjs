@@ -92,7 +92,7 @@ console.log('Habit types and values');
   eq([C.hv(cnt, d), C.hv(dur, d), C.hv(yn, d), C.hv(w, d)], [12, 20, 1, 87.2], 'values are read from the right place for each type');
   eq([C.isMet(cnt, d), C.isMet(dur, d), C.isMet(yn, d), C.isMet(w, d)], [true, false, true, true], 'met: count at target, duration short, yes/no ticked, a measurement logged');
   eq([C.isLogged(dur, d), C.isLogged(yn, day(MON)), C.hv(yn, null)], [true, false, null], 'logged / not logged');
-  eq([C.stepFor(cnt), C.stepFor(dur), C.stepFor(H('p', { type: 'duration', unit: 'sec' })), C.stepFor(H('w', { unit: 'litres', target: 2.5 }))], [1, 5, 10, 0.5], 'one-tap steps: reps 1, minutes 5, seconds 10, litres 0.5');
+  eq([C.stepFor(cnt), C.stepFor(dur), C.stepFor(H('p', { type: 'duration', unit: 'sec' })), C.stepFor(H('w', { unit: 'litres', target: 2.5 }))], [1, 5, 10, 0.25], 'one-tap steps: reps 1, minutes 5, seconds 10, litres 0.25 (water is no longer a clumsy half litre)');
 }
 
 console.log('Schedules and due days');
@@ -708,6 +708,150 @@ console.log('Goal weight');
   eq(C.approxDate('2026-12-15', T1), 'mid-December', 'dates are approximate');
   eq([C.approxDate('2026-12-03', T1), C.approxDate('2026-12-28', T1), C.approxDate('2027-03-05', T1)], ['early December', 'late December', 'early March 2027'], 'early, late, and the year when it is not this one');
   eq(C.weightSeries({ '2026-10-01': day('2026-10-01', {}, {}, { weight: 80 }), '2026-09-30': day('2026-09-30'), '2026-10-03': day('2026-10-03', {}, {}, { weight: 79 }) }, '2026-10-02'), [{ k: '2026-10-01', kg: 80 }], 'the weight series is the logged weights up to a day');
+}
+
+console.log('Anchors, quick-add amounts and per-habit reminders (habit fields)');
+{
+  const n = o => C.normalizeHabit(H('a', o), 0);
+  eq(n({ anchor: '  After   lunch  ' }).anchor, 'After lunch', 'an anchor is trimmed and its spaces collapsed');
+  ok(n({ anchor: 'x'.repeat(60) }).anchor.length === 30, 'an anchor is at most 30 characters');
+  ok(!('anchor' in n({ anchor: '   ' })) && !('anchor' in n({ anchor: 42 })) && !('anchor' in n({})), 'an empty or non-text anchor is dropped');
+  eq(n({ anchor: 'a\nb<script>' }).anchor, 'a b<script>', 'line breaks become spaces (the text is only ever shown as text)');
+  eq(n({ presets: [0.5, 0.25, 0.25, -1, 'x', 2, 3, 4, 5] }).presets, [0.25, 0.5, 2, 3], 'quick-add amounts: positive numbers only, no repeats, smallest first, at most 4');
+  ok(!('presets' in n({ presets: [] })) && !('presets' in n({ presets: 'a' })) && !('presets' in n({ type: 'yesno', target: 1, unit: '', presets: [1] })), 'no usable amounts (or a Yes/No habit) means no presets');
+  eq(n({ remind: { times: ['21:00', '07:00', '07:00', '7:5', '25:00', '12:00', '13:00'] } }).remind, { times: ['07:00', '12:00', '13:00'], skipIfDone: true }, 'reminder times: valid HH:MM only, no repeats, sorted, at most 3');
+  eq(n({ remind: { times: ['08:30'], skipIfDone: false } }).remind, { times: ['08:30'], skipIfDone: false }, 'skipIfDone can be turned off');
+  ok(!('remind' in n({ remind: { times: ['nope'] } })) && !('remind' in n({ remind: 'x' })) && !('remind' in n({ remind: { times: [] } })), 'no valid time means no reminder');
+  ok(!('remind' in C.normalizeHabit({ id: 'steps', name: 'Steps', type: 'steps', unit: 'steps', target: 8000, remind: { times: ['08:00'] } }, 0)), 'the automatic Steps habit has no reminder');
+  const round = C.migrateSettings({ v: 2, habits: [H('a', { anchor: 'After tea', presets: [1, 2], remind: { times: ['07:00'], skipIfDone: true } })] }).settings.habits[0];
+  eq([round.anchor, round.presets, round.remind], ['After tea', [1, 2], { times: ['07:00'], skipIfDone: true }], 'the fields survive settings migration (restore, cloud pull)');
+  eq([C.fmt12('07:00'), C.fmt12('00:05'), C.fmt12('12:30'), C.fmt12('23:59'), C.fmt12('x')], ['7:00 AM', '12:05 AM', '12:30 PM', '11:59 PM', ''], 'times are shown on a 12-hour clock');
+  eq(C.normalizeReminderMeta({ enabled: true, time: '20:15' }), { enabled: true, time: '20:15', onlyIfOpen: true, morning: { enabled: false, time: '08:00' }, morningOffered: false }, 'old reminder settings get the new ones: only-if-open on, morning cue off');
+  eq(C.normalizeReminderMeta({ time: 'bad', onlyIfOpen: false, morning: { enabled: true, time: '07:30' } }), { enabled: false, time: '21:00', onlyIfOpen: false, morning: { enabled: true, time: '07:30' }, morningOffered: false }, 'a bad time falls back to 9:00 PM');
+}
+
+console.log('Quick-add amounts and one-tap steps');
+{
+  const water = H('w', { unit: 'litres', target: 2.5 }), glass = H('g', { unit: 'glasses', target: 8 }), cups = H('c', { unit: 'cups', target: 6 });
+  eq([C.stepFor(water), C.stepFor(glass), C.stepFor(cups)], [0.25, 1, 1], 'water in litres steps by a quarter, glasses and cups by one');
+  eq([C.presetsFor(water), C.presetsFor(glass), C.presetsFor(H('r')), C.presetsFor(H('d', { type: 'duration', unit: 'min' })), C.presetsFor(H('p', { type: 'duration', unit: 'sec' }))], [[0.25, 0.5], [1, 2], [5, 10], [5, 10], [10, 30]], 'sensible chips for each unit');
+  eq(C.presetsFor(H('w2', { unit: 'litres', presets: [0.33, 0.75] })), [0.33, 0.75], "a habit's own amounts come first");
+  eq(C.stepFor(H('w3', { unit: 'litres', target: 2, presets: [0.3, 0.6] })), 0.3, 'the + and − buttons use the first amount');
+  eq(C.stepFor(H('w4', { unit: 'litres', target: 2, presets: [0.3], step: 0.1 })), 0.1, 'unless the habit sets its own step');
+  eq([C.presetLabel(glass, 1, true), C.presetLabel(glass, 2, true), C.presetLabel(water, 0.25, true), C.presetLabel(water, 0.25), C.presetLabel(H('r'), 5, true)], ['+1 glass (250 ml)', '+2 glasses (500 ml)', '+0.25 L', '+0.25', '+5 reps'], 'chip labels: "+1 glass (250 ml)", "+0.25 L"');
+  ok(C.hasQuickAdd(water) && C.hasQuickAdd(glass) && C.hasQuickAdd(H('x', { presets: [5, 10] })) && !C.hasQuickAdd(H('r')) && !C.hasQuickAdd(H('d', { type: 'duration', unit: 'min' })), 'water-like units and habits with their own amounts get chips; plain reps keep + and −');
+  const lib = C.libEntry('water'), added = C.habitFromLibrary(S([]), lib);
+  eq([added.presets, C.stepFor(added), added.step], [[0.25, 0.5], 0.25, undefined], 'the library water entry has presets and a quarter-litre step');
+  added.presets.push(9); ok(lib.presets.length === 2, 'a library item is copied, not shared');
+}
+
+console.log('Smarter reminders (what is planned for tonight and the next days)');
+{
+  const NOW = new Date(2026, 9, 2, 14, 0), TODAY = FRI;                 // Friday 2:00 PM
+  const habits = [H('water', { name: 'Water', unit: 'litres', target: 2.5 }), H('walk', { name: 'Brisk walk', type: 'duration', unit: 'min', target: 30 }), H('nosugar', { name: 'No sugar', type: 'yesno', target: 1, unit: '', section: 'food' })];
+  const st = S(habits);
+  const rem = (o = {}) => Object.assign({ enabled: true, time: '21:00', onlyIfOpen: true, morning: { enabled: false, time: '08:00' } }, o);
+  const evening = list => list.filter(n => n.kind === 'evening');
+  const hh = n => n.at.getHours() * 60 + n.at.getMinutes();
+  const p = evening(C.planReminders(st, {}, rem(), NOW));
+  eq(p.map(n => [n.id, C.ymd(n.at), hh(n)]), [[1001, FRI, 1260], [1002, SAT, 1260], [1003, SUN, 1260]], 'three evenings ahead as one-shot notifications at 9:00 PM (ids 1001 to 1003)');
+  ok(p[0].body === 'Water, Brisk walk and 1 more are still open. A quick one counts.' && p[0].title === 'Comeback' && p.every(n => n.on === null), 'tonight names two open things and counts the rest; every one is a one-shot (no repeating)', p[0].body);
+  ok(p[1].body === C.REM_GENERIC && p[2].body === C.REM_GENERIC, 'the days after use the plain text (nothing is known about them yet)');
+  eq(C.eveningBody([{ name: 'Water' }]), 'Water is still open. A quick one counts.', 'one open item');
+  eq(C.eveningBody([{ name: 'Water' }, { name: 'Walk' }, { name: 'Squats' }, { name: 'Plank' }]), 'Water, Walk and 2 more are still open. A quick one counts.', 'more than two: two names and a count');
+  // already done today: tonight is skipped, tomorrow stays
+  const done = { [TODAY]: day(TODAY, { water: 2.5, walk: 30 }, { nosugar: true }) };
+  eq(evening(C.planReminders(st, done, rem(), NOW)).map(n => n.id), [1002, 1003], 'everything done today: tonight is skipped, tomorrow is kept');
+  const partial = { [TODAY]: day(TODAY, { water: 2.5 }, {}) };
+  const pp = evening(C.planReminders(st, partial, rem(), NOW));
+  ok(pp[0].body === 'Brisk walk and No sugar are still open. A quick one counts.', 'only what is still open is named', pp[0].body);
+  // light day
+  const light = { [TODAY]: day(TODAY, {}, {}, { light: true }) };
+  eq(evening(C.planReminders(st, light, rem(), NOW)).map(n => n.id), [1002, 1003], 'a light day skips tonight');
+  // rest day: nothing due today (the only habit is for Mon, Wed and Fri; Saturday and Sunday are rest days too)
+  const restSt = S([H('mwf', { schedule: { kind: 'days', days: [1, 3] } })]);
+  eq(evening(C.planReminders(restSt, {}, rem(), NOW)).map(n => n.id), [], 'a rest day (Friday here) and the weekend after it are skipped');
+  eq(evening(C.planReminders(restSt, {}, rem(), new Date(2026, 9, 3, 14, 0))).map(n => C.ymd(n.at)), ['2026-10-05'], 'on Saturday the Monday (three days ahead) is the only evening planned');
+  // time already passed
+  eq(evening(C.planReminders(st, {}, rem(), new Date(2026, 9, 2, 21, 30))).map(n => n.id), [1002, 1003], 'after 9:00 PM tonight is not scheduled');
+  // switch off: the classic repeating reminder, same id
+  const classic = evening(C.planReminders(st, done, rem({ onlyIfOpen: false }), NOW));
+  eq(classic.map(n => [n.id, n.at, n.on, n.body]), [[1001, null, { hour: 21, minute: 0 }, C.REM_GENERIC]], 'with "only if something is left" off it is one repeating daily reminder (id 1001), even on a done day');
+  eq(C.planReminders(st, {}, rem({ enabled: false }), NOW), [], 'everything off: nothing planned');
+  // morning cue
+  const mp = C.planReminders(st, { [TODAY]: day(TODAY, { water: 2 }, {}) }, rem({ enabled: false, morning: { enabled: true, time: '15:00' } }), NOW).filter(n => n.kind === 'morning');
+  eq(mp.map(n => n.id), [1011, 1012, 1013], 'the morning cue: one a day, ids 1011 and up');
+  ok(mp[0].body === "Good morning. Today's easiest win: 0.5 litres of water." && mp[1].body === "Good morning. Today's easiest win: 0.5 litres of water.".replace('0.5', '2.5'), 'its text is the easiest open habit: the one closest to done', mp.map(n => n.body));
+  eq(C.easiestOpen(S([H('stand', { name: 'Stand-up breaks', unit: 'times', target: 6 }), H('push', { name: 'Pushups', target: 30 })]), {}, TODAY).text, '6 stand-up breaks', 'with nothing started, the smallest target is the easiest win');
+  eq(C.easiestOpen(S([H('nosugar', { name: 'No sugar', type: 'yesno', unit: '', target: 1 })]), {}, TODAY).text, 'no sugar', 'only a Yes/No habit open: it is the win');
+  eq(C.easiestOpen(S([H('a')]), { [TODAY]: day(TODAY, { a: 10 }) }, TODAY), null, 'nothing open: no easiest win');
+  eq(C.planReminders(st, done, rem({ enabled: false, morning: { enabled: true, time: '15:00' } }), NOW).filter(n => n.kind === 'morning').map(n => n.id), [1012, 1013], 'a morning cue is skipped on a day that is already done');
+}
+
+console.log('Reminders for one habit');
+{
+  const NOW = new Date(2026, 9, 2, 6, 0);   // Friday 6:00 AM
+  const walk = H('walk', { name: 'Brisk walk', type: 'duration', unit: 'min', target: 10, anchor: 'After lunch', remind: { times: ['13:00', '07:00'], skipIfDone: true } });
+  const push = H('pushups', { name: 'Pushups', target: 30, remind: { times: ['18:30'], skipIfDone: true } });
+  const vit = H('vit', { name: 'Took vitamins', type: 'yesno', unit: '', target: 1, remind: { times: ['08:00'], skipIfDone: false } });
+  const mwf = H('mwf', { name: 'Stretching', type: 'duration', unit: 'min', target: 10, schedule: { kind: 'days', days: [1, 3, 5] }, remind: { times: ['09:15'], skipIfDone: false } });
+  const w3 = H('w3', { name: 'Run', type: 'duration', unit: 'min', target: 20, schedule: { kind: 'weekly', times: 3 }, remind: { times: ['17:00'], skipIfDone: false } });
+  const st = S([walk, push, vit, mwf, w3]), off = { enabled: false, time: '21:00', onlyIfOpen: true, morning: { enabled: false, time: '08:00' } };
+  const habitsOf = (days, now = NOW, s = st) => C.planReminders(s, days, off, now).filter(n => n.kind === 'habit');
+  const list = habitsOf({});
+  eq(C.habitReminderBody(walk), 'After lunch: 10 min brisk walk.', 'with an anchor: "After lunch: 10 min brisk walk."');
+  eq([C.habitReminderBody(push), C.habitReminderBody(vit), C.habitReminderBody(H('d', { name: 'Water', unit: 'litres', target: 2.5, anchor: 'Before bed' }))], ['Pushups: 30 reps.', 'Took vitamins: one tap when it is done.', 'Before bed: 2.5 litres of water.'], 'without one: "<Name>: <target> <unit>."');
+  const ids = list.map(n => n.id);
+  ok(new Set(ids).size === ids.length && ids.every(i => i >= 2000), 'every id is 2000 or more and unique', ids);
+  const wk = list.filter(n => n.habitId === 'walk');
+  eq(wk.map(n => C.ymd(n.at) + ' ' + n.at.getHours()).sort(), ['2026-10-02 13', '2026-10-02 7', '2026-10-03 13', '2026-10-03 7', '2026-10-04 13', '2026-10-04 7'], 'a daily habit that skips when done: one-shot notifications for each time over the next 3 days');
+  ok(wk.every(n => n.body === 'After lunch: 10 min brisk walk.' && n.title === 'Comeback' && n.on === null), 'with the anchor text');
+  const v = list.filter(n => n.habitId === 'vit');
+  eq(v.map(n => [n.on, n.at]), [[{ hour: 8, minute: 0 }, null]], 'a daily habit that does not skip: one repeating daily notification');
+  const m = list.filter(n => n.habitId === 'mwf');
+  eq(m.map(n => n.on.weekday).sort(), [2, 4, 6], 'a specific-days habit that does not skip: one repeating notification per weekday (Capacitor weekday 1 = Sunday)');
+  const w = list.filter(n => n.habitId === 'w3');
+  eq(w.map(n => C.ymd(n.at)), [FRI, SAT, SUN], 'a times-a-week habit is planned day by day, never as a repeat');
+  const met = habitsOf({ [FRI]: day(FRI, { walk: 10 }, {}) }).filter(n => n.habitId === 'walk');
+  eq(met.map(n => C.ymd(n.at)).sort(), [SAT, SAT, SUN, SUN], 'already met today: today is skipped (skipIfDone)');
+  ok(habitsOf({ [FRI]: day(FRI, {}, {}, { light: true }) }).filter(n => n.habitId === 'walk' || n.habitId === 'pushups').every(n => C.ymd(n.at) !== FRI), 'a light day skips today for habits that skip when done');
+  eq(habitsOf({}, new Date(2026, 9, 2, 14, 0)).filter(n => n.habitId === 'walk').map(n => C.ymd(n.at) + ' ' + n.at.getHours()).sort(), ['2026-10-03 13', '2026-10-03 7', '2026-10-04 13', '2026-10-04 7'], 'times already past today are not planned');
+  eq(habitsOf({}, NOW, S([Object.assign({}, walk, { hidden: true })])), [], 'a hidden habit has no reminders');
+  eq(habitsOf({}, NOW, S([Object.assign({}, mwf, { schedule: { kind: 'days', days: [1, 3] }, remind: { times: ['09:15'], skipIfDone: true } })])).map(n => C.ymd(n.at)), [], 'a specific-days habit (Mon, Wed) is not planned on days it is not due');
+  eq(habitsOf({}, new Date(2026, 9, 4, 6, 0), S([Object.assign({}, mwf, { schedule: { kind: 'days', days: [1, 3] }, remind: { times: ['09:15'], skipIfDone: true } })])).map(n => C.ymd(n.at)), ['2026-10-05'], 'but on Sunday the Monday is planned');
+}
+
+console.log('The timer');
+{
+  const plank = H('plank', { name: 'Plank', type: 'duration', unit: 'sec', target: 60 }), walk = H('walk', { name: 'Brisk walk', type: 'duration', unit: 'min', target: 30 });
+  eq([C.timerUnit(plank), C.timerUnit(walk), C.timerUnit(H('h', { type: 'duration', unit: 'hours' })), C.timerUnit(H('r'))], ['sec', 'min', null, null], 'the timer adds to minutes or seconds, only on Duration habits');
+  eq([C.timerTargetMs(plank), C.timerTargetMs(walk)], [60000, 1800000], 'the target in milliseconds');
+  eq([C.timerElapsed({ startedAt: 1000, pausedMs: 0, pausedAt: null }, 43000), C.timerElapsed({ startedAt: 1000, pausedMs: 5000, pausedAt: null }, 43000), C.timerElapsed({ startedAt: 1000, pausedMs: 5000, pausedAt: 20000 }, 99999), C.timerElapsed(null, 5), C.timerElapsed({ startedAt: 1000, pausedMs: 0 }, 500)], [42000, 37000, 14000, 0, 0], 'elapsed time comes from timestamps: pauses are left out, a paused timer stands still, never negative');
+  eq([C.timerCredit(plank, 42400), C.timerCredit(plank, 400), C.timerCredit(walk, 750000), C.timerCredit(walk, 42000), C.timerCredit(walk, 1000), C.timerCredit(H('r'), 5000)], [{ value: 42, ms: 42000 }, { value: 0, ms: 0 }, { value: 12.5, ms: 750000 }, { value: 0.7, ms: 42000 }, { value: 0, ms: 0 }, { value: 0, ms: 0 }], 'stopping adds whole seconds, or minutes to a tenth');
+  eq([C.fmtClock(42000), C.fmtClock(725000), C.fmtClock(3723000), C.fmtClock(-5), C.fmtClock(999)], ['0:42', '12:05', '1:02:03', '0:00', '0:00'], 'clock text');
+}
+
+console.log('The first-week ramp');
+{
+  const habits = [H('steps', { type: 'steps', unit: 'steps', target: 8000 }), H('walk', { type: 'duration', unit: 'min' }), H('push'), H('squat'), H('water', { unit: 'litres', target: 2 }), H('weight', { type: 'measure', measure: 'weight', target: 0, unit: 'kg', section: 'body', schedule: { kind: 'weekly', times: 3 } })];
+  const on = S(habits, { prefs: { suggestions: true, ramp: true, rampStart: MON } });
+  const vis = (s, d, today) => s.habits.filter(h => C.rampVisible(s, d, today, h)).map(h => h.id);
+  eq(vis(on, {}, MON), ['steps', 'walk', 'push', 'weight'], 'day 1: the first three habits of the plan (and the weight row, which is a measurement)');
+  eq(C.rampHiddenCount(on, {}, MON), 2, 'two are held back ("More when you are ready (2)")');
+  eq([C.rampDay(on, {}, MON), C.rampDay(on, {}, THU), C.rampDay(on, {}, SUN), C.rampDay(on, {}, '2026-10-05')], [1, 4, 7, 8], 'days of the ramp are counted from rampStart');
+  eq(C.rampHiddenCount(on, {}, '2026-10-05'), 0, 'after the 7th day nothing is held back');
+  eq(vis(on, {}, '2026-10-05').length, 6, 'and every habit shows');
+  eq(vis(S(habits, { prefs: { suggestions: true } }), {}, MON).length, 6, 'without prefs.ramp (every existing user) nothing is ever held back');
+  eq(vis(S(habits, { prefs: { suggestions: true, ramp: false, rampStart: MON } }), {}, MON).length, 6, 'turned off in Settings: nothing is held back');
+  ok(vis(on, { [MON]: day(MON, { water: 1 }) }, MON).includes('water'), 'a habit that already has an entry is never hidden');
+  eq(vis(S(habits, { prefs: { suggestions: true, ramp: true, rampStart: MON, rampLimit: 4 } }), {}, MON), ['steps', 'walk', 'push', 'squat', 'weight'], '"Add another habit?" raises the limit by one');
+  const tue = S([H('a', { schedule: { kind: 'days', days: [2] } }), H('b'), H('c'), H('d'), H('e')], { prefs: { suggestions: true, ramp: true, rampStart: MON } });
+  eq(vis(tue, {}, MON).filter(i => i !== 'a'), ['b', 'c', 'd'], 'only habits that are due count towards the three (a Tuesday habit is not due on Monday)');
+  const fresh = C.defaultSettings(); C.applyStarterPlan(fresh, 'desk');
+  ok(fresh.prefs.ramp === true && /^\d{4}-\d{2}-\d{2}$/.test(fresh.prefs.rampStart), 'picking a starter plan turns the ramp on (and records the first day)');
+  const scratch = C.defaultSettings(); C.applyStarterPlan(scratch, 'scratch'); ok(scratch.prefs.ramp !== true, 'start from scratch has no ramp');
+  eq(C.migrateSettings(on).settings.prefs, { suggestions: true, ramp: true, rampStart: MON }, 'the ramp settings survive normalizing (sync, restore)');
+  eq(C.migrateSettings({ v: 2, habits: [H('a')], prefs: { ramp: 'yes', rampStart: 'soon', rampLimit: 2 } }).settings.prefs, { suggestions: true }, 'junk ramp settings are dropped');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

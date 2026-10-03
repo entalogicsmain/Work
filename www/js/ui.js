@@ -164,7 +164,7 @@ async function flushSave(){
   clearTimeout(saveTimer);
   if(!pendingSave.size)return;
   const keys=[...pendingSave];pendingSave.clear();
-  try{await store.persist();showSaveError(false);flashSaved();keys.forEach(markDayDirty);autoBackup();syncSoon(false)}
+  try{await store.persist();showSaveError(false);flashSaved();keys.forEach(markDayDirty);autoBackup();syncSoon(false);rescheduleReminders()}
   catch(e){keys.forEach(k=>pendingSave.add(k));showSaveError(true);toast("Couldn't save. Trying again.",{icon:'x'});clearTimeout(saveTimer);saveTimer=setTimeout(flushSave,3000)}
 }
 
@@ -232,7 +232,7 @@ function numberSheet(o){
     err.textContent=e||'';if(sheet)sheet.setDone(!e);
   }
   const num=()=>buf===''?0:Number(buf);
-  const set=v=>{buf=String(Math.max(o.min||0,r1(v)));fresh=true;show();haptic('light')};
+  const set=v=>{buf=String(Math.max(o.min||0,r2(v)));fresh=true;show();haptic('light')};
   minus.addEventListener('click',()=>set(num()-o.step));plus.addEventListener('click',()=>set(num()+o.step));
   (o.presets||[]).forEach(p=>{const b=h('<button class="preset"></button>');b.textContent=p.label;b.addEventListener('click',()=>set(p.apply?p.apply(num()):p.set));root.querySelector('.presets').appendChild(b)});
   if(!(o.presets||[]).length)root.querySelector('.presets').remove();

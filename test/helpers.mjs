@@ -120,6 +120,7 @@ export const MOCK = `
 (function(){
   var KEY='__mock';
   var st=JSON.parse(localStorage.getItem(KEY)||'null')||{prefs:{comeback_onboarded:'1'},fs:{},calls:[],perm:'prompt',requestResult:'granted',failWrite:false,shareMode:'ok',exit:0};
+  if(!st.pending)st.pending={};   // notifications that are scheduled right now, by id (schedule adds, cancel removes)
   if(!st.steps)st.steps={activityGranted:true,locationGranted:true,batteryIgnored:false,brand:'xiaomi',health:'working',source:'counter',days:{},filteredToday:0,cfg:{enabled:false}};
   function save(){localStorage.setItem(KEY,JSON.stringify(st))}
   function rec(n,a){st.calls.push({n:n,a:a});save()}
@@ -143,8 +144,9 @@ export const MOCK = `
     LocalNotifications:{
       checkPermissions:async function(){return{display:st.perm}},
       requestPermissions:async function(){rec('requestPermissions');if(st.requestResult==='granted')st.perm='granted';else st.perm='denied';save();return{display:st.perm}},
-      cancel:async function(o){rec('cancel',o)},createChannel:async function(o){rec('createChannel',o)},
-      schedule:async function(o){rec('schedule',o);return{notifications:[]}},
+      cancel:async function(o){rec('cancel',o);(o.notifications||[]).forEach(function(n){delete st.pending[n.id]});save()},createChannel:async function(o){rec('createChannel',o)},
+      schedule:async function(o){rec('schedule',o);(o.notifications||[]).forEach(function(n){st.pending[n.id]=n});save();return{notifications:[]}},
+      getPending:async function(){return{notifications:Object.keys(st.pending).map(function(k){return st.pending[k]})}},
       addListener:async function(ev,f){(listeners[ev]=listeners[ev]||[]).push(f);return{remove:function(){}}}
     },
     App:{addListener:async function(ev,f){(listeners[ev]=listeners[ev]||[]).push(f);return{remove:function(){}}},exitApp:async function(){st.exit++;save()}},
