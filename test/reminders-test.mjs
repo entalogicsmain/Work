@@ -356,7 +356,7 @@ console.log('First-week ramp');
 {
   const { ctx, pg, errs } = await open({ native: false, onboard: true });
   await pg.waitForSelector('#onbNext');
-  await pg.click('#onbNext'); await pg.click('#plan-desk'); await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.click('#onbStart');
+  await pg.click('#onbNext'); await pg.click('#plan-desk'); await pg.click('#onbNext'); await pg.click('#onbStart');
   await pg.waitForFunction(() => !document.querySelector('.onb')); await ready(pg);
   ok((await pg.$$eval('#sections .titem', e => e.map(x => x.dataset.id))).filter(i => !['weight', 'waist'].includes(i)).join() === 'steps,walk,standups', 'a new install with a starter plan shows only the first three habits on Today');
   ok(/More when you're ready \(4\)/.test(await pg.textContent('#rampMore')) && (await pg.getAttribute('#rampMore', 'aria-label')).includes('4 more'), 'and a "More when you\'re ready (4)" row');
