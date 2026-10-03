@@ -222,7 +222,8 @@ console.log('No repeats');
   // real pulls: texts differ and the history survives a restart
   const texts = [];
   for (let i = 0; i < 3; i++) { await pull(cdp, 160); await pg.waitForFunction(() => document.getElementById('ptr').classList.contains('hold')); texts.push((await panel(pg)).text); await waitClosed(pg); }
-  ok(new Set(texts).size === 3 && texts.every(t => !seq.slice(-20).includes(t)), 'three real pulls show three different lines, none from the last 20', texts);
+  // each pull pushes the oldest remembered line out, so pull i only has to avoid the newest 20 - i of the earlier picks (and the pulls before it)
+  ok(new Set(texts).size === 3 && texts.every((t, i) => !seq.slice(80 - (20 - i)).includes(t)), 'three real pulls show three different lines, none from the last 20', texts);
   await pg.reload(); await ready(pg); await pg.waitForTimeout(800);
   const hist = await pg.evaluate(() => meta.nudges.slice());
   ok(hist.length === 20 && texts.every(t => hist.includes(t)), 'after a restart the history is still there', hist.length);
