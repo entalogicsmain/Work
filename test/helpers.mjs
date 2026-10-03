@@ -60,12 +60,15 @@ export const settle = pg => pg.waitForTimeout(750); // auto-save debounce (400ms
 export async function enterNumber(pg, text) {
   for (const ch of String(text)) await pg.click(`.keypad .key[aria-label="${ch === '.' ? 'Decimal point' : ch}"]`);
 }
+// sets a habit's TOTAL for the day through its number sheet (Count and Duration: via the "Set total" toggle)
 export async function setHabit(pg, idx, value) {
   // a card that already hit its target shrinks to one line; tap it to open it again
   const done = `#sections .drow[data-id="${hid(idx)}"]`;
   if (await pg.$(done)) await pg.click(done);
   await pg.click(`${cardSel(idx)} .hc-main`);
   await pg.waitForSelector('.keypad');
+  // Count and Duration sheets open in Add mode; this helper sets a total, so it switches to "Set total" first
+  if (await pg.$('#numModeSet')) await pg.click('#numModeSet');
   await enterNumber(pg, value);
   await pg.click('.sheet .txtbtn.strong');
   await sheetGone(pg);

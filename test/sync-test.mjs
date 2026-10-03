@@ -314,7 +314,6 @@ console.log('Onboard signed out, then sign in to an existing account');
   const { c, p } = await phone({ onboard: true });
   await p.goto(base); await p.waitForSelector('.onb');
   await p.click('#onbNext'); await p.click('#plan-beginner'); await p.click('#onbNext');
-  await p.click('#onbNext'); await p.click('#onbNext'); await p.click('#onbNext');
   await p.click('#onbStart'); await p.waitForFunction(() => !document.querySelector('.onb'));
   await settle(p);
   ok((await stored(p)).settings.habits.some(h => h.id === 'pushups'), 'the phone has the starter plan after onboarding');

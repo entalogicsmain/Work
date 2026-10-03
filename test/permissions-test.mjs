@@ -21,22 +21,20 @@ async function fresh(over = {}, top = {}) {
 }
 const mock = pg => pg.evaluate(() => window.__mock.st());
 const names = async pg => (await mock(pg)).calls.map(c => c.n);
-// welcome -> starter plan -> targets -> reminder
+// welcome -> starter plan -> reminder
 async function toReminder(pg) {
-  await pg.click('#onbNext'); await pg.click('#plan-beginner'); await pg.click('#onbNext'); await pg.click('#onbNext');
+  await pg.click('#onbNext'); await pg.click('#plan-beginner'); await pg.click('#onbNext');
 }
-// through the welcome, plan, targets and reminder pages to the permission screen
+// through the welcome, plan and reminder pages to the permission screen
 async function toPermissions(pg) {
   await toReminder(pg); await pg.click('#onbNext');
   await pg.waitForSelector('#onbAllow');
 }
 const pageText = pg => pg.evaluate(() => { const t = document.querySelector('.onb-track'); const pages = [...t.children]; const i = Math.round(-parseFloat(t.style.transform.replace(/[^\d.-]/g, '') || 0) / (100 / pages.length)); return pages[Math.abs(i)] ? pages[Math.abs(i)].textContent : ''; });
 const finishFlow = async pg => {
-  await pg.waitForSelector('#onbBrandNext, #onbNext', { timeout: 8000 });
-  if (await pg.$('#onbBrandNext')) { await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbNext'); }
-  await pg.click('#onbNext');           // height (left empty)
-  await pg.waitForSelector('#onbStart'); // BMI scale
-  await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'), null, { timeout: 8000 });
+  await pg.waitForSelector('#onbBrandNext, #onbStart', { timeout: 8000 });
+  if (await pg.$('#onbBrandNext')) { await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbStart'); }
+  await pg.click('#onbStart');          // height page (left empty): Start counting await pg.waitForFunction(() => !document.querySelector('.onb'), null, { timeout: 8000 });
   await pg.waitForTimeout(500);
 };
 
@@ -57,7 +55,7 @@ console.log('All allowed');
   ok(!/location/i.test(t), 'location is not mentioned or asked for here');
   ok((await pg.$$('#onbFoot .btn')).length === 1 && /Allow and continue/.test(await pg.textContent('#onbFoot')), 'it has a single "Allow and continue" button');
   await pg.click('#onbAllow');
-  await pg.waitForSelector('#onbBrandNext, #onbNext', { timeout: 8000 });
+  await pg.waitForSelector('#onbBrandNext, #onbStart', { timeout: 8000 });
   const n = await names(pg);
   const iAct = n.indexOf('reqActivity'), iNote = n.indexOf('requestPermissions'), iBat = n.indexOf('reqBattery');
   ok(iAct >= 0 && iNote > iAct && iBat > iNote, 'the system dialogs come one after another: activity, then notifications, then battery', n.filter(x => /req/.test(x)));
@@ -67,12 +65,11 @@ console.log('All allowed');
   await pg.click('#onbOpenBrand'); await pg.waitForTimeout(250);
   ok((await mock(pg)).calls.some(c => c.n === 'openSettings' && c.a.target === 'autostart'), 'with a button that opens the right settings page');
   ok(/Continue/.test(await pg.textContent('#onbBrandNext')), 'and the skip button becomes "Continue" afterwards');
-  await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbNext');
-  ok(/Your height/.test(await pageText(pg)) && (await pg.inputValue('#onbHeight')) === '', 'then the height (optional, empty to begin with)');
-  await pg.fill('#onbHeight', '90'); await pg.click('#onbNext');
+  await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbStart');
+  ok(/Your height/.test(await pageText(pg)) && /Optional/.test(await pageText(pg)) && (await pg.inputValue('#onbHeight')) === '', 'then the height (marked optional, empty to begin with)');
+  await pg.fill('#onbHeight', '90'); await pg.click('#onbStart');
   ok(/between 100 and 230/.test(await pg.textContent('#onbHeightErr')) && !!(await pg.$('.onb')), 'a bad height is refused');
-  await pg.fill('#onbHeight', '172'); await pg.click('#onbNext'); await pg.waitForSelector('#onbStart');
-  ok(/BMI scale/.test(await pageText(pg)), 'then the BMI scale, right after the height');
+  await pg.fill('#onbHeight', '172'); ok(!(await pg.$('#scale-asian')), 'there is no BMI scale page (it is asked in the BMI sheet)');
   await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'));
   const cfg = (await mock(pg)).calls.filter(c => c.n === 'stepsConfigure').pop();
   ok(cfg && cfg.a.enabled === true && cfg.a.heightCm === 172, 'the step service starts right away with the chosen height', cfg && cfg.a);
@@ -93,7 +90,7 @@ console.log('Brands');
 for (const [brand, label, tip] of [['xiaomi', 'Xiaomi', /Autostart/], ['oppo', 'Oppo', /auto-launch/], ['vivo', 'Vivo', /Background power/], ['samsung', 'Samsung', /Sleeping apps/], ['transsion', 'Infinix', /Autostart/], ['other', null, null]]) {
   const { ctx, pg } = await fresh({ brand });
   await toPermissions(pg); await pg.click('#onbAllow');
-  await pg.waitForSelector('#onbBrandNext, #onbNext', { timeout: 8000 });
+  await pg.waitForSelector('#onbBrandNext, #onbStart', { timeout: 8000 });
   if (label) {
     ok(!!(await pg.$('#onbBrandNext')) && new RegExp('Keep counting on ' + label).test(await pageText(pg)) && tip.test(await pageText(pg)), `${brand}: brand steps screen for ${label}`);
     ok(await pg.isVisible('#onbOpenBrand') && /Skip for now/.test(await pg.textContent('#onbBrandNext')), `${brand}: can open its settings or skip`);
@@ -167,15 +164,15 @@ console.log('Partly allowed');
   await ctx.close();
 }
 
-/* ---------- plain browser: no permission screen, original three pages ---------- */
+/* ---------- plain browser: no permission screen, welcome, plan and reminder ---------- */
 {
   const errs = [];
   const ctx = await browser.newContext({ viewport: { width: 400, height: 900 } });
   const pg = await newPage(ctx, errs); await pg.goto(base); await pg.waitForSelector('.onb');
-  ok((await pg.$$('.onb-track > .onb-page')).length === 6 && !(await pg.$('#onbAllow')), 'in a browser there are six pages (welcome, plan, targets, reminder, height, BMI scale) and no permission screen');
+  ok((await pg.$$('.onb-track > .onb-page')).length === 3 && !(await pg.$('#onbAllow')), 'in a browser there are three pages (welcome, plan, reminder) and no permission screen');
   await toReminder(pg);
   ok(await pg.isVisible('#onbRemOn'), 'the reminder page has the switch and the time');
-  await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.waitForSelector('#onbStart');
+  await pg.waitForSelector('#onbStart');
   ok(/Finish/.test(await pg.textContent('#onbStart')), 'the last page says Finish (no step counting to start in a browser)');
   ok(errs.length === 0, 'no JS errors (browser)', errs);
   await ctx.close();

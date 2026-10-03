@@ -111,7 +111,7 @@ function habitVal(x){
 function renderPlan(){
   const root=$('planSections');if(!root)return;
   root.innerHTML='';
-  $('reorderBtn').textContent=reorderMode?'Done':'Reorder';
+  $('reorderBtn').textContent=reorderMode?'Done':'Reorder in sections';
   $('reorderBtn').setAttribute('aria-pressed',String(reorderMode));
   settings.sections.forEach(sec=>{
     const hs=settings.habits.filter(x=>x.section===sec.id);
@@ -143,10 +143,18 @@ async function sectionActions(sec){
   const r=await actionSheet({title:sec.name,message:empty?'This section is empty.':'Move its habits to another section to delete it.',actions:acts});
   if(r==='rename')renameSection(sec);else if(r==='del')deleteSection(sec);
 }
-async function confirmRemove(name,what){
-  return(await actionSheet({title:'Remove '+name+'?',message:what||'Past entries stay saved.',actions:[{label:'Remove',value:'rm',destructive:true}]}))==='rm';
+/* Remove is immediate and can be undone from the toast: the habit goes back to where it was. Past entries are never touched. */
+async function removeHabit(x){
+  const at=settings.habits.findIndex(q=>q.id===x.id);
+  if(at<0)return;
+  settings.habits=settings.habits.filter(q=>q.id!==x.id);
+  await saveSettingsQuiet();
+  renderSetup();renderToday();renderProgress();
+  toast('Removed '+x.name,{icon:'trash-2',undo:async()=>{
+    if(!settings.habits.some(q=>q.id===x.id))settings.habits.splice(Math.min(at,settings.habits.length),0,x);
+    await saveSettingsQuiet();renderSetup();renderToday();renderProgress();toast(x.name+' is back',{icon:'check'});
+  }});
 }
-async function removeHabit(x){if(!(await confirmRemove(x.name)))return;settings.habits=settings.habits.filter(q=>q.id!==x.id);await persistSettings('Removed '+x.name)}
 
 /* ---------- a plain form sheet (name fields) ---------- */
 function formSheet(o){
@@ -384,6 +392,6 @@ function habitFormSheet(x,opts){
       persistSettings('Added '+name).then(()=>reminderPermissionFor(remind));
     }
   }});
-  if(!isNew)q('#fRemove').addEventListener('click',async()=>{if(await confirmRemove(x.name)){sh.close('cancel');settings.habits=settings.habits.filter(z=>z.id!==x.id);persistSettings('Removed '+x.name)}});
+  if(!isNew)q('#fRemove').addEventListener('click',()=>{sh.close('cancel');removeHabit(x)});
   return sh;
 }

@@ -30,12 +30,14 @@
    <div class="ptr" id="ptr" role="status" aria-live="polite"><div class="ptr-in"><span class="ptr-ic" id="ptrIc" aria-hidden="true"></span><span class="ptr-text" id="ptrText"></span></div></div>
    <div class="today-grid">
     <div class="today-side">
-    <h1 class="large-title" id="todayTitle"></h1>
+    <div class="title-row"><h1 class="large-title" id="todayTitle"></h1><button class="iconbtn" id="editTodayBtn" aria-label="Edit Today: rearrange, hide or add habits"><svg data-ic="pencil"></svg></button></div>
+    <div class="sub-row">
     <p class="subtitle" id="todaySub"></p>
     <div class="dayswitch">
       <button class="iconbtn" id="prevDay" aria-label="Previous day"><svg data-ic="chevron-left"></svg></button>
       <button class="daypill" id="dayLabel" aria-label="Choose a date"><svg data-ic="calendar" class="sm"></svg><span id="dayLabelText"></span></button>
       <button class="iconbtn" id="nextDay" aria-label="Next day"><svg data-ic="chevron-right"></svg></button>
+    </div>
     </div>
 
     <div class="card ringcard" id="ringCard">
@@ -51,15 +53,14 @@
         <div class="chiprow" id="chipRules"><svg data-ic="list" class="sm"></svg><span></span></div>
         <div class="streakline" id="streakLine"><svg data-ic="flame" class="sm"></svg><span></span></div>
       </div>
+      <p class="hint" id="todayHint" role="status"></p>
     </div>
-    <p class="hint" id="todayHint" role="status"></p>
     <div id="suggestSlot"></div>
     </div>
 
     <div class="today-main">
     <div id="reviewSlot"></div>
-    <div class="edit-bar" id="editBar" hidden role="region" aria-label="Edit Today"><div class="edit-bar-in"><span class="edit-hint">Drag the handles to rearrange. Tap Hide to take a card off Today.</span><button class="btn small" id="editDone">Done</button></div></div>
-    <div id="hiddenTray" class="hidden-tray" hidden></div>
+    <div class="edit-bar" id="editBar" hidden role="region" aria-label="Edit Today"><div class="edit-bar-in"><span class="edit-hint">Drag to rearrange</span><button class="chip" id="hiddenChip" hidden></button><button class="btn small" id="editDone">Done</button></div></div>
     <div id="sections"></div>
     <div id="todayFoot" class="today-foot"></div>
     </div>
@@ -149,12 +150,12 @@
     <div class="group-head"><span role="heading" aria-level="2">Habits and rules</span><button class="txtbtn" id="reorderBtn">Reorder</button></div>
     <div id="planSections"></div>
     <div class="group ic" id="planAdd"></div>
-    <div class="group-foot">Swipe a row left to remove it. Pull a card off Today, or put it back, from here too. Past entries always stay saved.</div>
+    <div class="group-foot">Swipe a row left to remove it. Past entries stay saved.</div>
     </div>
     <div class="plan-col">
     <div class="group-head"><span role="heading" aria-level="2">Today screen</span></div>
     <div class="group ic" id="planToday"></div>
-    <div class="group-foot">Long-press a card on Today to rearrange it, hide it, or add habits from the library.</div>
+    <div class="group-foot">Or hold a card on Today to rearrange it, hide it, or add habits from the library.</div>
     <div class="group-head"><span role="heading" aria-level="2">Sections</span></div>
     <div class="group ic" id="planSecs"></div>
     <div class="group-foot">Sections group your habits on Today. Rename them, add your own, or move a habit into one from its edit sheet.</div>
@@ -163,10 +164,64 @@
   </section>
 
   <!-- ============ Settings ============ -->
+  <!-- order: the things people touch most first (reminder, units, body, suggestions, look), then the phone-only groups, then data and account -->
   <section class="screen" id="p-settings" aria-labelledby="settingsTitle">
     <h1 class="large-title" id="settingsTitle">Settings</h1>
     <div class="plan-cols">
     <div class="plan-col">
+    <div class="group-head"><span role="heading" aria-level="2">Reminder</span></div>
+    <div class="group ic" id="remGroup">
+      <label class="row"><span class="row-ic"><svg data-ic="bell"></svg></span><span class="row-body"><span class="row-label">Daily reminder</span></span><input type="checkbox" class="switch" role="switch" id="remOn" aria-label="Daily reminder"></label>
+      <label class="row"><span class="row-ic"><svg data-ic="clock"></svg></span><span class="row-body"><span class="row-label">Time</span></span><span id="remTime"></span></label>
+      <label class="row" id="remIfOpenRow"><span class="row-ic"><svg data-ic="circle-check"></svg></span><span class="row-body"><span class="row-label">Only remind me if something is left</span><span class="row-sub">Stays quiet when today is done, on a rest day and on a light day.</span></span><input type="checkbox" class="switch" role="switch" id="remIfOpen" aria-label="Only remind me if something is left" checked></label>
+      <label class="row" id="remMornRow"><span class="row-ic"><svg data-ic="sunrise"></svg></span><span class="row-body"><span class="row-label">Morning cue</span><span class="row-sub">One short note with the easiest win of the day.</span></span><input type="checkbox" class="switch" role="switch" id="remMornOn" aria-label="Morning cue"></label>
+      <label class="row" id="remMornTimeRow"><span class="row-ic"><svg data-ic="clock"></svg></span><span class="row-body"><span class="row-label">Morning time</span></span><span id="remMornTime"></span></label>
+    </div>
+    <div class="group-foot" id="remMsg" role="status"></div>
+    <div class="group-foot">Each habit can also have its own reminders: open it in Plan and use Remind me.</div>
+
+    <div class="group-head"><span role="heading" aria-level="2">Units</span></div>
+    <div class="group ic" id="unitGroup"></div>
+
+    <div class="group-head"><span role="heading" aria-level="2">Body</span></div>
+    <div class="group ic" id="bodyGroup"></div>
+    <div class="group-foot" id="bodyFoot"></div>
+
+    <div class="group-head"><span role="heading" aria-level="2">Suggestions</span></div>
+    <div class="group ic" id="sugGroup"></div>
+    <div class="group-foot">When you hit a target several days in a row, Today can offer to raise it a little.</div>
+
+    <div class="group-head"><span role="heading" aria-level="2">Appearance</span></div>
+    <div class="group ic" id="appearGroup"></div>
+    <div class="group-foot">Turns off the frosted blur and the wiggle while editing Today. Easier on older phones and the battery.</div>
+
+    </div>
+    <div class="plan-col">
+    <div class="group-head" id="stepHead" hidden><span role="heading" aria-level="2">Step tracking</span></div>
+    <div class="group ic" id="stepGroup" hidden></div>
+    <div class="group-foot" id="stepFoot" hidden></div>
+    <div class="group-foot" id="stMsg" role="status" hidden></div>
+
+    <div class="group-head" id="permHead" hidden><span role="heading" aria-level="2">Permissions</span></div>
+    <div class="group ic" id="permGroup" hidden></div>
+    <div class="group-foot" id="permFoot" hidden></div>
+
+    <div class="group-head" id="advHead" hidden><span role="heading" aria-level="2">Advanced</span></div>
+    <div class="group ic" id="advGroup" hidden></div>
+    <div class="group-foot" id="advFoot" hidden></div>
+
+    <div class="group-head"><span role="heading" aria-level="2">Backup</span></div>
+    <div class="group ic" id="bkGroup">
+      <button class="row" id="expJson"><span class="row-ic"><svg data-ic="download"></svg></span><span class="row-body"><span class="row-label">Export backup (JSON)</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
+      <button class="row" id="expCsv"><span class="row-ic"><svg data-ic="table"></svg></span><span class="row-body"><span class="row-label">Export as spreadsheet (CSV)</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
+      <button class="row" id="restoreBtn"><span class="row-ic orange"><svg data-ic="upload"></svg></span><span class="row-body"><span class="row-label">Restore from backup</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
+    </div>
+    <input type="file" id="restoreFile" accept="application/json,.json,text/plain,application/octet-stream" hidden>
+    <div class="group-foot" id="lastBackup">Last backup: never</div>
+    <button class="btn small secondary backup-now" id="backupNow" hidden>Back up now</button>
+    <div class="group-foot" id="bkMsg" role="status"></div>
+    <div class="group-foot" id="bkHint"></div>
+
     <div class="group-head"><span role="heading" aria-level="2">Account and sync</span></div>
     <div class="group ic" id="acctOut">
       <button class="row" id="signInBtn"><span class="row-ic"><svg data-ic="cloud"></svg></span><span class="row-body"><span class="row-label">Sign in to sync</span><span class="row-sub">Optional. Keep your log on all your phones.</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
@@ -180,67 +235,13 @@
     </div>
     <div class="group-foot" id="acctMsg" role="status"></div>
 
-    <div class="group-head"><span role="heading" aria-level="2">Backup</span></div>
-    <div class="group ic" id="bkGroup">
-      <button class="row" id="expJson"><span class="row-ic"><svg data-ic="download"></svg></span><span class="row-body"><span class="row-label">Export backup (JSON)</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
-      <button class="row" id="expCsv"><span class="row-ic"><svg data-ic="table"></svg></span><span class="row-body"><span class="row-label">Export as spreadsheet (CSV)</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
-      <button class="row" id="restoreBtn"><span class="row-ic orange"><svg data-ic="upload"></svg></span><span class="row-body"><span class="row-label">Restore from backup</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
-    </div>
-    <input type="file" id="restoreFile" accept="application/json,.json,text/plain,application/octet-stream" hidden>
-    <div class="group-foot" id="lastBackup">Last backup: never</div>
-    <div class="group-foot" id="bkMsg" role="status"></div>
-    <div class="group-foot" id="bkHint"></div>
-
-    <div class="group-head"><span role="heading" aria-level="2">Reminder</span></div>
-    <div class="group ic" id="remGroup">
-      <label class="row"><span class="row-ic"><svg data-ic="bell"></svg></span><span class="row-body"><span class="row-label">Daily reminder</span></span><input type="checkbox" class="switch" role="switch" id="remOn" aria-label="Daily reminder"></label>
-      <label class="row"><span class="row-ic"><svg data-ic="clock"></svg></span><span class="row-body"><span class="row-label">Time</span></span><span id="remTime"></span></label>
-      <label class="row" id="remIfOpenRow"><span class="row-ic"><svg data-ic="circle-check"></svg></span><span class="row-body"><span class="row-label">Only remind me if something is left</span><span class="row-sub">Stays quiet when today is done, on a rest day and on a light day.</span></span><input type="checkbox" class="switch" role="switch" id="remIfOpen" aria-label="Only remind me if something is left" checked></label>
-      <label class="row" id="remMornRow"><span class="row-ic"><svg data-ic="sunrise"></svg></span><span class="row-body"><span class="row-label">Morning cue</span><span class="row-sub">One short note with the easiest win of the day.</span></span><input type="checkbox" class="switch" role="switch" id="remMornOn" aria-label="Morning cue"></label>
-      <label class="row" id="remMornTimeRow"><span class="row-ic"><svg data-ic="clock"></svg></span><span class="row-body"><span class="row-label">Morning time</span></span><span id="remMornTime"></span></label>
-    </div>
-    <div class="group-foot" id="remMsg" role="status"></div>
-    <div class="group-foot">Each habit can also have its own reminders: open it in Plan and use Remind me.</div>
-
-    </div>
-    <div class="plan-col">
-    <div class="group-head" id="stepHead" hidden><span role="heading" aria-level="2">Step tracking</span></div>
-    <div class="group ic" id="stepGroup" hidden></div>
-    <div class="group-foot" id="stepFoot" hidden></div>
-    <div class="group-foot" id="stMsg" role="status" hidden></div>
-
-    <div class="group-head" id="permHead" hidden><span role="heading" aria-level="2">Permissions</span></div>
-    <div class="group ic" id="permGroup" hidden></div>
-    <div class="group-foot" id="permFoot" hidden></div>
-
-    <div class="group-head"><span role="heading" aria-level="2">Units</span></div>
-    <div class="group ic" id="unitGroup"></div>
-
-    <div class="group-head"><span role="heading" aria-level="2">Body</span></div>
-    <div class="group ic" id="bodyGroup"></div>
-    <div class="group-foot" id="bodyFoot"></div>
-
-    <div class="group-head"><span role="heading" aria-level="2">Suggestions</span></div>
-    <div class="group ic" id="sugGroup"></div>
-    <div class="group-foot">When you hit a target several days in a row, Today can offer to raise it a little.</div>
-
-    <div class="group-head" id="advHead" hidden><span role="heading" aria-level="2">Advanced</span></div>
-    <div class="group ic" id="advGroup" hidden></div>
-    <div class="group-foot" id="advFoot" hidden></div>
-
-    <div class="group-head"><span role="heading" aria-level="2">Appearance</span></div>
-    <div class="group ic" id="appearGroup"></div>
-    <div class="group-foot">Turns off the frosted blur and the wiggle while editing Today. Easier on older phones and the battery.</div>
-
     <div class="group-head"><span role="heading" aria-level="2">About</span></div>
     <div class="group ic">
       <div class="row"><span class="row-ic"><svg data-ic="info"></svg></span><span class="row-body"><span class="row-label">About Comeback</span><span class="row-sub">Track your habits and steps, and get back to your best one day at a time.</span></span></div>
       <button class="row" id="replayIntro"><span class="row-ic"><svg data-ic="sparkles"></svg></span><span class="row-body"><span class="row-label">Show intro again</span></span><svg data-ic="chevron-right" class="chev"></svg></button>
-      <div class="row"><span class="row-ic"><svg data-ic="shield-check"></svg></span><span class="row-body"><span class="row-label">Version</span></span><span class="row-val">1.0</span></div>
+      <div class="row"><span class="row-ic"><svg data-ic="shield-check"></svg></span><span class="row-body"><span class="row-label">Version</span></span><span class="row-val" id="appVersion"></span></div>
     </div>
     <div class="group-foot" id="storeNote"></div>
-    </div>
-    </div>
     </div>
     </div>
   </section>
@@ -255,6 +256,7 @@
 </nav>
 
 <div id="layer"></div>
+<div class="vh" id="liveNote" role="status" aria-live="polite"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"><svg data-ic="circle-check" class="sm" id="toastIc"></svg><span id="toastMsg"></span><button id="toastUndo" hidden>Undo</button></div>
 
 <script src="config.js"></script>

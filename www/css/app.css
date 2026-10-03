@@ -111,6 +111,10 @@ svg.ic.sm{width:1.125rem;height:1.125rem}
 .group-foot{margin:6px var(--s4) 0;font-size:.8125rem;color:var(--label2);overflow-wrap:anywhere}
 .group-foot:empty{display:none}
 .group-foot.bad{color:var(--red)}
+.group-foot.warn{color:var(--orange);font-weight:500}
+.backup-now{margin:var(--s2) var(--s4) 0}
+.scale-choice{margin-bottom:var(--s3)}
+.scale-help{margin:6px var(--s4) 0}
 .group-foot.ok{color:var(--label2)}
 .card{background:var(--card);border-radius:var(--r-m);padding:var(--s4)}
 .txtbtn{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;padding:0 var(--s3);color:var(--accent);font-size:1.0625rem;border-radius:var(--r-s)}
@@ -122,11 +126,16 @@ svg.ic.sm{width:1.125rem;height:1.125rem}
 .iconbtn:active{background:var(--fill)}
 
 /* ---------- Today ---------- */
-.dayswitch{display:flex;align-items:center;justify-content:space-between;margin:0 calc(var(--s2)*-1) var(--s3)}
-.daypill{min-height:44px;padding:0 var(--s4);border-radius:22px;font-size:.9375rem;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:6px}
+.title-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s2)}
+.title-row .large-title{flex:1;min-width:0;margin:var(--s1) 0}
+.title-row .iconbtn{flex:none;margin-right:calc(var(--s2)*-1)}
+.sub-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 var(--s2);margin-bottom:var(--s2)}
+.sub-row .subtitle{flex:1 1 8rem;min-width:0;margin:0}
+.dayswitch{display:flex;align-items:center;flex:none;margin:0 calc(var(--s2)*-1) 0 0}
+.daypill{min-height:44px;padding:0 var(--s3);border-radius:22px;font-size:.9375rem;font-weight:600;color:var(--accent);display:inline-flex;align-items:center;gap:6px}
 .daypill:active{background:var(--accent-soft)}
-.ringcard{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s4);padding:var(--s5) var(--s4)}
-.ring{position:relative;width:8.25rem;height:8.25rem;flex:none}
+.ringcard{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s4);padding:var(--s3) var(--s4)}
+.ring{position:relative;width:5.5rem;height:5.5rem;flex:none}
 .ring svg{width:100%;height:100%;transform:rotate(-90deg)}
 .ring .trk{stroke:var(--track)}
 .ring .prg{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .8s var(--ease),stroke .3s}
@@ -134,23 +143,27 @@ svg.ic.sm{width:1.125rem;height:1.125rem}
 .ring.done{animation:glow 1.2s ease-out 1}
 @keyframes glow{0%{filter:drop-shadow(0 0 0 transparent)}40%{filter:drop-shadow(0 0 10px var(--green))}100%{filter:drop-shadow(0 0 0 transparent)}}
 .ring-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
-.ring-c b{font-size:1.75rem;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
-.ring-c span{font-size:.75rem;color:var(--label2);margin-top:2px}
-.ring-side{flex:1 1 9rem;min-width:0;display:flex;flex-direction:column;gap:var(--s2)}
+.ring-c b{font-size:1.375rem;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.ring-c span{font-size:.6875rem;color:var(--label2);margin-top:1px}
+.ring.empty .ring-c{visibility:hidden}
+.ring-side{flex:1 1 9rem;min-width:0;display:flex;flex-direction:column;gap:6px}
 .chiprow{display:flex;align-items:center;gap:var(--s2);font-size:.9375rem}
 .chiprow .ic{color:var(--label2)}
 .chiprow.ok .ic{color:var(--green)}
 .streakline{display:flex;align-items:center;gap:6px;font-size:.8125rem;color:var(--label2)}
 .hint{margin:var(--s3) 0 var(--s3);font-size:.9375rem;color:var(--label2)}
+.ringcard .hint{flex:1 1 100%;margin:0;font-size:.875rem}
 .habits{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3)}
 .hcard{position:relative;display:flex;flex-direction:column;gap:6px;min-height:6.5rem;padding:var(--s3) 14px 14px;background:var(--card);border-radius:var(--r-m);text-align:left;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:transform .15s var(--ease),background .2s}
 .hcard:active{transform:scale(.975)}
 .hcard-top{display:flex;align-items:center;justify-content:space-between;color:var(--label2)}
 .hcard-top .met-ic{color:var(--green)}
 .hcard .hname{font-size:.9375rem;font-weight:600;line-height:1.2;overflow-wrap:anywhere}
+.hcard .hline{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:6px;min-width:0}
 .hcard .hval{font-size:1.375rem;font-weight:700;letter-spacing:-.3px;font-variant-numeric:tabular-nums;line-height:1.15;overflow-wrap:anywhere}
-.hcard .htgt{font-size:.8125rem;color:var(--label2);overflow-wrap:anywhere;margin-top:-2px}
-.hsrc{display:flex;align-items:center;gap:4px;font-size:.75rem;color:var(--label2);margin-top:-2px;overflow-wrap:anywhere}
+.hcard .htgt{font-size:.8125rem;color:var(--label2);overflow-wrap:anywhere}
+.hsrc{display:flex;flex-wrap:wrap;align-items:center;gap:0 4px;font-size:.75rem;color:var(--label2);margin-top:-2px;overflow-wrap:anywhere}
+.hsrc .hs-km{flex-basis:100%}
 .hsrc:empty{display:none}
 .hsrc .ic{width:.875rem;height:.875rem}
 .bar{height:6px;border-radius:3px;background:var(--track);overflow:hidden;margin-top:auto}
@@ -283,6 +296,10 @@ button.row:active,label.row:active{background:var(--fill)}
 .numdisp .nv{display:block;font-size:3.25rem;font-weight:700;letter-spacing:-1px;line-height:1.1;font-variant-numeric:tabular-nums;min-height:3.6rem;overflow-wrap:anywhere}
 .numdisp .nv.empty-v{color:var(--label2);font-weight:500}
 .numdisp .nu{font-size:.9375rem;color:var(--label2)}
+.numdisp .nlive{display:block;min-height:1.4rem;margin-top:2px;font-size:1rem;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.numdisp .nlive:empty{display:none}
+.numdisp.add .nv::before{content:'+';opacity:.55;margin-right:2px}
+.numseg{max-width:16rem;margin:0 auto var(--s2)}
 .stepper{display:flex;justify-content:center;gap:var(--s6);margin:var(--s3) 0}
 .step{width:3.5rem;height:3.5rem;border-radius:50%;background:var(--fill);display:flex;align-items:center;justify-content:center;color:var(--accent)}
 .step:active{background:var(--fill2)}
@@ -321,6 +338,7 @@ button.row:active,label.row:active{background:var(--fill)}
 .onb h2{margin:0 0 var(--s2);font-size:1.75rem;font-weight:700;letter-spacing:-.4px;line-height:1.15}
 .onb p{margin:0 0 var(--s4);color:var(--label2);font-size:1.0625rem}
 .onb .group{margin-top:var(--s2)}
+.onb .onb-help{margin:var(--s3) var(--s2) 0;font-size:.9375rem}
 .onb-foot{padding:0 var(--s6);display:flex;flex-direction:column;gap:var(--s3)}
 .dots{display:flex;justify-content:center;gap:var(--s2);padding:var(--s2) 0}
 .dots i{width:7px;height:7px;border-radius:50%;background:var(--fill2);transition:background .2s,transform .2s}
@@ -403,7 +421,10 @@ button.row:active,label.row:active{background:var(--fill)}
   .pcols,.plan-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 var(--s8);align-items:start}
   .plan-col>.group-head:first-child,.pcol>.sec-head:first-child{margin-top:var(--s6)}
   .today-main>.sec-head:first-child{margin-top:0}
-  .ringcard{flex-direction:column;text-align:center;gap:var(--s4)}
+  .ringcard{flex-direction:column;text-align:center;gap:var(--s4);padding:var(--s5) var(--s4)}
+  .ring{width:8.25rem;height:8.25rem}
+  .ring-c b{font-size:1.75rem}
+  .ring-c span{font-size:.75rem}
   .ring-side{align-items:flex-start;width:100%}
   /* sheets become centred dialogs */
   .sheet-wrap{align-items:center}
@@ -423,8 +444,8 @@ button.row:active,label.row:active{background:var(--fill)}
   html{font-size:93.75%}
   .screen{padding-left:var(--s3);padding-right:var(--s3)}
   .ringcard{gap:var(--s3)}
-  .ring{width:7rem;height:7rem}
-  .ring-c b{font-size:1.5rem}
+  .ring{width:5rem;height:5rem}
+  .ring-c b{font-size:1.25rem}
   .hcard{padding:10px 12px 12px}
   .tabbar{padding-left:calc(var(--s2) + var(--safe-l));padding-right:calc(var(--s2) + var(--safe-r))}
   .sheet-body{padding-left:var(--s3);padding-right:var(--s3)}
@@ -439,8 +460,6 @@ button.row:active,label.row:active{background:var(--fill)}
 @media (max-height:520px){
   :root{--tab-h:max(52px,calc(2.1rem + 14px))}
   .large-title{font-size:1.875rem}
-  .ringcard{padding:var(--s3) var(--s4)}
-  .ring{width:6.5rem;height:6.5rem}
   .numdisp .nv{font-size:2.25rem;min-height:2.5rem}
   .step{width:2.75rem;height:2.75rem}
   .stepper{margin:var(--s2) 0}
@@ -452,7 +471,8 @@ button.row:active,label.row:active{background:var(--fill)}
   .asheet .ab{min-height:48px}
 }
 @media (min-width:840px) and (max-height:520px){
-  .ringcard{flex-direction:row;text-align:left}
+  .ringcard{flex-direction:row;text-align:left;padding:var(--s3) var(--s4)}
+  .ring{width:6.5rem;height:6.5rem}
   .tab{min-height:3.25rem}
   .tab span{font-size:.6875rem}
 }
@@ -508,11 +528,21 @@ button.row:active,label.row:active{background:var(--fill)}
 .hc-collapse{position:absolute;top:2px;right:2px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--label2);border-radius:50%}
 .hc-collapse:active{background:var(--fill)}
 .drow,.yrow,.mrow{position:relative;display:flex;align-items:center;gap:var(--s3);width:100%;min-height:48px;background:var(--card);border-radius:var(--r-m);color:var(--label)}
-.drow{padding:6px var(--s4);text-align:left;font-size:1rem;border-color:color-mix(in srgb,var(--green) 40%,var(--glass-border))}
+.drow{padding:0;text-align:left;font-size:1rem;border-color:color-mix(in srgb,var(--green) 40%,var(--glass-border))}
+.drow-main{flex:1;min-width:0;display:flex;align-items:center;gap:var(--s3);min-height:48px;padding:6px var(--s4);text-align:left;font-size:1rem;color:inherit;border-radius:var(--r-m)}
 .drow .row-label{flex:1;min-width:0}
 .drow .row-val{max-width:45%;font-size:.8125rem}
 .drow .met-ic{display:inline-flex;color:var(--green)}
-.drow:active{background:var(--fill)}
+.drow-main:active{background:var(--fill)}
+.drow-act{flex:none;width:44px;min-width:44px;margin:0 6px 0 0;border-radius:50%}
+.drow-main:focus-visible{outline-offset:-3px}
+/* a card that just hit its target folds away after a short pause (reduced motion folds it at once: no pause, no animation) */
+.hcard.folding{animation:fold .26s ease-in forwards}
+@keyframes fold{to{opacity:0;transform:scale(.94)}}
+/* press and hold a card: a ring grows around it while the 0.5 second hold runs (it starts after a short beat so a plain tap never flashes it) */
+.titem.holding:not(.dragging){animation:holdcue .4s ease-out .12s both}
+@keyframes holdcue{from{transform:scale(1);outline:2px solid transparent;outline-offset:0}to{transform:scale(.965);outline:2px solid var(--accent);outline-offset:3px}}
+.due-dot{display:inline-block;width:.5rem;height:.5rem;margin-right:6px;border-radius:50%;background:var(--orange);vertical-align:middle}
 .yrow .row,.mrow .row{flex:1;min-width:0;border-radius:var(--r-m)}
 .yrow.on .row-ic{background:var(--green-soft);color:var(--green)}
 .yrow.on{border-color:color-mix(in srgb,var(--green) 40%,var(--glass-border))}
@@ -530,12 +560,9 @@ button.row:active,label.row:active{background:var(--fill)}
 
 /* edit mode */
 .edit-bar{position:sticky;top:calc(var(--nav-h) + var(--safe-t) + var(--s1));z-index:15;margin:0 0 var(--s3)}
-.edit-bar-in{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s2) var(--s2) var(--s4);border-radius:var(--r-m);background:var(--glass)}
-.edit-hint{flex:1;font-size:.8125rem;color:var(--label2)}
-.hidden-tray{margin:0 0 var(--s3)}
-.tray-in{padding:var(--s3) var(--s4);border-radius:var(--r-m);background:var(--card)}
-.tray-chips{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s2)}
-.tray-chip{display:inline-flex;align-items:center;gap:6px}
+.edit-bar-in{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s1) var(--s1) var(--s4);border-radius:var(--r-m);background:var(--glass)}
+.edit-hint{flex:1;min-width:0;font-size:.8125rem;color:var(--label2)}
+.edit-bar .chip{min-height:44px}
 .edit-ctl{display:none}
 .editing .edit-ctl{display:flex;align-items:center;justify-content:space-between;gap:var(--s2)}
 .hcard .edit-ctl{padding:0 var(--s2) var(--s2)}
@@ -552,9 +579,12 @@ button.row:active,label.row:active{background:var(--fill)}
 .sec-btn{width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--accent);border-radius:50%}
 .sec-btn:active{background:var(--fill)}
 .sec-del{color:var(--red)}
-.editing .titem:not(.dragging){animation:wiggle .3s ease-in-out infinite alternate}
-.editing .titem:nth-child(2n):not(.dragging){animation-delay:-.12s}
-@keyframes wiggle{from{transform:rotate(-.5deg)}to{transform:rotate(.5deg)}}
+/* the cards wiggle for the first second of edit mode, then settle (JS removes .wiggling); never with the simple look or reduced motion */
+.editing.wiggling .titem:not(.dragging){animation:wiggle .9s ease-in-out 1}
+.editing.wiggling .titem:nth-child(2n):not(.dragging){animation-delay:-.12s}
+@keyframes wiggle{0%{transform:rotate(-.6deg)}20%{transform:rotate(.6deg)}40%{transform:rotate(-.6deg)}60%{transform:rotate(.6deg)}80%{transform:rotate(-.4deg)}100%{transform:none}}
+.lite .editing.wiggling .titem:not(.dragging){animation:none}
+@media (prefers-reduced-motion:reduce){.editing.wiggling .titem:not(.dragging){animation:none}}
 .titem.dragging{background:var(--solid)}
 .titem.dragging,.tsec.dragging{position:relative;z-index:30;opacity:.96;box-shadow:0 14px 34px rgba(0,0,0,.3);animation:none;touch-action:none}
 .tsec.dragging{background:var(--solid);border-radius:var(--r-m)}
@@ -637,7 +667,7 @@ button.row:active,label.row:active{background:var(--fill)}
 .bmi-sheet .numdisp .nu{display:flex;justify-content:center;align-items:center;gap:var(--s2);flex-wrap:wrap}
 
 /* same glass as the other cards, and no second blur inside sheets */
-.drow,.yrow,.mrow,.tray-in,.edit-bar-in,.iconpick{border:1px solid var(--glass-border);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-hi)}
+.drow,.yrow,.mrow,.edit-bar-in,.iconpick{border:1px solid var(--glass-border);box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-hi)}
 /* the edit bar sticks over scrolling cards: it must be opaque now that it does not blur */
 .edit-bar-in{background:var(--solid)}
 .sheet .iconpick,.sheet .drow{box-shadow:inset 0 1px 0 var(--glass-hi)}
@@ -651,7 +681,7 @@ button.row:active,label.row:active{background:var(--fill)}
 }
 
 /* ---------- keyboard focus: rings stay inside rows and cards that clip their content ---------- */
-.row:focus-visible,.seg button:focus-visible,.drow:focus-visible,.bmi-main:focus-visible,.handle:focus-visible,.swipe-del:focus-visible,.asheet .ab:focus-visible,.lib-add:focus-visible,.ipick:focus-visible{outline-offset:-3px}
+.row:focus-visible,.seg button:focus-visible,.drow:focus-visible,.drow-main:focus-visible,.bmi-main:focus-visible,.handle:focus-visible,.swipe-del:focus-visible,.asheet .ab:focus-visible,.lib-add:focus-visible,.ipick:focus-visible{outline-offset:-3px}
 .row .switch:focus-visible{outline-offset:2px}
 .asheet:focus,.sheet:focus{outline:none}
 .hc:focus-visible{outline-offset:-2px;border-radius:10px}

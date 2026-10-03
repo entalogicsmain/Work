@@ -177,35 +177,58 @@ function comebackDay(k){
   return Core.daysBetween(f,k)+1;
 }
 const GENTLE_RESTART='Every comeback has restarts. Start again today.';
-/* One change = one auto-saved write, one undo step, and (maybe) a small celebration. */
-function commitDay(label,mutate,quiet,forKey){
+/* One change = one auto-saved write, one undo step, and (maybe) a small celebration.
+   Taps on the same habit within a few seconds (opts.tap) share one undo step: Undo goes back to how the day was before the first tap.
+   Plain + and - taps are quiet (opts.hush: the number and the bar already move); a toast only appears for a goal hit, a streak
+   milestone or a finished day. The final number is still spoken, through the quiet live region (opts.say). */
+const TAP_WINDOW=3000;
+let tapSess=null,liveTimer=null;
+function announce(text){
+  const el=$('liveNote');if(!el||!text)return;
+  clearTimeout(liveTimer);
+  liveTimer=setTimeout(()=>{el.textContent='';requestAnimationFrame(()=>{el.textContent=text})},350);
+}
+function commitDay(label,mutate,quiet,forKey,opts){
   onResume();      // midnight may have passed while the screen stayed on: roll "today" forward first
-  const k=forKey||current;
-  const prev=days[k]?clone(days[k]):null;
-  const before=dayMetrics(prev,k),streakBefore=streak();
-  const d=prev?clone(prev):Core.blankDay(k);
+  opts=opts||{};
+  const k=forKey||current,now=Date.now();
+  const cur=days[k]?clone(days[k]):null;
+  const before=dayMetrics(cur,k),streakBefore=streak();
+  let sess=null;
+  if(opts.tap){
+    if(tapSess&&tapSess.id===opts.tap&&tapSess.k===k&&now-tapSess.t<=TAP_WINDOW)sess=tapSess;
+    else sess=tapSess={id:opts.tap,k,prev:cur,delta:0,t:now};
+    sess.t=now;sess.delta+=opts.delta||0;
+  }else tapSess=null;
+  const prev=sess?sess.prev:cur;      // what Undo goes back to
+  const d=cur?clone(cur):Core.blankDay(k);
   mutate(d);
   d.date=k;d.updatedAt=Date.now();
   days[k]=d;Core.invalidate();
   scheduleSave(k);
   const after=dayMetrics(d,k),streakAfter=streak();
+  const newlyMet=settings.habits.filter(x=>(x.type==='count'||x.type==='duration'||x.type==='steps')&&Core.isMet(x,d)&&!Core.isMet(x,cur));
+  if(newlyMet.length&&k===current&&typeof holdDone==='function')newlyMet.forEach(holdDone);   // a card that just hit its target stays open for a moment before it folds
   renderToday(true);renderProgress();
   const undo=()=>{
+    tapSess=null;
     if(prev){days[k]=Object.assign(clone(prev),{updatedAt:Date.now()})}
     else if(signedIn()){days[k]=Object.assign(Core.blankDay(k),{updatedAt:Date.now()})}   // an empty record syncs the removal; it is not a logged day (Core.hasRecord)
     else delete days[k];
     Core.invalidate();scheduleSave(k);renderToday();renderProgress();haptic('light');toast('Change undone',{icon:'check'});
   };
-  let msg=label,ic='circle-check',ok=false;
+  let msg=sess&&opts.tapMsg?opts.tapMsg(sess.delta):label,ic='circle-check',ok=false;
   if(after.full&&!before.full){msg='Strong day. Your comeback is on track.';ic='sparkles';ok=true;celebrate()}
   else{
     const MILE=[3,5,7,10,14,21,30,50,100];
-    const newlyMet=settings.habits.filter(x=>(x.type==='count'||x.type==='duration'||x.type==='steps')&&Core.isMet(x,d)&&!Core.isMet(x,prev));
     if(streakAfter>streakBefore&&MILE.includes(streakAfter)){msg=streakAfter+'-day streak';ic='flame';ok=true;haptic('success')}
     else if(newlyMet.length){msg=newlyMet[0].name+' goal hit';ic='trophy';ok=true;haptic('success')}
   }
   if(!ok)haptic('light');
-  if(!quiet)toast(msg,{undo,icon:ic});
+  const hush=!!opts.hush&&!ok;
+  if(opts.say)announce(typeof opts.say==='function'?opts.say(d):opts.say);
+  if(!quiet&&!hush)toast(msg,{undo,icon:ic});
+  if(typeof coachAfterLog==='function'&&k===todayStr())coachAfterLog();
 }
 
 function celebrate(){
@@ -218,25 +241,48 @@ function celebrate(){
   document.body.appendChild(box);setTimeout(()=>box.remove(),2200);
 }
 
-/* ================= number sheet (large number, steppers, presets, keypad) ================= */
+/* ================= number sheet (large number, steppers, presets, keypad) =================
+   o.add = {base,target,unit} opens it in "Add" mode: the big number is the amount to add, with a live line ("20 + 15 = 35 of 30 reps")
+   and a "Set total" toggle for corrections. Without o.add (weight, waist, height) it always sets a value.
+   onDone(value, info): in Add mode value is the new total and info is {mode:'add',added}; otherwise info is {mode:'set'}. */
 function numberSheet(o){
-  let buf=o.value==null?'':String(o.value),fresh=true;
-  const root=h('<div><div class="numdisp"><span class="nv num" aria-live="polite"></span><span class="nu"></span></div><div class="err" role="alert"></div><div class="stepper"><button class="step" aria-label="Decrease"></button><button class="step" aria-label="Increase"></button></div><div class="presets"></div><div class="keypad"></div></div>');
-  const nv=root.querySelector('.nv'),err=root.querySelector('.err');
-  root.querySelector('.nu').textContent=o.unitLine||'';
+  const ad=o.add||null;
+  let mode=ad?'add':'set';
+  let buf=ad?'':(o.value==null?'':String(o.value)),fresh=true;
+  const root=h('<div>'+(ad?'<div class="seg mini numseg" id="numMode" role="radiogroup" aria-label="How to enter it"><button role="radio" id="numModeAdd" aria-checked="true">Add</button><button role="radio" id="numModeSet" aria-checked="false">Set total</button></div>':'')+'<div class="numdisp"><span class="nv num" aria-live="polite"></span><span class="nu"></span><span class="nlive" id="numLive"></span></div><div class="err" role="alert"></div><div class="stepper"><button class="step" aria-label="Decrease"></button><button class="step" aria-label="Increase"></button></div><div class="presets"></div><div class="keypad"></div></div>');
+  const nv=root.querySelector('.nv'),nu=root.querySelector('.nu'),live=root.querySelector('.nlive'),err=root.querySelector('.err'),disp=root.querySelector('.numdisp');
   const [minus,plus]=root.querySelectorAll('.step');minus.innerHTML=icon('minus');plus.innerHTML=icon('plus');
   let sheet;
+  const num=()=>buf===''||buf==='.'?0:Number(buf);
   function show(){
     nv.textContent=buf===''?(o.placeholder||'0'):buf;nv.classList.toggle('empty-v',buf==='');
-    const v=buf===''?null:Number(buf);const e=o.validate?o.validate(v):'';
+    const v=buf===''||buf==='.'?null:Number(buf);
+    disp.classList.toggle('add',mode==='add');
+    nv.setAttribute('aria-live',mode==='add'?'off':'polite');
+    if(mode==='add'){
+      nu.textContent='to add';
+      live.setAttribute('aria-live','polite');
+      live.textContent=fmt(ad.base)+' + '+fmt(num())+' = '+fmt(r1(ad.base+num()))+' of '+fmt(ad.target)+' '+ad.unit;
+    }else{nu.textContent=o.unitLine||'';live.removeAttribute('aria-live');live.textContent=''}
+    const e=o.validate?o.validate(mode==='add'?r1(ad.base+num()):v):'';
     err.textContent=e||'';if(sheet)sheet.setDone(!e);
   }
-  const num=()=>buf===''?0:Number(buf);
   const set=v=>{buf=String(Math.max(o.min||0,r2(v)));fresh=true;show();haptic('light')};
   minus.addEventListener('click',()=>set(num()-o.step));plus.addEventListener('click',()=>set(num()+o.step));
-  (o.presets||[]).forEach(p=>{const b=h('<button class="preset"></button>');b.textContent=p.label;b.addEventListener('click',()=>set(p.apply?p.apply(num()):p.set));root.querySelector('.presets').appendChild(b)});
+  (o.presets||[]).forEach(p=>{const b=h('<button class="preset"></button>');b.textContent=p.label;b.addEventListener('click',()=>set(p.apply?p.apply(num()):(mode==='add'&&ad?Math.max(0,p.set-ad.base):p.set)));root.querySelector('.presets').appendChild(b)});
   if(!(o.presets||[]).length)root.querySelector('.presets').remove();
   (o.extras||[]).forEach(x=>{const b=h('<button class="btn secondary" style="margin-bottom:var(--s3)"></button>');b.textContent=x.label;b.addEventListener('click',()=>x.onClick(sheet));root.insertBefore(b,root.querySelector('.keypad'))});
+  if(ad){
+    const pick=m=>{
+      if(m===mode)return;
+      if(m==='set'){const t=r1(ad.base+num());buf=t?String(t):''}
+      else{const a=r1((buf===''?ad.base:num())-ad.base);buf=a>0?String(a):''}
+      mode=m;fresh=true;
+      root.querySelector('#numModeAdd').setAttribute('aria-checked',String(m==='add'));root.querySelector('#numModeSet').setAttribute('aria-checked',String(m==='set'));
+      show();haptic('light');
+    };
+    root.querySelector('#numModeAdd').addEventListener('click',()=>pick('add'));root.querySelector('#numModeSet').addEventListener('click',()=>pick('set'));
+  }
   const kp=root.querySelector('.keypad');
   ['1','2','3','4','5','6','7','8','9','.','0','del'].forEach(k=>{
     const b=h('<button class="key"></button>');
@@ -250,7 +296,11 @@ function numberSheet(o){
     });
     kp.appendChild(b);
   });
-  sheet=openSheet({title:o.title,content:root,onCancel:o.onCancel,onDone:()=>{const v=buf===''||buf==='.'?null:Number(buf);if(o.validate&&o.validate(v))return false;o.onDone(v)}});
+  sheet=openSheet({title:o.title,content:root,onCancel:o.onCancel,onDone:()=>{
+    const v=buf===''||buf==='.'?null:Number(buf);
+    if(mode==='add'){const added=v==null?0:v,total=r1(ad.base+added);if(o.validate&&o.validate(total))return false;o.onDone(total,{mode:'add',added});return}
+    if(o.validate&&o.validate(v))return false;o.onDone(v,{mode:'set'});
+  }});
   show();
   return sheet;
 }
@@ -503,8 +553,9 @@ function refreshAll(){renderToday();renderProgress();renderSetup();showLastBacku
 /* ================= onboarding ================= */
 const ONB_KEY='comeback_onboarded';
 let onb=null;
-/* Onboarding. mode 'full' = first launch: welcome, starter plan, targets, reminder, then (Android app) one permission screen and brand help,
-   then height and BMI scale. mode 'permissions' = existing users who still need the permission screen once (permissions, brand help, height).
+/* Onboarding. mode 'full' = first launch: welcome, starter plan, reminder, then (Android app) one permission screen, brand help and an
+   optional height. Height and the BMI scale are asked inline the first time someone opens BMI or Body, not here.
+   mode 'permissions' = existing users who still need the permission screen once (permissions, brand help, height).
    mode 'replay' = "Show intro again" (welcome page only). */
 function showPermissionSetup(){showOnboarding({mode:'permissions'})}
 function showOnboarding(opts){
@@ -513,8 +564,7 @@ function showOnboarding(opts){
   const full=mode==='full';
   const stepFlow=stepsAvailable()&&mode!=='replay';   // permission screen and brand help only exist in the Android app
   const intro=mode!=='permissions';
-  const edits={};
-  let chosenScale=settings.body.scale||'standard',chosenHeight=null,chosenPlan=null;
+  let chosenHeight=null,chosenPlan=null;
   const root=h('<div class="onb" role="dialog" aria-modal="true" aria-label="'+(intro?'Welcome to Comeback':'Set up step counting')+'"><div class="onb-top"><button class="txtbtn" id="onbSkip">Skip</button></div><div class="onb-pages"><div class="onb-track" id="onbTrack"></div></div><div class="dots" id="onbDots" aria-hidden="true"></div><div class="onb-foot" id="onbFoot"></div></div>');
   root.querySelector('.onb-pages').addEventListener('scroll',e=>{e.target.scrollLeft=0});   // focusing an input on a page that is still sliding in must not shift the pages
   const track=root.querySelector('#onbTrack'),foot=root.querySelector('#onbFoot'),dotsEl=root.querySelector('#onbDots');
@@ -531,25 +581,11 @@ function showOnboarding(opts){
   const art=(el,name)=>{el.querySelector('.onb-art').innerHTML=icon(name);return el};
   let page=0,permResult=null,reminderSwitch=null,nextBtn=null,bgFree=false;
 
-  const targetHabits=()=>settings.habits.filter(x=>!x.hidden&&(x.type==='count'||x.type==='duration'||x.type==='steps'));
-  function buildTargets(){
-    const box=root.querySelector('#onbTargets');if(!box)return;
-    box.innerHTML='';
-    Object.keys(edits).forEach(k=>delete edits[k]);
-    const list=targetHabits();
-    if(!list.length){box.appendChild(h('<div class="row"><span class="row-label muted">No count targets in this plan. Add habits any time from Plan.</span></div>'));return}
-    list.forEach(x=>{
-      const r=h('<label class="row"><span class="row-label"></span><input class="numin" type="number" inputmode="decimal"></label>');
-      r.querySelector('.row-label').textContent=x.name+' ('+x.unit+')';const i=r.querySelector('input');i.value=x.target;i.setAttribute('aria-label',x.name+' daily target');
-      i.addEventListener('input',()=>{edits[x.id]=Number(i.value)});box.appendChild(r);
-    });
-  }
-
   if(intro){
-    addPage('welcome',art(h('<div class="onb-page"><div class="onb-art"></div><h2>Get back to your best, one day at a time.</h2><p>Tap a card to log your workouts and water. Steps are counted by your phone. Tick the rules you kept. Everything saves by itself, and you can undo any change.</p></div>'),'trending-up'));
+    addPage('welcome',art(h('<div class="onb-page"><div class="onb-art"></div><h2>Get back to your best, one day at a time.</h2><p>Tap + to log. Tick your rules. Hold a card to edit.</p></div>'),'trending-up'));
   }
   if(full){
-    const pl=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Pick a starting plan</h2><p>You can change everything later in Plan.</p><div class="group ic plan-pick" id="onbPlans" role="radiogroup" aria-label="Starter plan"></div></div>'),'sparkles');
+    const pl=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Pick a starting plan</h2><p>You can change everything later in Plan.</p><div class="group ic plan-pick" id="onbPlans" role="radiogroup" aria-label="Starter plan"></div><p class="onb-help" id="onbPlanHelp" role="status">Pick one to continue</p></div>'),'sparkles');
     Core.STARTER_PLANS.forEach(p=>{
       const r=h('<button class="row planopt" role="radio" aria-checked="false"><span class="row-ic"></span><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="radio" aria-hidden="true"></span></button>');
       r.dataset.plan=p.id;r.id='plan-'+p.id;
@@ -557,13 +593,12 @@ function showOnboarding(opts){
       r.addEventListener('click',()=>{
         haptic('light');chosenPlan=p.id;
         pl.querySelectorAll('.planopt').forEach(b=>{const on=b===r;b.setAttribute('aria-checked',String(on));b.classList.toggle('sel',on)});
+        pl.querySelector('#onbPlanHelp').textContent=p.name+' is picked. You can change everything later.';
         if(nextBtn)nextBtn.disabled=false;
       });
       pl.querySelector('#onbPlans').appendChild(r);
     });
     addPage('plan',pl);
-    const p2=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Set your targets</h2><p>These are a starting point. Change a number now or later in Plan.</p><div class="group" id="onbTargets"></div></div>'),'target');
-    addPage('targets',p2);
     const p3=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Never miss a day</h2><p>Get one gentle reminder a day. Pick the time that suits you. You can change it any time in Settings.</p><div class="group"><label class="row"><span class="row-label">Daily reminder</span><input type="checkbox" class="switch" role="switch" id="onbRemOn" aria-label="Daily reminder" checked></label><label class="row"><span class="row-label">Reminder time</span><span id="onbTime"></span></label></div></div>'),'bell');
     reminderSwitch=p3.querySelector('#onbRemOn');
     initTime12(p3.querySelector('#onbTime'),'Reminder time');
@@ -576,33 +611,16 @@ function showOnboarding(opts){
       row.querySelector('.row-ic').innerHTML=icon(r[0]);row.querySelector('.row-label').textContent=r[1];row.querySelector('.row-sub').textContent=r[2];pp.querySelector('#onbPerms').appendChild(row);
     });
     addPage('perm',pp);
-  }
-  if(full||stepFlow){
-    const ph=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Your height</h2><p>'+(full?'Used for your BMI and to estimate how far you walk. You can skip this and add it later in Settings.':'Used to estimate how far you walk. You can change it any time in Settings.')+'</p><div class="group"><label class="row"><span class="row-label">Height (cm)</span><input class="numin" id="onbHeight" type="number" inputmode="decimal" aria-label="Height in centimetres"></label></div><p class="err" id="onbHeightErr" role="alert"></p></div>'),'user');
+    // the height only helps the distance estimate (it falls back to 180 cm), so it is optional and easy to leave empty
+    const ph=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Your height</h2><p>Optional. Used to estimate how far you walk, and for your BMI later. Leave it empty to use a typical stride, and add it any time in Settings.</p><div class="group"><label class="row"><span class="row-label">Height (cm), optional</span><input class="numin" id="onbHeight" type="number" inputmode="decimal" aria-label="Height in centimetres, optional"></label></div><p class="err" id="onbHeightErr" role="alert"></p></div>'),'user');
     ph.querySelector('#onbHeight').value=settings.body.heightCm!=null?r1(settings.body.heightCm):(full?'':meta.steps.heightCm);
     addPage('height',ph);
-  }
-  if(full){
-    const ps=art(h('<div class="onb-page"><div class="onb-art"></div><h2>Pick a BMI scale</h2><p>Healthy ranges differ a little by background. The Asian scale is recommended if you are of South, East or Southeast Asian background.</p><div class="group ic plan-pick" id="onbScales" role="radiogroup" aria-label="BMI scale"></div></div>'),'activity');
-    [['standard','Standard (WHO)','Healthy range 18.5 to 24.9'],['asian','Asian (WHO Asia-Pacific)','Healthy range 18.5 to 22.9']].forEach(sc=>{
-      const r=h('<button class="row planopt" role="radio"><span class="row-body"><span class="row-label"></span><span class="row-sub"></span></span><span class="radio" aria-hidden="true"></span></button>');
-      r.id='scale-'+sc[0];r.querySelector('.row-label').textContent=sc[1];r.querySelector('.row-sub').textContent=sc[2];
-      r.addEventListener('click',()=>{haptic('light');chosenScale=sc[0];ps.querySelectorAll('.planopt').forEach(b=>{const on=b.id==='scale-'+chosenScale;b.setAttribute('aria-checked',String(on));b.classList.toggle('sel',on)})});
-      ps.querySelector('#onbScales').appendChild(r);
-    });
-    ps.querySelectorAll('.planopt').forEach(b=>{const on=b.id==='scale-'+chosenScale;b.setAttribute('aria-checked',String(on));b.classList.toggle('sel',on)});
-    addPage('scale',ps);
   }
   hydrate(root);
 
   async function finish(applyReminder){
     let changed=!!chosenPlan;
-    const ch=Object.keys(edits).filter(id=>edits[id]>0&&settings.habits.find(x=>x.id===id&&x.target!==edits[id]));
-    if(ch.length){ch.forEach(id=>{settings.habits.find(x=>x.id===id).target=edits[id]});changed=true}
-    if(full){
-      if(chosenHeight!=null&&settings.body.heightCm!==chosenHeight){settings.body.heightCm=chosenHeight;meta.steps.heightCm=Math.round(chosenHeight);changed=true}
-      if(settings.body.scale!==chosenScale){settings.body.scale=chosenScale;changed=true}
-    }
+    if(full&&chosenHeight!=null&&settings.body.heightCm!==chosenHeight){settings.body.heightCm=chosenHeight;meta.steps.heightCm=Math.round(chosenHeight);changed=true}
     if(changed)await persistSettings();
     if(applyReminder){$('remTime').value=root.querySelector('#onbTime')?root.querySelector('#onbTime').value||'21:00':'21:00';$('remOn').checked=true;await setReminder(true)}
     try{await prefSet(ONB_KEY,'1')}catch(e){}
@@ -627,18 +645,20 @@ function showOnboarding(opts){
   function go(n){
     page=clamp(n,0,pages.length-1);layout();
     foot.innerHTML='';nextBtn=null;
-    const id=pages[page].id;
+    const id=pages[page].id,last=page===pages.length-1;
     if(id==='welcome')nextBtn=btn(full?'Next':'Got it','onbNext','',()=>{if(full)go(page+1);else finish(false)});
     else if(id==='plan'){
       nextBtn=btn('Next','onbNext','',()=>{
         if(!chosenPlan)return;
         Core.applyStarterPlan(settings,chosenPlan);
-        buildTargets();go(page+1);
+        go(page+1);
       });
       nextBtn.disabled=!chosenPlan;
     }
-    else if(id==='targets')nextBtn=btn('Next','onbNext','',()=>go(page+1));
-    else if(id==='reminder')nextBtn=btn('Next','onbNext','',()=>go(page+1));
+    else if(id==='reminder'){
+      if(last)nextBtn=btn('Finish','onbStart','',startAndFinish);
+      else nextBtn=btn('Next','onbNext','',()=>go(page+1));
+    }
     else if(id==='perm'){
       const b=btn('Allow and continue','onbAllow','',async()=>{
         b.disabled=true;b.textContent='Asking…';
@@ -664,20 +684,12 @@ function showOnboarding(opts){
       btn('Skip for now','onbBrandNext','secondary',()=>go(page+1));
     }
     else if(id==='height'){
-      if(full){
-        btn('Next','onbNext','',()=>{const r=readHeight();if(!r.ok)return;chosenHeight=r.cm;go(page+1)});
-      }else{
-        btn('Start counting','onbStart','',async()=>{const r=readHeight();if(!r.ok)return;chosenHeight=r.cm;await startAndFinish()});
-      }
+      btn('Start counting','onbStart','',async()=>{const r=readHeight();if(!r.ok)return;chosenHeight=r.cm;await startAndFinish()});
     }
-    else if(id==='scale'){
-      btn(stepFlow?'Start counting':'Finish','onbStart','',startAndFinish);
-    }
-    root.querySelector('#onbSkip').hidden=!(id==='welcome'||id==='plan'||id==='targets')||(mode==='permissions')||mode==='replay';
+    root.querySelector('#onbSkip').hidden=!(id==='welcome'||id==='plan')||(mode==='permissions')||mode==='replay';
   }
   root.querySelector('#onbSkip').addEventListener('click',()=>{
     if(stepFlow&&idx('perm')>=0)go(idx('perm'));
-    else if(full&&idx('height')>=0)go(idx('height'));
     else finish(false);
   });
   onb={back(){if(page>0)go(page-1);else finish(false)}};

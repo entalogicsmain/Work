@@ -77,7 +77,11 @@ console.log('Steps card is read-only');
   await pg.waitForFunction(() => document.querySelector('#sections .hcard[data-id="steps"] .hval').textContent === '4,320');
   ok(/Counted by phone/.test(await cardText(pg, '.hsrc')), 'the card shows the phone\'s count and says "Counted by phone"');
   ok((await cardText(pg, '.hsrc')).replace(/ /g, ' ').includes(String(Math.round(km(4320) * 10) / 10) + ' km'), 'and the estimated distance (from height)');
-  ok(/of 8,000 steps/.test(await cardText(pg, '.htgt')) && (await pg.$eval(`${stepsCard} .bar i`, e => parseFloat(e.style.width))) > 50, 'with the target and a progress bar');
+  ok(/^\/ 8,000 steps$/.test((await cardText(pg, '.htgt')).trim()) && (await pg.$eval(`${stepsCard} .bar i`, e => parseFloat(e.style.width))) > 50, 'with the target and a progress bar');
+  await pg.setViewportSize({ width: 360, height: 800 }); await pg.waitForTimeout(200);
+  const lines = await pg.$eval(`${stepsCard} .hsrc`, e => { const cs = getComputedStyle(e); return Math.round(e.getBoundingClientRect().height / (parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.35)); });
+  ok(lines <= 2, 'the source line ("Counted by phone", then the distance) fits two lines in the half-width card at 360 px', lines);
+  await pg.setViewportSize({ width: 400, height: 900 });
   ok(/phone/.test(await pg.getAttribute(stepsCard + ' .hc-main', 'aria-label')) && /Tap for details/.test(await pg.getAttribute(stepsCard + ' .hc-main', 'aria-label')) && !/Tap to edit/.test(await pg.getAttribute(stepsCard + ' .hc-main', 'aria-label')), 'its spoken label says details, not edit');
   ok((await pg.textContent('#headScore')) !== '0%', 'the ring counts the phone\'s steps');
   // tapping opens a read-only sheet
@@ -108,7 +112,7 @@ console.log('Steps card is read-only');
   await pg.fill('#fTarget', '9000'); await pg.click('.sheet .txtbtn.strong'); await sheetGone(pg); await settle(pg);
   ok((await stored(pg)).settings.habits.find(h => h.id === 'steps').target === 9000, 'the daily Steps target is editable in Plan');
   await tab(pg, 'today');
-  ok(/of 9,000 steps/.test(await cardText(pg, '.htgt')), 'and the card follows it');
+  ok(/^\/ 9,000 steps$/.test((await cardText(pg, '.htgt')).trim()), 'and the card follows it');
   ok(errs.length === 0, 'no JS errors (read-only)', errs);
   await ctx.close();
 }

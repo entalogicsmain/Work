@@ -297,7 +297,7 @@ store={
 /* ---------- files: export, auto backup ---------- */
 const DIR='Comeback';
 const fmtWhen=t=>new Date(t).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
-function showLastBackup(){$('lastBackup').textContent='Last backup: '+(meta.lastBackup?fmtWhen(meta.lastBackup):'never')}
+function showLastBackup(){const el=$('lastBackup');el.textContent='Last backup: '+(meta.lastBackup?fmtWhen(meta.lastBackup):'never');el.classList.toggle('warn',!meta.lastBackup);$('backupNow').hidden=!!meta.lastBackup}
 async function markBackup(){meta.lastBackup=Date.now();showLastBackup();try{await store.saveMeta()}catch(e){}}
 
 const FS=()=>Native.Filesystem;

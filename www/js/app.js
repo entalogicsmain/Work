@@ -1,3 +1,5 @@
+/* The version shown in Settings > About. Keep it equal to "version" in package.json (test:structure checks that). */
+const APP_VERSION='1.0.0';
 /* Start-up. Everything it calls is defined in the other scripts, which are all loaded before this one. */
 $('dayLabel').addEventListener('click',dateSheet);
 (async function(){
