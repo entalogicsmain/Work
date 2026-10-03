@@ -172,7 +172,7 @@ All screenshots (light and dark) are in [`docs/screenshots`](docs/screenshots). 
 ## Install the APK
 
 
-1. Get `release/Comeback-debug.apk` onto your phone (download it from this repo, or take it from the latest GitHub Actions run, see below).
+1. Get `release/Comeback.apk` onto your phone (download it from this repo, or take it from the latest GitHub Actions run, see below).
 2. Open it. Android will ask you to allow **Install unknown apps** for the app you opened it from (Files, Chrome, etc.). Allow it, then tap Install.
 3. Open **Comeback**. On Android 13+ the first time you switch the daily reminder on, allow notifications.
 
@@ -394,7 +394,7 @@ You need Node 22, JDK 21 and the Android SDK (platform 36).
 ```bash
 npm ci
 npm run build:apk        # bundles plugins, syncs www/ into android/, runs Gradle
-# result: android/app/build/outputs/apk/debug/app-debug.apk
+# result: android/app/build/outputs/apk/release/app-release.apk  (a signed, non-debuggable release build)
 ```
 
 - The web app is `www/index.html` with `www/css/app.css`, `www/js/core.js` (the pure logic: habit types, schedules, scores and streaks, suggestions, the library and starter plans, BMI and units, the migration), `www/js/logic.js` (data, storage, backup, reminder, sync), and the screens: `ui.js` (sheets, Progress, onboarding, navigation), `today.js`, `plan.js`, `settings.js`, `body.js` (BMI and body units), `timer.js` (the habit timer, with `css/timer.css`) and `app.js` (start-up). The Capacitor plugins and supabase-js are bundled from `src/native.js` into `www/vendor/native.js`, and the Lucide icons into `www/vendor/icons.js`, by `npm run build:web`.
@@ -405,7 +405,9 @@ npm run build:apk        # bundles plugins, syncs www/ into android/, runs Gradl
 
 ### Rebuild on GitHub
 
-`.github/workflows/build-apk.yml` builds the debug APK on every push to `main` (and on demand from the Actions tab). Open the run and download the **Comeback-debug-apk** artifact.
+`.github/workflows/build-apk.yml` runs the tests and builds the signed release APK on every push to `main` (and on demand from the Actions tab). Open the run and download the **Comeback-apk** artifact.
+
+**About the signing key.** The release APK is signed with the same fixed key as the earlier builds (`android/app/comeback-debug.keystore`, which is public in this repo), so it installs over them and keeps your data; Android refuses an update that is signed with a different key. The version number is the number of commits, so a newer build always installs over an older one. To sign with your own private key instead, set `COMEBACK_KEYSTORE`, `COMEBACK_KEYSTORE_PASSWORD`, `COMEBACK_KEY_ALIAS` and `COMEBACK_KEY_PASSWORD` before building (a phone that has the old key has to uninstall first, so export a backup first). The release build is not shrunk or obfuscated, because Capacitor loads its plugins by name.
 
 
 ## Icon, splash and store files

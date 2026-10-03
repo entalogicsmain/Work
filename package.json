@@ -6,7 +6,7 @@
   "scripts": {
     "build:web": "node scripts/build-icons.mjs && esbuild src/native.js --bundle --minify --format=iife --target=chrome90 --outfile=www/vendor/native.js",
     "sync": "npm run build:web && cap sync android",
-    "build:apk": "npm run sync && cd android && ./gradlew assembleDebug",
+    "build:apk": "npm run sync && cd android && ./gradlew assembleRelease",
     "assets": "capacitor-assets generate --android",
     "test:web": "node test/web-test.mjs",
     "test:sync": "node test/sync-test.mjs",

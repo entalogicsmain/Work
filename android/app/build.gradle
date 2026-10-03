@@ -1,6 +1,14 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
+// The number of commits: it only ever goes up, and it is the same on this machine and on GitHub, so a newer build
+// always installs over an older one (CI checks out the full history for this).
+def appVersionCode = {
+    int n = 0
+    try { n = 'git rev-list --count HEAD'.execute(null, rootDir).text.trim() as int } catch (ignored) { }
+    return n > 0 ? n : 1 + ((System.getenv('GITHUB_RUN_NUMBER') ?: '0') as int)
+}()
+
 android {
     namespace = "com.entalogics.comeback"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,8 +16,7 @@ android {
         applicationId "com.entalogics.comeback"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Local builds are version 1; CI builds count up so newer builds always install over older ones.
-        versionCode 1 + ((System.getenv('GITHUB_RUN_NUMBER') ?: '0') as int)
+        versionCode appVersionCode
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -26,6 +33,15 @@ android {
             storePassword 'android'
             keyAlias 'comebackdebug'
             keyPassword 'android'
+        }        // The release APK is signed with the SAME key by default, so it installs over the earlier builds and keeps your data
+        // (Android refuses an update that is signed with a different key). To use your own private key instead, set
+        // COMEBACK_KEYSTORE (path), COMEBACK_KEYSTORE_PASSWORD, COMEBACK_KEY_ALIAS and COMEBACK_KEY_PASSWORD.
+        release {
+            def ks = System.getenv('COMEBACK_KEYSTORE')
+            storeFile ks ? file(ks) : file('comeback-debug.keystore')
+            storePassword ks ? System.getenv('COMEBACK_KEYSTORE_PASSWORD') : 'android'
+            keyAlias ks ? System.getenv('COMEBACK_KEY_ALIAS') : 'comebackdebug'
+            keyPassword ks ? System.getenv('COMEBACK_KEY_PASSWORD') : 'android'
         }
     }
     compileOptions {
@@ -43,7 +59,10 @@ android {
     }
     buildTypes {
         release {
+            // Not shrunk or obfuscated: Capacitor loads its plugins by name, and there is no phone here to test the keep rules on.
             minifyEnabled false
+            debuggable false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

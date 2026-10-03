@@ -1,4 +1,4 @@
-name: Build debug APK
+name: Build release APK
 
 on:
   push:
@@ -12,6 +12,8 @@ jobs:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the version number is the commit count
 
       - uses: actions/setup-node@v4
         with:
@@ -62,11 +64,11 @@ jobs:
             echo "Gradle failed (often Maven Central rate limiting); retrying in 30 s"; sleep 30
           done
 
-      - name: Build debug APK
+      - name: Build release APK
         working-directory: android
         run: |
           n=0
-          until ./gradlew assembleDebug --no-daemon -Dorg.gradle.internal.repository.max.retries=12 -Dorg.gradle.internal.repository.initial.backoff=4000; do
+          until ./gradlew assembleRelease --no-daemon -Dorg.gradle.internal.repository.max.retries=12 -Dorg.gradle.internal.repository.initial.backoff=4000; do
             n=$((n+1)); [ $n -ge 3 ] && exit 1
             echo "Gradle failed (often Maven Central rate limiting); retrying in 30 s"; sleep 30
           done
@@ -74,10 +76,10 @@ jobs:
       - name: Name the APK
         run: |
           mkdir -p out
-          cp android/app/build/outputs/apk/debug/app-debug.apk out/Comeback-debug.apk
+          cp android/app/build/outputs/apk/release/app-release.apk out/Comeback.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Comeback-debug-apk
-          path: out/Comeback-debug.apk
+          name: Comeback-apk
+          path: out/Comeback.apk
           if-no-files-found: error
