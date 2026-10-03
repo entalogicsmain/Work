@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
+import com.entalogics.comeback.lock.AppLockPlugin;
 import com.entalogics.comeback.steps.StepsPlugin;
 
 public class MainActivity extends BridgeActivity {
@@ -17,6 +18,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(StepsPlugin.class); // local step-counting plugin (Kotlin)
+        registerPlugin(AppLockPlugin.class); // app lock: BiometricPrompt and FLAG_SECURE (Kotlin)
         super.onCreate(savedInstanceState);
     }
 

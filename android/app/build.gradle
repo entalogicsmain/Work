@@ -63,6 +63,8 @@ dependencies {
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     testImplementation 'org.json:json:20240303'
+    // app lock (Settings > Security): BiometricPrompt with a screen-lock fallback
+    implementation 'androidx.biometric:biometric:1.1.0'
     // step tracking
     implementation 'androidx.work:work-runtime:2.10.0'
     implementation 'com.google.android.gms:play-services-location:21.3.0'

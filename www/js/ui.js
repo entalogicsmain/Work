@@ -734,13 +734,14 @@ function onResume(){
 setInterval(()=>{if(!document.hidden)onResume()},60_000);
 function onForeground(){onResume();syncOnResume();stepsOnForeground()}
 function initNativeGlue(){
-  try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{syncBars();redrawCharts()})}catch(e){}
+  window.addEventListener('comeback-theme',()=>{syncBars();redrawCharts()});   // theme.js: the Theme choice changed, or the phone's dark mode did while the choice is System
   syncBars();
   try{if(Native.Network)Native.Network.addListener('networkStatusChange',s=>{if(s.connected&&!document.hidden)syncSoon(true)})}catch(e){}
   document.addEventListener('visibilitychange',()=>{if(document.hidden)flushSave();else if(!IS_NATIVE)onForeground()});
   window.addEventListener('pagehide',flushSave);
   if(!IS_NATIVE)return;
   Native.App.addListener('backButton',()=>{
+    if(typeof lockIsLocked==='function'&&lockIsLocked()){Native.App.exitApp();return}   // lock.js: Back on the lock screen leaves the app
     if(closeTopLayer())return;
     if(onb){onb.back();return}
     if(editing){exitEdit();return}

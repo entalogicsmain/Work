@@ -1,4 +1,4 @@
-/* Settings, in this order: reminder, units, body, suggestions, appearance, step tracking health, permissions, advanced, backup, account and sync, about.
+/* Settings, in this order: reminder, units, body, suggestions, appearance (theme, simple look), security (app lock), step tracking health, permissions, advanced, backup, account and sync, about.
    Opened from the gear in the top bar. Goals (habits, targets, schedules) live in Plan (plan.js). */
 
 let settingsFrom='today';
@@ -131,11 +131,17 @@ let simpleLook=false;
 function applySimpleLook(on){simpleLook=!!on;document.documentElement.classList.toggle('lite',simpleLook||AUTO_LITE)}
 function renderAppearance(){
   const g=$('appearGroup');if(!g)return;g.innerHTML='';
+  // Theme (theme.js): System follows the phone's dark mode; Light and Dark override it. Device-local, applied at once.
+  g.appendChild(segRow({id:'themeRow',icon:'moon',label:'Theme',value:Theme.get(),options:[{value:'system',label:'System',id:'thSystem'},{value:'light',label:'Light',id:'thLight'},{value:'dark',label:'Dark',id:'thDark'}],onPick:v=>{
+    Theme.set(v);   // fires 'comeback-theme', which draws this group again (below)
+    const b=$({system:'thSystem',light:'thLight',dark:'thDark'}[v]);if(b)b.focus({preventScroll:true});
+  }}));
   g.appendChild(switchRow({id:'simpleRow',boxId:'simpleOn',icon:'eye',label:'Simple look',sub:'Solid bars and sheets, no blur, no wiggle',on:simpleLook,onChange:async on=>{
     applySimpleLook(on);try{await prefSet(SIMPLE_KEY,on?'1':'0')}catch(e){}
   }}));
 }
 try{prefGet(SIMPLE_KEY).then(v=>{applySimpleLook(v==='1');renderAppearance()}).catch(()=>{})}catch(e){}
+window.addEventListener('comeback-theme',()=>{if(typeof activeTab!=='undefined'&&activeTab==='settings')renderAppearance()});   // the stored choice arrived after the page was shown
 
 /* ---------- suggestions ---------- */
 function renderSuggestions(){
@@ -199,6 +205,7 @@ function renderSettings(){
   $('appVersion').textContent=APP_VERSION;
   renderAccount();
   renderUnits();renderBodyGroup();renderSuggestions();renderAppearance();
+  if(typeof renderSecurity==='function')renderSecurity();   // lock.js: the Security group (Android app only)
   renderStepGroup(false);
   $('storeNote').textContent=IS_NATIVE?'Entries are saved on this phone and copied to Documents/Comeback after every change.':'Entries are saved in this browser only.';
   $('bkHint').textContent=IS_NATIVE?'Your entries live on this phone. A copy is also saved to Documents/Comeback after every change. Export one to keep it somewhere safe.':'Your entries live in this browser. Export a copy to keep it somewhere safe.';

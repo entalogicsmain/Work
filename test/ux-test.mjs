@@ -260,7 +260,7 @@ console.log('Settings');
   const n = await open({ native: true });
   await gear(n.pg); await n.pg.waitForTimeout(400);
   const nh = await n.pg.$$eval('#p-settings [role=heading]', e => e.filter(x => x.offsetParent !== null).map(x => x.textContent.trim()));
-  ok(nh.join() === 'Reminder,Units,Body,Suggestions,Appearance,Step tracking,Permissions,Advanced,Backup,Account and sync,About', 'in the Android app the phone-only groups come after Appearance (Step tracking, Permissions, Advanced), then Backup, Account and sync, About', nh);
+  ok(nh.join() === 'Reminder,Units,Body,Suggestions,Appearance,Security,Step tracking,Permissions,Advanced,Backup,Account and sync,About', 'in the Android app the phone-only groups come after Appearance (Security, Step tracking, Permissions, Advanced), then Backup, Account and sync, About', nh);
   await n.ctx.close();
 }
 

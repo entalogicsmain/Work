@@ -850,7 +850,7 @@ function syncBars(){
   if(!IS_NATIVE||!Native.StatusBar)return;
   try{
     const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#F2F2F7';
-    const dark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark=isDark();   // theme.js: the Theme choice, or the phone's own setting when it is System
     Native.StatusBar.setStyle({style:dark?'DARK':'LIGHT'}).catch(()=>{});
     Native.StatusBar.setBackgroundColor({color:bg}).catch(()=>{});
   }catch(e){}

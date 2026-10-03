@@ -14,6 +14,8 @@ import { createClient } from '@supabase/supabase-js';
 
 // Local Kotlin plugin (android/app/src/main/java/com/entalogics/comeback/steps). Only exists inside the APK.
 const Steps = Capacitor.isNativePlatform() ? registerPlugin('Steps') : null;
+// Local Kotlin plugin for the app lock (android/app/src/main/java/com/entalogics/comeback/lock). Only exists inside the APK.
+const AppLock = Capacitor.isNativePlatform() ? registerPlugin('AppLock') : null;
 
 window.ComebackNative = {
   isNative: Capacitor.isNativePlatform(),
@@ -27,6 +29,7 @@ window.ComebackNative = {
   StatusBar,
   Network,
   Steps,
+  AppLock,
   Haptics,
   ImpactStyle,
   NotificationType,

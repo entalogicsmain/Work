@@ -125,6 +125,9 @@ export const MOCK = `
   var st=JSON.parse(localStorage.getItem(KEY)||'null')||{prefs:{comeback_onboarded:'1'},fs:{},calls:[],perm:'prompt',requestResult:'granted',failWrite:false,shareMode:'ok',exit:0};
   if(!st.pending)st.pending={};   // notifications that are scheduled right now, by id (schedule adds, cancel removes)
   if(!st.steps)st.steps={activityGranted:true,locationGranted:true,batteryIgnored:false,brand:'xiaomi',health:'working',source:'counter',days:{},filteredToday:0,cfg:{enabled:false}};
+  // app lock knobs (test/theme-lock-test.mjs): available/reason = what isAvailable() says; result = what authenticate() answers ('ok','canceled','lockout','unavailable','failed'),
+  // queue = answers used first, one per call; authDelay = ms the prompt stays up; secure = the FLAG_SECURE state setSecure() last got
+  if(!st.lock)st.lock={available:true,reason:'ok',result:'ok',queue:[],authDelay:0,secure:false};
   function save(){localStorage.setItem(KEY,JSON.stringify(st))}
   function rec(n,a){st.calls.push({n:n,a:a});save()}
   var listeners={};
@@ -170,6 +173,16 @@ export const MOCK = `
         addListener:async function(ev,f){(listeners[ev]=listeners[ev]||[]).push(f);return{remove:function(){}}}
       }
     })(),
+    AppLock:{
+      isAvailable:async function(){rec('lockAvail');var l=st.lock;return{available:l.available!==false,reason:l.available===false?(l.reason||'none_enrolled'):'ok'}},
+      authenticate:async function(o){
+        rec('lockAuth',o);var l=st.lock;
+        if(l.authDelay)await new Promise(function(r){setTimeout(r,l.authDelay)});
+        var a=(l.queue&&l.queue.length)?l.queue.shift():l.result;save();
+        return a==='ok'?{ok:true}:{ok:false,error:a}
+      },
+      setSecure:async function(o){rec('lockSecure',o);st.lock.secure=!!o.enabled;save();return{}}
+    },
     Haptics:{impact:async function(o){rec('impact',o)},notification:async function(o){rec('notify',o)}},
     ImpactStyle:{Light:'LIGHT',Medium:'MEDIUM'},NotificationType:{Success:'SUCCESS'}
   };

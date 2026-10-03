@@ -42,7 +42,7 @@ const inertState = pg => pg.evaluate(() => ['#screens', '.tabbar', '.navbar'].ma
   while ((m = blurSel.exec(CSS))) m[2].split(',').forEach(x => blurred.add(x.trim()));
   const allowed = ['.navbar::before', '.tabbar-in', '.sheet', '.asheet .ag', '.toast', '.ptr-in'];
   ok([...blurred].every(x => allowed.includes(x)), 'only bars, sheets, the toast and the refresh pill use backdrop blur in the stylesheet', [...blurred].filter(x => !allowed.includes(x)));
-  ok(/@media \(prefers-contrast:more\)\{\s*:root\{[^}]*--card:var\(--solid\)[^}]*--glass-border:var\(--label2\)/.test(CSS), 'more contrast: cards turn solid and edges strong');
+  ok(/@media \(prefers-contrast:more\)\{\s*:root:root\{[^}]*--card:var\(--solid\)[^}]*--glass-border:var\(--label2\)/.test(CSS), 'more contrast: cards turn solid and edges strong');
   ok(/@media \(forced-colors:active\)[\s\S]*\.switch[\s\S]*\.ring[\s\S]*\.bar/.test(CSS), 'forced colours: switches, rings and bars have their own rules');
   ok(/\.toast:not\(\.show\)|visibility:hidden/.test(CSS) && /\.toast\{[^}]*visibility:hidden/.test(CSS), 'a hidden toast is visibility:hidden (its Undo leaves the tab order)');
   ok(/\.field \.box:focus-within\{outline:2px solid var\(--accent\)/.test(CSS), 'the field box carries the focus ring');
@@ -272,6 +272,22 @@ const inertState = pg => pg.evaluate(() => ['#screens', '.tabbar', '.navbar'].ma
   await gear(pg); await pg.click('#simpleRow'); await pg.waitForTimeout(300);
   const off = await pg.evaluate(() => ({ lite: document.documentElement.classList.contains('lite'), tab: getComputedStyle(document.querySelector('.tabbar-in')).backdropFilter }));
   ok(!off.lite && /blur/.test(off.tab), 'Simple look: switching it off restores the glass', off);
+  await ctx.close();
+}
+
+/* ---------- Theme choice (Settings > Appearance > Theme) ---------- */
+{
+  const { ctx, pg, errs } = await open(412, 915, 'light', {});
+  await gear(pg); await pg.waitForTimeout(300);
+  const info = await pg.evaluate(() => { const g = document.querySelector('#themeRow [role=radiogroup]'); const rs = [...g.querySelectorAll('[role=radio]')]; return { label: g.getAttribute('aria-label'), checked: rs.map(r => r.getAttribute('aria-checked')).join(), tabs: rs.map(r => r.tabIndex).join(), h: Math.min(...rs.map(r => r.getBoundingClientRect().height)) }; });
+  ok(info.label === 'Theme' && info.checked === 'true,false,false' && info.tabs === '0,-1,-1' && info.h >= 44, 'Theme: a labelled radio group with one tab stop and 44px targets', info);
+  await pg.focus('#thSystem'); await pg.keyboard.press('ArrowRight'); await pg.waitForTimeout(250);
+  const k = await pg.evaluate(() => ({ theme: document.documentElement.getAttribute('data-theme'), checked: [...document.querySelectorAll('#themeRow [role=radio]')].map(r => r.getAttribute('aria-checked')).join(), focus: document.activeElement && document.activeElement.id }));
+  ok(k.theme === 'light' && k.checked === 'false,true,false' && k.focus === 'thLight', 'Theme: the arrow keys move and choose, and focus stays on the group', k);
+  await pg.keyboard.press('ArrowRight'); await pg.waitForTimeout(250);
+  const d = await pg.evaluate(() => ({ theme: document.documentElement.getAttribute('data-theme'), bg: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), ring: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() }));
+  ok(d.theme === 'dark' && d.bg === '#070C0F' && d.ring === '#78BCFF', 'Theme: Dark on a light phone gives the dark palette (and a light focus ring)', d);
+  ok(errs.length === 0, 'Theme: no JS errors', errs);
   await ctx.close();
 }
 

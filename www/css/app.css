@@ -7,7 +7,7 @@
    Spacing: 8px grid. Radius: 10 / 14 / 22. Tap targets: 44px minimum.
    ============================================================ */
 :root{
-  color-scheme:light dark;
+  color-scheme:light dark;   /* System by default; Light and Dark below are the choices in Settings > Appearance > Theme (theme.js sets data-theme) */
   /* surfaces: translucent glass over a soft aurora backdrop. --solid is the opaque stand-in for rows that must not show through. */
   --bg:#E9EFF9;--card:rgba(255,255,255,.72);--sheet:rgba(244,247,253,.9);--sheet-card:rgba(255,255,255,.72);--solid:#F4F7FD;
   --aurora-a:#C9DBFF;--aurora-b:#E0D8FF;--aurora-c:#CDF3E8;--aurora-d:#FFE8D2;
@@ -34,8 +34,10 @@
   --ease:cubic-bezier(.32,.72,0,1);--dur:.32s;
   --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
 }
+/* Dark palette. The same tokens appear twice because CSS cannot share a rule between a media query and an attribute selector:
+   (1) when the phone is dark and the person has not forced Light, (2) when the person forced Dark. test/contrast-test.mjs checks the two copies are identical. */
 @media (prefers-color-scheme:dark){
-  :root{
+  :root:not([data-theme="light"]){
     --bg:#070C0F;--card:rgba(255,255,255,.055);--sheet:rgba(18,25,29,.94);--sheet-card:rgba(255,255,255,.065);--solid:#11181C;
     --aurora-a:#0D2E44;--aurora-b:#1E1649;--aurora-c:#08342F;--aurora-d:#33210F;
     --glass:rgba(16,24,28,.82);--glass-border:rgba(255,255,255,.13);--glass-hi:rgba(255,255,255,.16);
@@ -51,6 +53,24 @@
     --toast:rgba(52,60,66,.94);
     --scrim:rgba(0,0,0,.55);
   }
+}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#070C0F;--card:rgba(255,255,255,.055);--sheet:rgba(18,25,29,.94);--sheet-card:rgba(255,255,255,.065);--solid:#11181C;
+  --aurora-a:#0D2E44;--aurora-b:#1E1649;--aurora-c:#08342F;--aurora-d:#33210F;
+  --glass:rgba(16,24,28,.82);--glass-border:rgba(255,255,255,.13);--glass-hi:rgba(255,255,255,.16);
+  --glass-shadow:0 10px 30px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.4);
+  --label:#FFFFFF;--label2:#C5C7CE;
+  --sep:rgba(235,235,245,.16);--fill:rgba(255,255,255,.12);--fill2:rgba(255,255,255,.2);--track:rgba(255,255,255,.18);
+  --accent:#78BCFF;--accent-fill:#0A6CD6;--accent-fill-lo:#0858B0;--on-accent:#FFFFFF;--on-green:#000000;--switch-off:#85858D;--switch-on:#3A8CEB;--accent-soft:rgba(120,188,255,.1);
+  --green:#3DDB66;--green-soft:rgba(61,219,102,.14);
+  --orange:#FFA726;--orange-soft:rgba(255,167,38,.14);
+  --red:#FF958E;--red-soft:rgba(255,149,142,.1);--on-red:#1A0000;
+  --bmi-under:#78BCFF;--bmi-under-soft:rgba(120,188,255,.11);--bmi-normal:#3DDB66;--bmi-normal-soft:rgba(61,219,102,.14);--bmi-over:#E8C14D;--bmi-over-soft:rgba(232,193,77,.14);--bmi-obese:#F59C85;--bmi-obese-soft:rgba(245,156,133,.11);
+  --confetti-1:#6AB4FF;--confetti-2:#3DDB66;--confetti-3:#FFA726;--confetti-4:#C79BFF;--confetti-5:#FF7A9C;
+  --toast:rgba(52,60,66,.94);
+  --scrim:rgba(0,0,0,.55);
 }
 
 *{box-sizing:border-box}
@@ -379,11 +399,11 @@ button.row:active,label.row:active{background:var(--fill)}
 
 /* No backdrop-filter support: use near-opaque surfaces so text never sits on busy background. */
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-  :root{--card:var(--solid);--sheet-card:var(--solid);--glass:var(--solid);--sheet:var(--solid);--toast:var(--solid)}
+  :root:root{--card:var(--solid);--sheet-card:var(--solid);--glass:var(--solid);--sheet:var(--solid);--toast:var(--solid)}
 }
 /* The system asked for less transparency: solid surfaces, no blur. */
 @media (prefers-reduced-transparency:reduce){
-  :root{--card:var(--solid);--sheet-card:var(--solid);--glass:var(--solid);--sheet:var(--solid);--glass-border:var(--sep);--aurora:none}
+  :root:root{--card:var(--solid);--sheet-card:var(--solid);--glass:var(--solid);--sheet:var(--solid);--glass-border:var(--sep);--aurora:none}
   *,*::before,*::after{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 }
 
@@ -700,7 +720,7 @@ button.row:active,label.row:active{background:var(--fill)}
 
 /* ---------- more contrast and forced colours ---------- */
 @media (prefers-contrast:more){
-  :root{--card:var(--solid);--sheet-card:var(--solid);--glass-border:var(--label2)}
+  :root:root{--card:var(--solid);--sheet-card:var(--solid);--glass-border:var(--label2)}
 }
 @media (forced-colors:active){
   .switch{forced-color-adjust:none;background:Canvas;border:2px solid ButtonText}

@@ -10,6 +10,8 @@
 <link rel="stylesheet" href="css/travel.css">
 <link rel="stylesheet" href="css/review.css">
 <link rel="stylesheet" href="css/timer.css">
+<link rel="stylesheet" href="css/lock.css">
+<script src="js/theme.js"></script>
 </head>
 <body>
 
@@ -193,7 +195,11 @@
 
     <div class="group-head"><span role="heading" aria-level="2">Appearance</span></div>
     <div class="group ic" id="appearGroup"></div>
-    <div class="group-foot">Turns off the frosted blur and the wiggle while editing Today. Easier on older phones and the battery.</div>
+    <div class="group-foot">Theme follows your phone unless you pick Light or Dark. Simple look turns off the frosted blur and the wiggle while editing Today: easier on older phones and the battery.</div>
+
+    <div class="group-head" id="secHead" hidden><span role="heading" aria-level="2">Security</span></div>
+    <div class="group ic" id="secGroup" hidden></div>
+    <div class="group-foot" id="secFoot" hidden>Uses your fingerprint, face or screen lock. This stays on this phone and is never saved to a backup or your account.</div>
 
     </div>
     <div class="plan-col">
@@ -273,6 +279,7 @@
 <script src="js/review.js"></script>
 <script src="js/today.js"></script>
 <script src="js/plan.js"></script>
+<script src="js/lock.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/app.js"></script>
 <script src="js/ptr.js"></script>

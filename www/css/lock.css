@@ -1,0 +1,10 @@
+/* App lock screen (lock.js). Uses only tokens from app.css, so light, dark, more contrast and forced colours follow the rest of the app. */
+.lockscreen{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;overflow-y:auto;background:var(--aurora),var(--bg);color:var(--label);padding:calc(var(--safe-t) + var(--s4)) calc(var(--safe-r) + var(--s4)) calc(var(--safe-b) + var(--s4)) calc(var(--safe-l) + var(--s4));animation:fade .2s ease both}
+.lock-card{width:100%;max-width:22rem;margin:auto;display:flex;flex-direction:column;align-items:center;text-align:center;gap:var(--s3)}
+.lock-ic{width:4.5rem;height:4.5rem;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.lock-ic svg.ic{width:2rem;height:2rem}
+.lock-card h1{margin:var(--s2) 0 0;font-size:1.625rem;font-weight:700;letter-spacing:-.3px;line-height:1.15;overflow-wrap:anywhere}
+.lock-card p{margin:0;color:var(--label2);font-size:1rem;overflow-wrap:anywhere}
+.lock-card .btn{margin-top:var(--s2)}
+@media (forced-colors:active){.lockscreen{background:Canvas}}
+.lockscreen .btn.secondary{color:var(--label)}
