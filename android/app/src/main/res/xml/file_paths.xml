@@ -4,4 +4,6 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-path name="comeback_documents" path="Documents/Comeback/" />
     <cache-path name="my_cache_images" path="." />
+    <!-- the camera picker of the web view (Progress photos) writes its picture here before the app copies it; the app deletes it again -->
+    <external-files-path name="capture_pictures" path="Pictures/" />
 </paths>

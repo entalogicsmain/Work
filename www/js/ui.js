@@ -362,6 +362,7 @@ function renderProgress(){
   ch.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.metric===metric)));
   drawChart();drawHoursChart();renderBmiCard();
   if(window.Review)Review.progressHook();      // week tile, insights, calendar legend
+  if(window.Photos)Photos.progressHook();      // the Progress photos card
 
   // calendar heat map: soft rounded squares, one per day
   const cells=period===7?7:period===30?35:91;

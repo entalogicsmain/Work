@@ -106,6 +106,7 @@ function renderToday(inPlace){
   $('todayHint').textContent=nothingDue?'':!logged?(isToday?(st===0&&best>0?GENTLE_RESTART:'Nothing logged yet. Tap + to log.'):'This day was not logged. You can fill it in now.'):(m.full?'Strong day. Your comeback is on track.':(isToday&&coachState===2?'Tip: hold a card to rearrange':''));
   $('todayHint').hidden=!$('todayHint').textContent;
   if(window.Review)Review.todayHook(current);      // light day / shield / welcome-back hints and the weekly review card
+  if(window.Photos)Photos.todayHook(current);      // the monthly "Progress photo day" card
 
   renderSuggestion();
   renderSections();
@@ -404,7 +405,7 @@ function sectionEl(sec,items){
     else node=habitCard(x,d,current);
     body.appendChild(node);
   });
-  if(isBody){body.appendChild(bmiRow());body.appendChild(noteRow())}
+  if(isBody){body.appendChild(bmiRow());body.appendChild(noteRow());if(window.Photos)body.appendChild(Photos.row())}
   return el;
 }
 function renderSections(){
