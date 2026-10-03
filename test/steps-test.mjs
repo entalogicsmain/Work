@@ -77,6 +77,7 @@ console.log('Steps card is read-only');
   await pg.waitForFunction(() => document.querySelector('#sections .hcard[data-id="steps"] .hval').textContent === '4,320');
   ok(/Counted by phone/.test(await cardText(pg, '.hsrc')), 'the card shows the phone\'s count and says "Counted by phone"');
   ok((await cardText(pg, '.hsrc')).replace(/ /g, ' ').includes(String(Math.round(km(4320) * 10) / 10) + ' km'), 'and the estimated distance (from height)');
+  await pg.waitForFunction(sel => parseFloat(document.querySelector(sel + ' .bar i').style.width) > 50, stepsCard, { timeout: 5000 }).catch(() => {});
   ok(/^\/ 8,000 steps$/.test((await cardText(pg, '.htgt')).trim()) && (await pg.$eval(`${stepsCard} .bar i`, e => parseFloat(e.style.width))) > 50, 'with the target and a progress bar');
   await pg.setViewportSize({ width: 360, height: 800 }); await pg.waitForTimeout(200);
   const lines = await pg.$eval(`${stepsCard} .hsrc`, e => { const cs = getComputedStyle(e); return Math.round(e.getBoundingClientRect().height / (parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.35)); });
