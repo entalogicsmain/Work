@@ -1,0 +1,59 @@
+/* Progress photos (www/js/photos.js): the Today row and prompt card, the day sheet, the viewer, the Progress card and Before/After.
+   Uses the tokens from app.css, so it follows light, dark, the simple look and large text. */
+#photoCard:empty,#photoPromptSlot:empty{display:none}
+#photoCard{min-width:0;margin-top:var(--s6)}
+#photoCard .sec-head{margin-top:0}
+.ph-card{min-width:0;margin-bottom:var(--s2)}
+.ph-note{margin:var(--s3) 0 0;font-size:.8125rem;color:var(--label2);overflow-wrap:anywhere}
+.ph-sheet>.ph-note:first-child{margin-top:0}
+.ph-none{display:flex;align-items:center;gap:var(--s3)}
+.ph-none p{margin:0;overflow-wrap:anywhere}
+.ph-actions{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s3)}
+.ph-actions .btn{flex:1 1 9rem;display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);min-height:44px}
+.ph-actions .btn.danger{color:var(--red)}
+.ph-status{min-height:1.25rem;margin:var(--s2) 0 0;font-size:.875rem;color:var(--label2)}
+.ph-status.bad{color:var(--red)}
+.ph-undo{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-top:var(--s2);padding:0 var(--s2) 0 var(--s3);border-radius:var(--r-s);background:var(--fill);font-size:.9375rem}
+.ph-undo[hidden]{display:none}
+
+/* thumbnails: a grid in the day sheet, a sideways strip on Progress */
+.ph-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(7rem,1fr));gap:var(--s2);margin-top:var(--s3)}
+.ph-empty{grid-column:1/-1;margin:0}
+.ph-tile{position:relative;min-width:0}
+.ph-open{position:relative;display:block;width:100%;aspect-ratio:3/4;padding:0;border-radius:var(--r-s);overflow:hidden;background:var(--fill);color:var(--label2)}
+.ph-open img{display:block;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .2s}
+.ph-open.ok img{opacity:1}
+.ph-open.miss img{display:none}
+.ph-missing{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:var(--s2);text-align:center;font-size:.75rem}
+.ph-del{position:absolute;top:2px;right:2px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;isolation:isolate}
+.ph-del::before{content:'';position:absolute;inset:7px;border-radius:50%;background:rgba(0,0,0,.6);z-index:-1}
+.ph-strip{display:flex;gap:var(--s2);overflow-x:auto;padding:2px 2px var(--s2);margin:0 calc(var(--s1)*-1);scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.ph-item{flex:none;width:5.5rem;scroll-snap-align:start;display:flex;flex-direction:column;gap:2px}
+.ph-date{font-size:.75rem;color:var(--label2);text-align:center;font-variant-numeric:tabular-nums}
+.ph-pg{margin-top:var(--s3);background:var(--fill)}
+
+/* full-size viewer */
+.ph-full{display:flex;align-items:center;justify-content:center;min-height:8rem;border-radius:var(--r-s);overflow:hidden;background:var(--fill)}
+.ph-full img{display:block;max-width:100%;max-height:60vh;object-fit:contain}
+.ph-loading{margin:var(--s6) var(--s4);text-align:center}
+
+/* before / after */
+.ph-picks{display:flex;flex-wrap:wrap;gap:var(--s3)}
+.ph-pick{flex:1 1 9rem;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:.8125rem;color:var(--label2)}
+.ph-pick select{width:100%;min-height:44px;padding:0 var(--s3);border-radius:var(--r-s);background:var(--fill);color:var(--label);font-size:1rem;border:0}
+.ph-stage{position:relative;margin:var(--s3) auto 0;width:100%;max-width:26rem;aspect-ratio:3/4;max-height:58vh;border-radius:var(--r-s);overflow:hidden;background:var(--fill);touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.ph-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.ph-handle{position:absolute;top:0;bottom:0;width:44px;margin-left:-22px;display:flex;align-items:center;justify-content:center;cursor:ew-resize;border-radius:var(--r-s)}
+.ph-handle i{position:relative;display:block;width:3px;height:100%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+.ph-handle i::after{content:'';position:absolute;top:50%;left:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.4),0 2px 6px rgba(0,0,0,.3)}
+.ph-handle:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.ph-cap{margin:var(--s2) 0 0;text-align:center;font-size:.875rem;color:var(--label2);overflow-wrap:anywhere}
+
+/* the monthly card on Today */
+.ph-prompt{display:flex;gap:var(--s3);align-items:flex-start;margin-bottom:var(--s3)}
+.ph-prompt-body{flex:1;min-width:0}
+.ph-prompt-body p{margin:2px 0 0;font-size:.9375rem;overflow-wrap:anywhere}
+.ph-prompt .ph-actions{margin-top:var(--s2)}
+.ph-prompt .ph-actions .btn{flex:0 1 auto}
+
+@media (prefers-reduced-motion:reduce){.ph-open img{transition:none}}

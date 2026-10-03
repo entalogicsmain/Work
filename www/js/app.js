@@ -22,6 +22,7 @@ $('dayLabel').addEventListener('click',dateSheet);
   initReminder();
   initSync();
   initSteps();
+  if(window.Photos)Photos.init();      // monthly prompt state and the once-a-day clean-up of unused photo files
   try{
     if(await prefGet(ONB_KEY)==null){
       if(Object.keys(days).length){await prefSet(ONB_KEY,'1');await maybeShowPermissionSetup()}else showOnboarding({mode:'full'});

@@ -43,8 +43,9 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 
 /* ---------- data shape ----------
    { version:2, settings:{v:2,habits:[{id,name,icon,type,unit,target,section,schedule}],sections,body,units,prefs},
-     days:{ "YYYY-MM-DD":{vals,rules,weight,waist,note,date,updatedAt,light?} } }
+     days:{ "YYYY-MM-DD":{vals,rules,weight,waist,note,date,updatedAt,light?,photos?} } }
    A day may carry light:true ("Take it easy today"): it is left out of scoring like a rest day (Core.isLight). settings.body may carry goalKg and goalDate.
+   A day may carry photos:["YYYY-MM-DD.jpg",...] (at most 3 names; the files live in the app's private storage, see photos.js). The names are in the phone's copy and JSON backups, never in the cloud (dayData leaves them out).
    Count, duration and steps habits keep their number in a day's "vals"; Yes/No habits keep a tick in "rules" (so every day
    record from an earlier version stays valid); weight and waist are the day's "weight" and "waist". Version 1 data (backups,
    the phone's saved copy, the cloud) is migrated into this structure whenever it is read. */
@@ -83,6 +84,7 @@ function normalizeDay(k,d){
   if(sm)out.steps_meta=sm;
   const tv=normalizeTravel(d.travel);if(tv)out.travel=tv;
   if(d.light===true)out.light=true;
+  const ph=PhotoNames.clean(d.photos,k);if(ph.length)out.photos=ph;   // names of private on-device photos (never sent to the cloud, see dayData)
   return out;
 }
 /* Throws an Error with a readable message when the object is not a Comeback backup. Restoring from a file is strict: one bad day
@@ -129,6 +131,7 @@ function mergeDayRecords(a,b,now){
     const aWins=!mb||(ma&&(wa[0]>wb[0]||(wa[0]===wb[0]&&(wa[1]>wb[1]||(wa[1]===wb[1]&&nw===a)))));
     out.steps_meta=clone(aWins?ma:mb);
   }
+  const ph=PhotoNames.merge(a.photos,b.photos,out.date);if(ph.length)out.photos=ph;   // photos stay on the phone: the names of both sides are kept
   // travel: the side that recorded more wins whole (a relabelled trip is kept with it)
   const tvA=a.travel,tvB=b.travel;
   if(tvA||tvB){
@@ -601,6 +604,7 @@ const cloudConfigured=()=>!!(CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&Nat
 const signedIn=()=>cloudConfigured()&&sync.signedIn;
 const saveSync=()=>prefSet(SYNC_KEY,JSON.stringify(sync));
 const pendingCount=()=>sync.pendingDays.length+(sync.pendingSettings?1:0);
+/* What goes to the cloud. A day's photo names (d.photos) are deliberately NOT in it: progress photos never leave the phone. */
 const dayData=d=>{const o={vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''};if(d.steps_meta)o.steps_meta=d.steps_meta;if(d.travel)o.travel=d.travel;if(d.light===true)o.light=true;return o};
 const isNetErr=e=>!!e&&(e.name==='AuthRetryableFetchError'||e.status===0||/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(String(e.message||e)));
 function syncErrText(e){
@@ -697,7 +701,7 @@ async function pullAndMerge(){
     const cloudChanged=seen!==raw,localChanged=L.updatedAt!==(seen===undefined?raw:seen);
     if(!cloudChanged)return;                       // the cloud is as this phone last left it: keep the phone's copy (it goes up if it changed)
     const lts=clampTs(L.updatedAt,now);
-    if(!localChanged){if(ts>lts){days[k]=inc;changed=true}return}   // only the cloud changed (a copy that looks older leaves this phone's day alone)
+    if(!localChanged){if(ts>lts){if(L.photos)inc.photos=L.photos.slice();days[k]=inc;changed=true}return}   // only the cloud changed (a copy that looks older leaves this phone's day alone)
     if(sameDay(L,inc)){L.updatedAt=ts;return}      // both changed it the same way
     // both changed it (or this phone cannot tell): keep the fields from both
     const mg=mergeDayRecords(L,inc,now);

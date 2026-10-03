@@ -123,6 +123,7 @@ export const MOCK = `
 (function(){
   var KEY='__mock';
   var st=JSON.parse(localStorage.getItem(KEY)||'null')||{prefs:{comeback_onboarded:'1'},fs:{},calls:[],perm:'prompt',requestResult:'granted',failWrite:false,shareMode:'ok',exit:0};
+  if(!st.fsm)st.fsm={};           // when each mock file was written (ms), for readdir's mtime
   if(!st.pending)st.pending={};   // notifications that are scheduled right now, by id (schedule adds, cancel removes)
   if(!st.steps)st.steps={activityGranted:true,locationGranted:true,batteryIgnored:false,brand:'xiaomi',health:'working',source:'counter',days:{},filteredToday:0,cfg:{enabled:false}};
   function save(){localStorage.setItem(KEY,JSON.stringify(st))}
@@ -131,17 +132,20 @@ export const MOCK = `
   window.__mock={st:function(){return JSON.parse(localStorage.getItem(KEY))},
     fire:function(ev,p){(listeners[ev]||[]).forEach(function(f){f(p||{})})},
     set:function(k,v){st[k]=v;save()},
+    age:function(p,ms){st.fsm[p]=Date.now()-ms;save()},   // pretend the mock file at p (e.g. 'DATA/photos/2026-10-03.jpg') is ms old
     steps:function(p){Object.assign(st.steps,p);save()}};
   window.ComebackNative={
     isNative:true,
     Preferences:{get:async function(o){return{value:o.key in st.prefs?st.prefs[o.key]:null}},set:async function(o){st.prefs[o.key]=o.value;save()},remove:async function(o){delete st.prefs[o.key];save()},keys:async function(){return{keys:Object.keys(st.prefs)}}},
-    Directory:{Documents:'DOCUMENTS',Cache:'CACHE'},Encoding:{UTF8:'utf8'},
+    Directory:{Documents:'DOCUMENTS',Cache:'CACHE',Data:'DATA',External:'EXTERNAL'},Encoding:{UTF8:'utf8'},
     Filesystem:{
       writeFile:async function(o){
         if(st.failWrite&&o.directory==='DOCUMENTS')throw new Error('EACCES: permission denied');
-        var p=o.directory+'/'+o.path;st.fs[p]=o.data;save();return{uri:'file:///storage/emulated/0/'+(o.directory==='DOCUMENTS'?'Documents':'Cache')+'/'+o.path}},
-      readdir:async function(o){var pre=o.directory+'/'+o.path+'/';return{files:Object.keys(st.fs).filter(function(k){return k.indexOf(pre)===0&&k.slice(pre.length).indexOf('/')<0}).map(function(k){return{name:k.slice(pre.length),type:'file',size:st.fs[k].length}})}},
-      deleteFile:async function(o){var p=o.directory+'/'+o.path;if(!(p in st.fs))throw new Error('missing');delete st.fs[p];rec('deleteFile',o.path)}
+        if(st.failPhoto&&o.directory==='DATA')throw new Error('ENOSPC: no space left on device');
+        var p=o.directory+'/'+o.path;st.fs[p]=o.data;st.fsm[p]=Date.now();save();return{uri:o.directory==='DATA'?'file:///data/user/0/com.entalogics.comeback/files/'+o.path:'file:///storage/emulated/0/'+(o.directory==='DOCUMENTS'?'Documents':'Cache')+'/'+o.path}},
+      readFile:async function(o){var p=o.directory+'/'+o.path;if(!(p in st.fs))throw new Error('File does not exist.');return{data:st.fs[p]}},
+      readdir:async function(o){var pre=o.directory+'/'+o.path+'/';return{files:Object.keys(st.fs).filter(function(k){return k.indexOf(pre)===0&&k.slice(pre.length).indexOf('/')<0}).map(function(k){return{name:k.slice(pre.length),type:'file',size:st.fs[k].length,mtime:st.fsm[k]||0}})}},
+      deleteFile:async function(o){var p=o.directory+'/'+o.path;if(!(p in st.fs))throw new Error('missing');delete st.fs[p];delete st.fsm[p];rec('deleteFile',o.path)}
     },
     Share:{share:async function(o){rec('share',o);if(st.shareMode==='cancel')throw new Error('Share canceled');if(st.shareMode==='fail')throw new Error('No share targets');return{}}},
     LocalNotifications:{
