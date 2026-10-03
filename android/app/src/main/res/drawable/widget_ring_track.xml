@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The empty ring behind the score arc. Thickness is 11% of the size, matching WidgetModel.STROKE_RATIO. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:innerRadiusRatio="2.564"
+    android:shape="ring"
+    android:thicknessRatio="9.09"
+    android:useLevel="false">
+    <solid android:color="@color/widget_track" />
+</shape>

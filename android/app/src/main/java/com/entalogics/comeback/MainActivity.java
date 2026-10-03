@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(StepsPlugin.class); // local step-counting plugin (Kotlin)
+        registerPlugin(com.entalogics.comeback.widget.WidgetPlugin.class); // home-screen widget snapshot (Kotlin)
         super.onCreate(savedInstanceState);
     }
 

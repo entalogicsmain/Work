@@ -47,6 +47,7 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
 /** Fires just after midnight: take a reading so the old day is closed accurately, then book the next alarm. */
 class MidnightReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        com.entalogics.comeback.widget.WidgetUpdater.refresh(ctx)   // the home-screen widget moves on to the new day
         StepTracker.init(ctx)
         if (StepTracker.config().enabled) {
             if (!StepService.start(ctx, StepService.ACTION_SAMPLE)) StepTracker.catchUp(ctx)

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picture shown in the widget picker on Android 11 and older (newer versions show the real layout, see xml-v31). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="88dp"
+    android:viewportWidth="250"
+    android:viewportHeight="110">
+    <path
+        android:fillColor="@color/widget_bg"
+        android:pathData="M24,0 H226 A24,24 0 0 1 250,24 V86 A24,24 0 0 1 226,110 H24 A24,24 0 0 1 0,86 V24 A24,24 0 0 1 24,0 Z"
+        android:strokeColor="@color/widget_stroke"
+        android:strokeWidth="1" />
+    <!-- ring: empty track and a 62% arc -->
+    <path
+        android:pathData="M57,55 m-27,0 a27,27 0 1 0 54,0 a27,27 0 1 0 -54,0"
+        android:strokeColor="@color/widget_track"
+        android:strokeWidth="7" />
+    <path
+        android:pathData="M57,28 A27,27 0 1 1 38.5,74.7"
+        android:strokeColor="@color/widget_arc"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+    <!-- the percent, the streak, steps and the next habit as soft bars -->
+    <path
+        android:fillColor="@color/widget_text"
+        android:pathData="M44,50 H70 A3,3 0 0 1 70,56 H44 A3,3 0 0 1 44,50 Z" />
+    <path
+        android:fillColor="@color/widget_accent_text"
+        android:pathData="M104,30 H190 A4,4 0 0 1 190,38 H104 A4,4 0 0 1 104,30 Z" />
+    <path
+        android:fillColor="@color/widget_text2"
+        android:pathData="M104,50 H214 A3,3 0 0 1 214,56 H104 A3,3 0 0 1 104,50 Z" />
+    <path
+        android:fillColor="@color/widget_text2"
+        android:pathData="M104,68 H170 A3,3 0 0 1 170,74 H104 A3,3 0 0 1 104,68 Z" />
+</vector>

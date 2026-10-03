@@ -72,6 +72,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- Home-screen widget (see README, Home-screen widget). The date / time actions let it move on to the new day by itself. -->
+        <receiver android:name=".widget.ComebackWidgetProvider" android:exported="false" android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/comeback_widget_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -123,6 +123,7 @@ export const MOCK = `
 (function(){
   var KEY='__mock';
   var st=JSON.parse(localStorage.getItem(KEY)||'null')||{prefs:{comeback_onboarded:'1'},fs:{},calls:[],perm:'prompt',requestResult:'granted',failWrite:false,shareMode:'ok',exit:0};
+  if(!st.widget)st.widget={snapshots:[]};   // what the page pushed to the home-screen widget plugin, in order
   if(!st.pending)st.pending={};   // notifications that are scheduled right now, by id (schedule adds, cancel removes)
   if(!st.steps)st.steps={activityGranted:true,locationGranted:true,batteryIgnored:false,brand:'xiaomi',health:'working',source:'counter',days:{},filteredToday:0,cfg:{enabled:false}};
   function save(){localStorage.setItem(KEY,JSON.stringify(st))}
@@ -170,6 +171,7 @@ export const MOCK = `
         addListener:async function(ev,f){(listeners[ev]=listeners[ev]||[]).push(f);return{remove:function(){}}}
       }
     })(),
+    Widget:{setWidgetSnapshot:async function(o){st.widget.snapshots.push(JSON.parse(JSON.stringify(o)));save();return{saved:true}}},
     Haptics:{impact:async function(o){rec('impact',o)},notification:async function(o){rec('notify',o)}},
     ImpactStyle:{Light:'LIGHT',Medium:'MEDIUM'},NotificationType:{Success:'SUCCESS'}
   };
