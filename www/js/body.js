@@ -114,6 +114,21 @@ async function heightSheet(){
   await setHeightCm(cm);toast('Height saved',{icon:'ruler'});
 }
 
+/* One line to pick the BMI scale (Standard or Asian), for the first time someone opens BMI. Settings > Body keeps the same choice. */
+function scaleChooser(){
+  const wrap=h('<div class="scale-choice" id="bmiScaleChoice"><div class="group"></div><p class="t-foot muted scale-help"></p></div>');
+  const help=wrap.querySelector('.scale-help'),grp=wrap.querySelector('.group');
+  const helpText=()=>bmiScale()==='asian'?'Asian (WHO Asia-Pacific): healthy range 18.5 to 22.9. Often used for South, East and Southeast Asian backgrounds.':'Standard (WHO): healthy range 18.5 to 24.9. Choose Asian if your background is South, East or Southeast Asian.';
+  const o={icon:'activity',label:'BMI scale',value:bmiScale(),options:[{value:'standard',label:'Standard',id:'sheetScStd'},{value:'asian',label:'Asian',id:'sheetScAsia'}],
+    onPick:async v=>{
+      o.value=v;grp.querySelectorAll('[role=radio]').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===v)));
+      settings.body=Object.assign({},settings.body,{scale:v});help.textContent=helpText();
+      await saveSettingsQuiet();refreshAll();
+    }};
+  grp.appendChild(segRow(o));help.textContent=helpText();
+  return wrap;
+}
+
 /* ---------- the BMI detail sheet ---------- */
 let bmiChart=null,bmiPeriod=30;
 function scaleBarHtml(){
@@ -159,6 +174,7 @@ function bmiSheet(){
     const b=e.querySelector('button');b.textContent=noH?'Set height':'Log weight';
     b.addEventListener('click',()=>{sh.close('cancel');noH?heightSheet():bodySheet('weight',todayStr())});
     root.appendChild(e);
+    root.appendChild(scaleChooser());    // first time here: the height and the scale are asked inline, not in the intro
   }
   // trend
   if(st.state==='ok'){

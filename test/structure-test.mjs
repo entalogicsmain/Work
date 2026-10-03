@@ -43,8 +43,10 @@ console.log('Today sections and habit types');
   ok((await secIds(pg)).join() === 'movement,workout,health,food,body', 'Today groups habits into Movement, Workout, Health, Food rules and Body and notes', await secIds(pg));
   ok((await pg.$$eval('#sections .tsec-title', e => e.map(x => x.textContent))).join() === 'Movement,Workout,Health,Food rules,Body and notes', 'the section titles read well');
   ok((await itemIds(pg, 'movement')).join() === 'steps,walk' && (await itemIds(pg, 'workout')).join() === 'pushups,pullups,squats,plank' && (await itemIds(pg, 'food')).length === 4, 'Steps and Brisk walk are Movement; pushups, pull-ups, squats and plank are Workout; the four food rules are Food rules');
-  ok(await pg.$eval('#sections .tsec[data-sec="body"] .tsec-toggle', e => e.getAttribute('aria-expanded') === 'false') && !(await pg.$('#rowWeight')), 'Body and notes starts collapsed');
-  ok(/Weight, waist and notes/.test(await pg.textContent('#sections .tsec[data-sec="body"] .tsec-sum')), 'its collapsed header says what is inside');
+  ok(await pg.$eval('#sections .tsec[data-sec="body"] .tsec-toggle', e => e.getAttribute('aria-expanded') === 'true') && await pg.isVisible('#rowWeight'), 'Body and notes starts open when a weight or waist is due today');
+  await pg.click('#sections .tsec[data-sec="body"] .tsec-toggle');
+  ok(await pg.$eval('#sections .tsec[data-sec="body"] .tsec-toggle', e => e.getAttribute('aria-expanded') === 'false') && !(await pg.$('#rowWeight')), 'it can still be closed by hand');
+  ok(/Weight and waist due/.test(await pg.textContent('#sections .tsec[data-sec="body"] .tsec-sum')) && !!(await pg.$('#sections .tsec[data-sec="body"] .tsec-sum .due-dot')), 'and its collapsed header says what is due ("Weight and waist due", with a dot)');
   await openBody(pg);
   ok(await pg.isVisible('#rowNote') && await pg.isVisible('#rowBmi'), 'opening it shows weight/waist (when due), BMI and the note');
   // types
@@ -69,17 +71,29 @@ console.log('Today sections and habit types');
 console.log('Completed cards');
 {
   const { ctx, pg, errs } = await open();
+  await setHabit(pg, 'pushups', 25);
+  ok((await pg.textContent(`${cardSel('pushups')} .hval`)) === '25' && /^\/ 30 reps$/.test((await pg.textContent(`${cardSel('pushups')} .htgt`)).trim()), 'an open card reads "25" and "/ 30 reps" (the same "25 / 30 reps" format the done row uses)');
   await setHabit(pg, 'pushups', 30);
-  ok(!!(await pg.$('#sections .drow[data-id="pushups"]')) && !(await pg.$(cardSel('pushups'))), 'a card that hits its target shrinks to one compact row');
-  ok(/Pushups/.test(await pg.textContent('.drow[data-id="pushups"]')) && /30 \/ 30/.test(await pg.textContent('.drow[data-id="pushups"]')) && !!(await pg.$('.drow[data-id="pushups"] .met-ic svg')), 'with its name, value and a ✓');
+  ok(!!(await pg.$(cardSel('pushups'))) && !(await pg.$('#sections .drow[data-id="pushups"]')), 'a card that hits its target stays open for a moment (it does not collapse under the finger)');
+  await pg.waitForSelector('#sections .drow[data-id="pushups"]', { timeout: 4000 });
+  ok(!(await pg.$(cardSel('pushups'))), 'and then folds into one compact row');
+  ok(/Pushups/.test(await pg.textContent('.drow[data-id="pushups"]')) && /30 \/ 30 reps/.test(await pg.textContent('.drow[data-id="pushups"]')) && !!(await pg.$('.drow[data-id="pushups"] .met-ic svg')), 'with its name, value ("30 / 30 reps") and a ✓');
   const hRow = (await (await pg.$('.drow[data-id="pushups"]')).boundingBox()).height;
   ok(hRow < 64 && hRow >= 44, 'the compact row is short but still a 44px tap target', hRow);
-  await pg.click('.drow[data-id="pushups"]');
-  ok(!!(await pg.$(cardSel('pushups'))) && !!(await pg.$(`${cardSel('pushups')} .hc-collapse`)), 'tapping it opens the full card again');
+  await pg.click('.drow[data-id="pushups"] .drow-act'); await settle(pg);
+  ok((await stored(pg)).days[tk].vals.pushups === 31 && /31 \/ 30 reps/.test(await pg.textContent('.drow[data-id="pushups"]')), 'extra reps after the target stay one tap: the done row has a small +');
+  await pg.click('.drow[data-id="pushups"] .drow-main');
+  ok(!!(await pg.$(cardSel('pushups'))) && !!(await pg.$(`${cardSel('pushups')} .hc-collapse`)), 'tapping the row opens the full card again');
   await pg.click(`${cardSel('pushups')} .hc-collapse`);
   ok(!!(await pg.$('#sections .drow[data-id="pushups"]')), 'and the arrow folds it away again');
   ok(errs.length === 0, 'no JS errors (completed cards)', errs);
   await ctx.close();
+  // reduced motion: no pause and no animation, the card folds at once
+  const r = await open({ still: true });
+  await setHabit(r.pg, 'pushups', 30);
+  await r.pg.waitForSelector('#sections .drow[data-id="pushups"]', { timeout: 600 });
+  ok(true, 'reduced motion: a finished card folds at once (no delay)');
+  await r.ctx.close();
 }
 
 /* ================= schedules on Today ================= */
@@ -134,13 +148,16 @@ console.log('Edit mode');
   await pg.waitForSelector('#editBar:not([hidden])', { timeout: 3000 });
   ok(await pg.isVisible('#editDone') && await pg.$eval('#p-today', e => e.classList.contains('editing')), 'a long press on a card starts edit mode (with a Done button)');
   ok((await pg.$$('#sections .titem .handle-btn')).length > 0 && (await pg.$$('#sections .titem .hide-btn')).length > 0, 'cards get drag handles and Hide buttons');
-  ok(await pg.$eval(`${cardSel('pushups')}`, e => getComputedStyle(e).animationName === 'wiggle'), 'cards wiggle a little to show they can be moved');
+  ok(await pg.$eval(`${cardSel('pushups')}`, e => getComputedStyle(e).animationName === 'none'), 'reduced motion: the cards do not wiggle');
   // hide
   await pg.click(`${cardSel('pullups')} .hide-btn`); await settle(pg);
   ok(!(await allItems(pg)).includes('pullups') && (await stored(pg)).settings.habits.find(h => h.id === 'pullups').hidden === true, 'Hide takes a card off Today and keeps the habit (hidden: true)');
-  ok(/Show Pull-ups/.test(await pg.textContent('#hiddenTray')), 'hidden habits wait in a tray (and can be shown again)');
-  await pg.click('#hiddenTray .tray-chip:has-text("Show Pull-ups")'); await settle(pg);
-  ok((await allItems(pg)).includes('pullups') && !(await stored(pg)).settings.habits.find(h => h.id === 'pullups').hidden, 'Show puts it back');
+  ok(!(await pg.$('#hiddenTray')) && await pg.isVisible('#hiddenChip') && /Hidden \(1\)/.test(await pg.textContent('#hiddenChip')), 'one compact strip: a "Hidden (1)" chip next to Done (there is no separate tray)');
+  await pg.click('#hiddenChip'); await pg.waitForSelector('#hiddenList');
+  ok(/Pull-ups/.test(await pg.textContent('#hiddenList')) && /Show/.test(await pg.textContent('#hiddenList .lib-add')), 'the chip opens a small list of hidden habits with Show buttons');
+  await pg.click('#hiddenList .lib-row[data-id="pullups"] .lib-add'); await sheetGone(pg); await settle(pg);
+  ok((await allItems(pg)).includes('pullups') && !(await stored(pg)).settings.habits.find(h => h.id === 'pullups').hidden, 'Show puts it back (and the list closes when nothing is left hidden)');
+  ok(!(await pg.isVisible('#hiddenChip')), 'with nothing hidden the chip is gone');
   await pg.click(`${cardSel('pullups')} .hide-btn`); await settle(pg);
   // reorder with the keyboard (same code path as a drag)
   await pg.focus(`${cardSel('pushups')} .handle-btn`);
@@ -268,13 +285,21 @@ console.log('Starter plans');
     const names = await pg.$$eval('#onbPlans .planopt .row-label', e => e.map(x => x.textContent));
     if (id === 'desk') ok(names.join() === 'Desk worker reset,Beginner fitness,Weight loss,Start from scratch', 'the starter plans are listed after the welcome page and before the permissions', names);
     await pg.click(`#plan-${id}`); await pg.click('#onbNext');
-    await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.click('#onbStart');
+    await pg.click('#onbStart');
     await pg.waitForFunction(() => !document.querySelector('.onb')); await settle(pg);
     const shown = (await stored(pg)).settings.habits.filter(h => !h.hidden).map(h => h.id);
     ok(same(shown.filter(i => expect.includes(i)).sort(), expect.slice().sort()) && shown.length === expect.length, `${id}: the plan adds exactly its habits`, shown);
     const all = (await stored(pg)).settings.habits;
     ok(all.some(h => h.type === 'measure' && h.measure === 'weight') && all.some(h => h.type === 'measure' && h.measure === 'waist'), `${id}: weight and waist stay available (for BMI), hidden unless the plan uses them`);
-    if (id === 'scratch') ok((await allItems(pg)).filter(i => i !== 'weight' && i !== 'waist').length === 0 && await pg.isVisible('#todayEmpty'), 'Start from scratch: an empty Today that invites adding habits');
+    if (id === 'scratch') {
+      ok((await allItems(pg)).filter(i => i !== 'weight' && i !== 'waist').length === 0 && await pg.isVisible('#todayEmpty'), 'Start from scratch: an empty Today that invites adding habits');
+      ok(/Your plan is empty/.test(await pg.textContent('#todayEmpty')) && /Add habit/.test(await pg.textContent('#emptyAdd')) && await pg.isVisible('#emptyPlans'), 'it says "Your plan is empty" with an Add habit button and a link to the starter plans');
+      ok(!(await pg.isVisible('#chipTargets')) && !(await pg.isVisible('#chipRules')) && !(await pg.isVisible('#ring .ring-c')) && !(await pg.isVisible('#todayHint')), 'with nothing due there are no "0 of 0" chips, no ring text and no hint');
+      await pg.click('#emptyPlans'); await pg.waitForSelector('#planPickList');
+      ok((await pg.$$('#planPickList .planopt')).length === 3, 'the starter plans link opens a picker with the three ready-made plans');
+      await pg.click('#planPickList .planopt[data-plan="beginner"]'); await sheetGone(pg); await settle(pg);
+      ok((await allItems(pg)).includes('pushups') && !(await pg.$('#todayEmpty')), 'picking one fills Today');
+    }
     ok(errs.length === 0, `no JS errors (plan ${id})`, errs);
     await ctx.close();
   }

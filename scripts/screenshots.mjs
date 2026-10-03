@@ -97,16 +97,13 @@ for (const scheme of ['light', 'dark']) {
       await pg.goto(base); await pg.waitForSelector('.onb'); await snap('01-onboarding-welcome');
       await pg.click('#onbNext'); await snap('02-onboarding-starter-plans');
       await pg.click('#plan-beginner'); await snap('03-onboarding-starter-plan-picked');
-      await pg.click('#onbNext'); await snap('04-onboarding-targets');
       await pg.click('#onbNext'); await snap('05-onboarding-reminder');
-      await pg.click('#onbNext'); await pg.fill('#onbHeight', '180'); await snap('06-onboarding-height');
-      await pg.click('#onbNext'); await pg.click('#scale-asian'); await snap('07-onboarding-bmi-scale');
       if (errs.length) console.log('ERRORS', tag, errs); await ctx.close(); }
 
     // first launch in the Android app: the one permission screen
     { const { ctx, pg, errs } = await setup(opts, { onboarded: false, native: true }); const snap = snapper(pg);
       await pg.goto(base); await pg.waitForSelector('.onb');
-      await pg.click('#onbNext'); await pg.click('#plan-desk'); await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.waitForSelector('#onbAllow'); await snap('08-onboarding-permissions');
+      await pg.click('#onbNext'); await pg.click('#plan-desk'); await pg.click('#onbNext'); await pg.click('#onbNext'); await pg.waitForSelector('#onbAllow'); await snap('08-onboarding-permissions');
       if (errs.length) console.log('ERRORS', tag, errs); await ctx.close(); }
 
     // Today, Plan, Settings, Progress, BMI with a person who has history (Android app, so Steps is live)

@@ -1,4 +1,4 @@
-/* Settings: account and sync, backup, reminder, step tracking health, permissions, units, body, suggestions, advanced.
+/* Settings, in this order: reminder, units, body, suggestions, appearance, step tracking health, permissions, advanced, backup, account and sync, about.
    Opened from the gear in the top bar. Goals (habits, targets, schedules) live in Plan (plan.js). */
 
 let settingsFrom='today';
@@ -174,8 +174,12 @@ function renderAdvanced(){
   foot.textContent='These are the defaults for most people. Change them only if steps look wrong.';
 }
 
+/* "Back up now" (shown while there has been no backup yet) is the JSON export */
+$('backupNow').addEventListener('click',()=>$('expJson').click());
+
 /* ---------- the whole screen ---------- */
 function renderSettings(){
+  $('appVersion').textContent=APP_VERSION;
   renderAccount();
   renderUnits();renderBodyGroup();renderSuggestions();renderAppearance();
   renderStepGroup(false);

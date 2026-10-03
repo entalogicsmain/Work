@@ -130,11 +130,11 @@ const webKeys = pg => pg.evaluate(() => Object.fromEntries(Object.keys(localStor
   const texts = [];
   const grab = async () => texts.push(await pg.evaluate(() => document.documentElement.innerText + ' ' + [...document.querySelectorAll('[aria-label],[title],[placeholder]')].map(e => e.getAttribute('aria-label') + ' ' + e.title + ' ' + (e.placeholder || '')).join(' ')));
   await pg.waitForSelector('.onb'); await grab();
-  // walk every onboarding page: welcome, plan, targets, reminder, permissions, brand help, height, BMI scale
-  await pg.click('#onbNext'); await grab(); await pg.click('#plan-beginner'); await pg.click('#onbNext'); await grab(); await pg.click('#onbNext'); await grab(); await pg.click('#onbNext'); await grab();
-  await pg.click('#onbAllow'); await pg.waitForSelector('#onbBrandNext, #onbNext'); await grab();
-  if (await pg.$('#onbBrandNext')) { await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbNext'); await grab(); }
-  await pg.click('#onbNext'); await pg.waitForSelector('#onbStart'); await grab();
+  // walk every onboarding page: welcome, plan, reminder, permissions, brand help, height
+  await pg.click('#onbNext'); await grab(); await pg.click('#plan-beginner'); await pg.click('#onbNext'); await grab(); await pg.click('#onbNext'); await grab();
+  await pg.click('#onbAllow'); await pg.waitForSelector('#onbBrandNext, #onbStart'); await grab();
+  if (await pg.$('#onbBrandNext')) { await pg.click('#onbBrandNext'); await pg.waitForSelector('#onbStart'); await grab(); }
+  await pg.waitForSelector('#onbStart'); await grab();
   await pg.click('#onbStart'); await pg.waitForFunction(() => !document.querySelector('.onb'));
   await pg.waitForTimeout(400);
   for (const t of ['today', 'progress', 'setup']) { await tab(pg, t); await grab(); }
