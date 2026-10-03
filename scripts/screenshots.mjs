@@ -66,7 +66,7 @@ async function setup(opts, { data, onboarded = true, native = false, stepsToday 
     localStorage.setItem('__seeded', '1');
     if (nat) {
       const prefs = {}; if (ob) prefs.comeback_onboarded = '1'; if (d) prefs.comeback = JSON.stringify(d);
-      if (d) prefs.comeback_meta = JSON.stringify({ lastBackup: Date.now() - 36e5, reminder: { enabled: true, time: '21:00' }, steps: { heightCm: d.settings.body.heightCm || 180, strictness: 'balanced', sensitivity: 'normal', useLocation: false, enabledAt: Date.now() - 864e5 * 30, setupShown: true }, heightChecked: true });
+      if (d) prefs.comeback_meta = JSON.stringify({ lastBackup: Date.now() - 36e5, reminder: { enabled: true, time: '21:00', morningOffered: true }, steps: { heightCm: d.settings.body.heightCm || 180, strictness: 'balanced', sensitivity: 'normal', useLocation: false, enabledAt: Date.now() - 864e5 * 30, setupShown: true }, heightChecked: true });
       const days = {}; const t = new Date(); const k = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
       days[k] = { steps, filtered: 12, hourly: hours };
       localStorage.setItem('__mock', JSON.stringify({ prefs, fs: {}, calls: [], perm: 'granted', requestResult: 'granted', failWrite: false, shareMode: 'ok', exit: 0, steps: { activityGranted: true, locationGranted: true, batteryIgnored: true, brand: 'other', health: 'working', source: 'counter', days, filteredToday: 12, cfg: { enabled: false } } }));
