@@ -439,5 +439,276 @@ console.log('Units');
   near(C.cmToIn(90), 35.43, 'waist cm to in', 0.01); near(C.inToCm(35.43), 90, 'in to cm', 0.01);
 }
 
+/* ================= retention: light days, the streak shield, the weekly review, insights, goal weight ================= */
+// a run of days from a pattern: K kept (100%), H exactly 50% (kept), L low (40%, under 50), M nothing logged, Z a light day with nothing else, Y kept and light
+const START = '2026-06-01';   // a Monday
+const pat = (s, start = START) => { const d = {}; [...s].forEach((c, i) => { const k = C.addDays(start, i); if (c === 'K') d[k] = day(k, { push: 10 }); else if (c === 'H') d[k] = day(k, { push: 5 }); else if (c === 'L') d[k] = day(k, { push: 4 }); else if (c === 'Z') d[k] = day(k, {}, {}, { light: true }); else if (c === 'Y') d[k] = day(k, { push: 10 }, {}, { light: true }); }); return d; };
+const last = (s, start = START) => C.addDays(start, s.length - 1);
+const stPush = () => S([H('push', { target: 10 })]);
+const run = s => { const st = stPush(), d = pat(s), t = last(s); return { cur: C.currentStreak(st, d, t), best: C.bestStreak(st, d, t), shields: C.shieldDays(st, d, t), ready: C.shieldReady(st, d, t), note: C.shieldNote(st, d, t), d, t, st }; };
+
+console.log('Light days');
+{
+  ok(C.isLight({ light: true }) && !C.isLight({ light: false }) && !C.isLight({}) && !C.isLight(null) && !C.isLight({ light: 'yes' }), 'isLight is true only for light:true');
+  const st = stPush();
+  const d = pat('Y');
+  eq(C.dayScore(st, d, START), null, 'a light day has no score, even when something was logged on it');
+  eq(C.dayScore(st, { [START]: day(START, { push: 10 }) }, START), 100, 'the same day without the flag scores');
+  ok(!C.hasRecord(day(START, {}, {}, { light: true })), 'a light flag alone is not a logged day');
+  eq(C.dayMetrics(st, d, START).score, 100, 'the ring still shows what was done on a light day');
+  eq(run('KKKZKKK').cur, 6, 'a light day in the middle does not break the streak and is not counted');
+  eq(run('KKKZZZZZKK').cur, 5, 'many light days in a row are skipped like rest days');
+  eq(run('KKKYKKK').cur, 6, 'a light day with some data is skipped too');
+  eq(run('KKKKZ').cur, 4, 'a light day today keeps the streak as it is');
+  eq(C.daysKept(st, pat('KKKZLK'), last('KKKZLK'), 35), { kept: 4, due: 5 }, 'daysKept leaves light days out');
+  eq(C.streakLine(st, pat('KKKKZ'), last('KKKKZ')), '4-day streak · light day', 'the streak line says it is a light day');
+  eq(C.streakLine(st, pat('Z'), START), 'Light day today', 'a light day with no streak');
+  // the cache notices the flag changing in place
+  const dd = pat('KKK'), t = last('KKK');
+  eq(C.currentStreak(st, dd, t), 3, 'streak 3');
+  dd[C.addDays(START, 1)] = day(C.addDays(START, 1), { push: 1 }, {}, { light: true });
+  eq(C.currentStreak(st, dd, t), 2, 'turning a low day into a light day is seen straight away (Mon and Wed, Tue skipped)');
+}
+
+console.log('Streak shield: one free miss after 6 kept due days');
+{
+  let r = run('KKKKKKMK');
+  eq([r.cur, r.best, r.shields], [7, 7, [C.addDays(START, 6)]], '6 kept, a missed day, then a kept day: the shield covers it and the count is 7 (the shield day adds nothing)');
+  r = run('KKKKKMK');
+  eq([r.cur, r.shields], [1, []], 'only 5 kept before the miss: no shield, the streak starts again');
+  r = run('KKKKKKMMK');
+  eq([r.cur, r.best], [1, 6], 'two misses in a row: the second breaks it (best stays 6)');
+  r = run('KKKKKKMKMK');
+  eq([r.cur, r.best], [1, 7], 'a miss one kept day after a shield day breaks it');
+  r = run('KKKKKKMKKKKKMK');
+  eq([r.cur, r.best], [1, 11], 'two misses 5 kept days apart break it (a miss within 7 due days of the last)');
+  r = run('KKKKKKMKKKKKKMK');
+  eq([r.cur, r.best, r.shields.length], [13, 13, 2], 'the shield is ready again after 6 more kept days: 6 + 6 + 1 = 13');
+  r = run('KKKKKKMKKKKKKMKKKKKKMK');
+  eq([r.cur, r.shields.length], [19, 3], 'and again');
+  r = run('KKKKKKLK');
+  eq(r.cur, 7, 'a low day (under 50%) is a miss the shield covers');
+  r = run('KKKKKKHK');
+  eq([r.cur, r.shields], [8, []], 'exactly 50% is kept, not a miss: it counts and uses no shield');
+  r = run('KKKKKKZMK');
+  eq(r.cur, 7, 'a light day between does not use up the 6 kept days or the shield');
+  r = run('KKKKKKMZKMK');
+  eq(r.cur, 1, 'light days do not reset the shield: a second miss soon after still breaks it');
+  r = run('KKKKKKMM');
+  eq([r.cur, r.note], [6, 'Rest day used. Streak safe at 6.'], 'today still open after a covered miss: the streak is 6 and the note says so');
+  eq(run('KKKKKKM').cur, 6, 'a miss that is today is still open, not yet a miss');
+  r = run('KKKKKKMK');
+  eq(r.note, '', 'no note once a kept day follows');
+  eq(run('KKKKKK').note, '', 'no note when nothing was covered');
+  r = run('KKKKKKMMM');
+  eq([r.cur, r.note], [0, ''], 'a long gap is not covered: the streak ended');
+  ok(run('KKKKKK').ready && !run('KKKKK').ready && !run('KKKKKKMM').ready && run('KKKKKKMKKKKKK').ready, 'shieldReady: after 6 kept days in a row, not right after one was used');
+  eq(run('KKKKKKM').best, 6, 'best counts the run before the shield day');
+  eq(run('KKKKKKMKKKKKK').best, 12, 'best runs through a shield day');
+  eq(C.daysKept(stPush(), pat('KKKKKKMK'), last('KKKKKKMK'), 35), { kept: 7, due: 8 }, 'the shield does not change the days kept: the missed day is still a due day');
+  // a rest day between is not a due day, so it is neither a miss nor a kept day
+  const mwf = S([H('mwf', { target: 10, schedule: { kind: 'days', days: [1, 3, 5] } })]);
+  const dd = {}; ['2026-06-01', '2026-06-03', '2026-06-05', '2026-06-08', '2026-06-10', '2026-06-12'].forEach(k => { dd[k] = day(k, { mwf: 10 }); });
+  eq(C.currentStreak(mwf, dd, '2026-06-15'), 7 - 1, 'six kept Mon/Wed/Fri days; Monday the 15th is a miss (open) - the streak is 6');
+  eq(C.currentStreak(mwf, dd, '2026-06-16'), 6, 'the shield covers the missed Monday; Tuesday is a rest day');
+  eq(C.currentStreak(mwf, dd, '2026-06-17'), 6, 'Wednesday is open: still 6 (and the Monday shield stands)');
+  eq(C.shieldDays(mwf, dd, '2026-06-17'), ['2026-06-15'], 'the shielded day is the Monday');
+  // streaks without the shield stay as before
+  eq(C.currentStreak(stPush(), pat('KKKKKMKKK'), last('KKKKKMKKK')), 3, 'a miss after only 5 kept days still ends the streak');
+  eq(C.streakStatus(stPush(), pat('KKKKKKMK'), last('KKKKKKMK')).current, 7, 'streakStatus carries the shielded count');
+}
+
+console.log('Easing and raising a habit, moving it off a day');
+{
+  eq([C.easeTarget(60), C.easeTarget(30), C.easeTarget(10), C.easeTarget(8000), C.easeTarget(7), C.easeTarget(2.5), C.easeTarget(5)], [50, 25, 8, 6400, 6, 2, 4], 'about 20 percent lower, on a round number');
+  eq([C.easeTarget(1), C.easeTarget(2), C.easeTarget(0), C.easeTarget(-5), C.easeTarget(null)], [null, null, null, null, null], 'a target of 1 or 2 cannot be eased, bad values give nothing');
+  ok([60, 45, 30, 12, 100, 250, 3000].every(t => { const e = C.easeTarget(t); return e > 0 && e < t && e >= t * 0.69 && e <= t * 0.91; }), 'the eased target is always 10 to 30 percent lower');
+  eq(C.easeSchedule({ kind: 'daily' }), { kind: 'weekly', times: 5 }, 'every day becomes 5 times a week');
+  eq(C.easeSchedule({ kind: 'days', days: [1, 3, 5] }), { kind: 'days', days: [1, 3] }, 'specific days lose the last one');
+  eq(C.easeSchedule({ kind: 'days', days: [1, 3] }), null, 'two days cannot be eased');
+  eq([C.easeSchedule({ kind: 'weekly', times: 3 }), C.easeSchedule({ kind: 'weekly', times: 1 }), C.easeSchedule({ kind: 'everyN', weeks: 2 }), C.easeSchedule({ kind: 'everyN', weeks: 8 })], [{ kind: 'weekly', times: 2 }, null, { kind: 'everyN', weeks: 3 }, null], 'X a week and every N weeks');
+  eq(C.easeFor(H('p', { type: 'duration', unit: 'sec', target: 60 })), { kind: 'target', from: 60, to: 50 }, 'a number target is eased first');
+  eq(C.easeFor(H('v', { type: 'yesno', target: 1 })).schedule, { kind: 'weekly', times: 5 }, 'a Yes/No habit eases its schedule');
+  eq(C.easeFor(H('x', { target: 1 })).kind, 'schedule', 'a target that cannot be eased falls back to the schedule');
+  eq(C.easeFor(H('m', { type: 'measure', measure: 'weight', target: 0 })), null, 'measurements are never eased');
+  eq(C.raiseFor(H('p', { target: 10 })), { kind: 'target', from: 10, to: 12 }, 'raise uses the same step as the target suggestion');
+  ok(C.raiseFor(H('p', { type: 'yesno', target: 1 })) === null && C.raiseFor(H('p', { hidden: true })) === null, 'Yes/No and hidden habits are not raised');
+  eq(C.moveOffDay(H('a'), 5).days, [0, 1, 2, 3, 4, 6], 'a daily habit leaves a weekday');
+  eq(C.moveOffDay(H('a', { schedule: { kind: 'days', days: [1, 3, 5] } }), 5), { kind: 'days', days: [1, 3] }, 'specific days drop one');
+  eq([C.moveOffDay(H('a', { schedule: { kind: 'days', days: [1, 3, 5] } }), 2), C.moveOffDay(H('a', { schedule: { kind: 'days', days: [5] } }), 5), C.moveOffDay(H('a', { schedule: { kind: 'weekly', times: 3 } }), 5)], [null, null, null], 'not on that day, only one day, or a flexible schedule: nothing to move');
+}
+
+console.log('Weekly review');
+{
+  // last week = Mon 2026-09-14 .. Sun 2026-09-20, the week before = 09-07 .. 09-13
+  const WK = '2026-09-14', PW = '2026-09-07';
+  const set = () => S([H('push', { target: 10, name: 'Push' }), H('water', { target: 2.5, unit: 'litres', name: 'Water' }), H('plank', { type: 'duration', unit: 'sec', target: 60, name: 'Plank' })]);
+  const mk = (list, start) => { const d = {}; list.forEach((v, i) => { if (v) { const k = C.addDays(start, i); d[k] = day(k, v); } }); return d; };
+  const dayVals = (push, water, plank) => ({ push, water, plank });
+  // the week before: 3 kept days (Mon-Wed), then nothing
+  const prev = mk([dayVals(10, 2.5, 60), dayVals(10, 2.5, 60), dayVals(10, 2.5, 60)], PW);
+  // last week: 5 logged days (Mon-Fri). Water every day, push 4 days, plank only twice.
+  const wk = mk([dayVals(10, 2.5, 60), dayVals(10, 2.5, 60), dayVals(10, 2.5, 20), dayVals(10, 2.5, 20), dayVals(2, 2.5, 20)], WK);
+  const days = Object.assign({}, prev, wk);
+  days['2026-09-12'] = Object.assign({}, days['2026-09-12'] || day('2026-09-12', { push: 10 }), { weight: 80 });
+  days['2026-09-19'] = day('2026-09-19', {}, {}, { weight: 79.4 });
+  const s = C.weekSummary(set(), days, WK);
+  eq([s.daysKept, s.daysDue, s.prevDaysKept], [5, 7, 3], 'days kept and due last week, and the week before');
+  eq(s.bestHabit && s.bestHabit.id, 'water', 'the steadiest habit is the one met most often');
+  eq(s.slippedHabit && s.slippedHabit.id, 'plank', 'the habit that dipped is the lowest one, named neutrally');
+  eq(s.weightChange, -0.6, 'weight change against the last weigh-in before the week');
+  ok(s.avgScore > 0 && s.avgScore <= 100 && s.loggedDays === 6, 'average score over logged days, and the logged days', s);
+  eq(s.suggestion, { kind: 'keep' }, 'a mixed week suggests keeping the plan');
+  const tx = C.weekText(set(), s);
+  ok(tx.text.startsWith('Last week: 5 of 7 days kept (up from 3). Water was your steadiest habit. Plank dipped. Weight went down 0.6 kg.'), 'the review reads like the example', tx.text);
+  ok(/Keeping the plan as it is sounds right\.$/.test(tx.text), 'and ends with a gentle keep', tx.text);
+  eq(C.weekText(set(), s, { fmtKg: n => (n * 2.2).toFixed(1) + ' lb' }).details[2], 'Weight went down 1.3 lb.', 'weight is shown in the unit the caller asks for');
+
+  // a hard week: 2 of 7 kept, plank slipped most
+  const hard = mk([dayVals(10, 2.5, 60), dayVals(10, 2.5, 20), dayVals(1, 0, 0), dayVals(2, 0, 0)], WK);
+  const s2 = C.weekSummary(set(), Object.assign({}, prev, hard), WK);
+  eq([s2.daysKept, s2.daysDue, s2.suggestion.kind, s2.suggestion.habitId], [2, 7, 'lighten', 'plank'], 'a hard week suggests lightening the habit that slipped');
+  const t2 = C.weekText(set(), s2).text;
+  ok(/Keep the plan, or ease plank to 50 sec\?$/.test(t2) && /Last week: 2 of 7 days kept \(3 the week before\)\./.test(t2) && !/fail|bad|missed|should/i.test(t2), 'the question offers an eased target in gentle words', t2);
+
+  // a strong week: all 7 kept, a habit met every day can be raised
+  const great = mk(Array(7).fill(0).map(() => dayVals(10, 2.5, 60)), WK);
+  const s3 = C.weekSummary(set(), Object.assign({}, prev, great), WK);
+  eq([s3.daysKept, s3.daysDue, s3.suggestion.kind, s3.suggestion.habitId, s3.suggestion.to], [7, 7, 'raise', 'push', 12], 'a week with everything kept suggests raising a habit');
+  ok(/Keep the plan, or raise push to 12 reps\?$/.test(C.weekText(set(), s3).text), 'worded as a choice', C.weekText(set(), s3).text);
+  const off = set(); off.prefs.suggestions = false;
+  eq(C.weekSummary(off, Object.assign({}, prev, great), WK).suggestion.kind, 'keep', 'with suggestions turned off nothing is raised');
+  // light days and rest days are not due days
+  const lg = mk([dayVals(10, 2.5, 60), dayVals(10, 2.5, 60), dayVals(10, 2.5, 60), dayVals(10, 2.5, 60)], WK);
+  lg['2026-09-18'] = day('2026-09-18', {}, {}, { light: true }); lg['2026-09-19'] = day('2026-09-19', {}, {}, { light: true }); lg['2026-09-20'] = day('2026-09-20', {}, {}, { light: true });
+  const s4 = C.weekSummary(set(), Object.assign({}, prev, lg), WK);
+  eq([s4.daysKept, s4.daysDue], [4, 4], 'light days are left out of the days due');
+  // this week so far: a partial week stops at `through` and an open day does not count against it
+  const part = C.weekSummary(set(), Object.assign({}, prev, wk), WK, '2026-09-16');
+  eq([part.daysKept, part.daysDue], [3, 3], 'this week so far counts to the given day');
+  const part2 = C.weekSummary(set(), Object.assign({}, prev, mk([dayVals(10, 2.5, 60), dayVals(10, 2.5, 60), dayVals(1, 0, 0)], WK)), WK, '2026-09-16');
+  eq([part2.daysKept, part2.daysDue], [2, 2], 'a day still open (under 50%) is not counted');
+  eq(C.weekText(set(), part, { label: 'This week so far', compare: false }).headline, 'This week so far: 3 of 3 days kept.', 'the label can change, and the comparison can be left out');
+  // nothing logged
+  const e = C.weekSummary(set(), {}, WK);
+  eq([e.daysKept, e.daysDue, e.bestHabit, e.slippedHabit, e.weightChange, e.avgScore, e.suggestion.kind], [0, 0, null, null, null, null, 'keep'], 'an empty week is all zero and nulls');
+  eq(C.weekText(set(), e).headline, 'Last week: 0 of 0 days kept.', 'and reads without a comparison');
+}
+
+console.log('Insights');
+{
+  const T0 = '2026-09-30';   // a Wednesday
+  const st = S([H('push', { target: 10, name: 'Push' }), H('plank', { type: 'duration', unit: 'sec', target: 60, name: 'Plank' })]);
+  const build = (fn, n = 70, today = T0) => { const d = {}; for (let i = n; i >= 1; i--) { const k = C.addDays(today, -i); const r = fn(k, C.dow(k), i); if (r) d[k] = day(k, r.vals || {}, {}, r.extra || {}); } return d; };
+  eq(C.insights(st, build(() => ({ vals: { push: 10, plank: 60 } }), 20), T0), [], 'nothing before 21 logged days');
+  eq(C.insights(st, build(() => ({ vals: { push: 10, plank: 60 } }), 40), T0), [], 'flat data has nothing to say');
+  // Friday plank always missed
+  const d1 = build((k, w) => w === 5 ? { vals: { push: 10, plank: 0 } } : { vals: { push: 10, plank: 60 } });
+  const det1 = C.insightsDetailed(st, d1, T0);
+  eq(det1[0].kind, 'skip', 'a habit missed on one weekday is the first thing to say');
+  const skip = det1[0];
+  ok(skip.habitId === 'plank' && skip.weekday === 5 && /^Plank was missed on \d+ of the last \d+ Fridays\. Want to move it to other days\?$/.test(skip.text), 'a habit missed on one weekday is named with an offer to move it', skip);
+  // weekends light
+  const d1b = build((k, w) => w === 6 || w === 0 ? { vals: { push: 3, plank: 10 } } : { vals: { push: 10, plank: 60 } });
+  const det = C.insightsDetailed(st, d1b, T0);
+  ok(det.length >= 2 && det.length <= 3, 'at most three insights', det);
+  ok(det.every((x, i, a) => i === 0 || a[i - 1].rank <= x.rank), 'ranked', det.map(x => x.rank));
+  ok(det.some(x => x.kind === 'weekend' && /^Weekends tend to be lighter than weekdays \(about 23% against 100%\)/.test(x.text)), 'the weekday and weekend gap', det.map(x => x.text));
+  const all = C.insights(st, d1b, T0);
+  eq(all, det.map(x => x.text), 'insights() is the same texts');
+  ok(all.every(t => !/because|caused|causes|leads to|makes you|due to|results in|you should|fail/i.test(t)), 'no claims about causes and no blame', all);
+  // a clear best day
+  const d2 = build((k, w) => w === 3 ? { vals: { push: 10, plank: 60 } } : { vals: { push: 6, plank: 36 } });
+  const bd = C.insightsDetailed(st, d2, T0).find(x => x.kind === 'bestday');
+  ok(bd && bd.weekday === 3 && /^Wednesdays tend to be your strongest day \(about 100% on average\)\.$/.test(bd.text), 'the best day of the week', bd);
+  ok(!C.insightsDetailed(st, build(() => ({ vals: { push: 10, plank: 60 } })), T0).some(x => x.kind === 'bestday'), 'no best day when every day is the same');
+  // a plateau: weigh-ins three weeks flat
+  const d3 = build((k, w, i) => ({ vals: { push: 10, plank: 60 }, extra: i % 5 === 0 ? { weight: 80 + (i % 2 ? 0.2 : -0.1) } : {} }));
+  ok(C.insightsDetailed(st, d3, T0)[0].kind === 'plateau' && /held steady for about 3 weeks.*normal/.test(C.insights(st, d3, T0)[0]), 'a weight plateau comes first, in reassuring words', C.insights(st, d3, T0));
+  const d3b = build((k, w, i) => ({ vals: { push: 10, plank: 60 }, extra: i % 5 === 0 ? { weight: 80 - i * 0.1 } : {} }));
+  ok(!C.insightsDetailed(st, d3b, T0).some(x => x.kind === 'plateau'), 'a weight that is moving is not a plateau');
+  const d3c = build((k, w, i) => ({ vals: { push: 10, plank: 60 }, extra: i === 20 || i === 1 ? { weight: 80 } : {} }));
+  ok(!C.insightsDetailed(st, d3c, T0).some(x => x.kind === 'plateau'), 'two weigh-ins are not enough to call a plateau');
+  // "tends to": steps 6000+ against everything else, alternating days so no weekday carries it
+  const st2 = S([H('steps', { type: 'steps', unit: 'steps', target: 8000, section: 'movement' }), H('push', { target: 10 })]);
+  const alt = (n, hiEvery) => build((k, w, i) => i % 2 === 0 ? { vals: { steps: 9000, push: 10 } } : { vals: { steps: 2000, push: 2 } }, n);
+  const pt = C.insights(st2, alt(60), T0);
+  ok(pt.length === 1 && /^On days you walk 6,000\+ steps, your other habits tend to go better \(about 100% against 20%\)\./.test(pt[0]), 'a "tends to" pattern, never a cause', pt);
+  // fewer than 8 days on one side: nothing
+  const few = build((k, w, i) => i % 9 === 0 ? { vals: { steps: 9000, push: 10 } } : { vals: { steps: 2000, push: 2 } }, 60);
+  ok(!C.insights(st2, few, T0).some(t => /6,000/.test(t)), 'with fewer than 8 days on a side there is no pattern');
+  // the numbers are from the last 12 weeks only and today is left out
+  const od = build(() => ({ vals: { push: 10, plank: 60 } }), 200);
+  eq(C.insights(st, od, T0), [], 'a long flat history gives nothing');
+}
+
+console.log('Goal weight');
+{
+  const T1 = '2026-10-02';
+  const wt = list => list.map(([off, kg]) => ({ k: C.addDays(T1, off), kg }));
+  const fall = wt([[-27, 86], [-20, 85.5], [-13, 85], [-6, 84.5], [0, 84]]);
+  eq(C.normalizeBody({ heightCm: 180, scale: 'asian' }), { heightCm: 180, scale: 'asian' }, 'a body without a goal has no goal keys');
+  eq(C.normalizeBody({ heightCm: 180, goalKg: 70.456, goalDate: '2026-12-15' }), { heightCm: 180, scale: 'standard', goalKg: 70.46, goalDate: '2026-12-15' }, 'a goal weight and date are kept');
+  eq(C.normalizeBody({ goalKg: 70, goalDate: '2026-02-31' }), { heightCm: null, scale: 'standard', goalKg: 70 }, 'a date that does not exist is dropped');
+  eq(C.normalizeBody({ goalKg: 'x', goalDate: '2026-12-15' }), { heightCm: null, scale: 'standard' }, 'a date without a goal weight is dropped');
+  eq([C.normalizeBody({ goalKg: 10 }).goalKg, C.normalizeBody({ goalKg: 400 }).goalKg, C.normalizeBody({ goalKg: null }).goalKg], [undefined, undefined, undefined], 'an impossible goal weight is dropped');
+  const mig = C.migrateSettings({ v: 2, habits: [H('a')], sections: [], body: { heightCm: 170, goalKg: 65, goalDate: '2027-01-10' } }).settings;
+  eq([mig.body.goalKg, mig.body.goalDate], [65, '2027-01-10'], 'the goal survives the migration');
+  eq(C.migrateSettings(JSON.parse(JSON.stringify(mig))).settings, mig, 'and a second run changes nothing');
+  eq(C.migrateSettings({ v: 2, habits: [H('a')], sections: [] }).settings.body, { heightCm: null, scale: 'standard' }, 'settings from before the goal field still load');
+
+  eq(C.goalStatus(null, null, fall, T1), { state: 'none' }, 'no goal, no status');
+  eq(C.goalStatus(80, null, [], T1).state, 'no-weight', 'a goal with no weigh-ins');
+  const r = C.weightRate(fall, T1);
+  near(r, -0.5, 'the weekly rate from four weeks of weigh-ins', 0.08);
+  const g0 = C.goalStatus(80, null, fall, T1);
+  eq([g0.state, g0.direction, g0.toGo], ['tracking', 'lose', 4], 'to go and direction');
+  near(g0.towardRate, 0.5, 'moving towards the goal at about 0.5 kg a week', 0.08);
+  ok(g0.eta && C.daysBetween(T1, g0.eta) >= 50 && C.daysBetween(T1, g0.eta) <= 62, 'the projected date follows from the pace', g0.eta);
+  eq(C.goalText(g0, T1).line, '4 kg to go · about 0.5 kg a week lately · around late November', 'the line reads like the example');
+  const tx = C.goalText(g0, T1, n => (n * 2.2).toFixed(1) + ' lb');
+  ok(/^8\.8 lb to go · about 1\.1 lb a week lately/.test(tx.line), 'in the unit the caller shows', tx.line);
+  // against a date
+  const onT = C.goalStatus(80, C.addDays(T1, 56), fall, T1);
+  eq([onT.status, onT.unsafe], ['on', false], 'on pace for a date 8 weeks away');
+  ok(/Right on pace for (early|mid-|late) (November|December)/.test(C.goalText(onT, T1).note), 'wording for on pace', C.goalText(onT, T1).note);
+  const ahead = C.goalStatus(80, C.addDays(T1, 120), fall, T1);
+  eq(ahead.status, 'ahead', 'ahead of a distant date');
+  const behind = C.goalStatus(80, C.addDays(T1, 28), fall, T1);
+  eq([behind.status, behind.unsafe], ['behind', false], 'behind a date 4 weeks away (needs 1 kg a week, which is still allowed)');
+  ok(/a little behind.*that's normal/i.test(C.goalText(behind, T1).note) && !/fail|should|must/i.test(C.goalText(behind, T1).note), 'behind is said gently', C.goalText(behind, T1).note);
+  const rush = C.goalStatus(80, C.addDays(T1, 14), fall, T1);
+  eq([rush.unsafe, rush.paceNeeded, rush.suggestedDate], [true, 2, C.addDays(T1, 28)], 'a date that needs more than 1 kg a week is flagged and a safer date is offered');
+  const rn = C.goalText(rush, T1).note;
+  ok(/you would need about 2 kg a week/.test(rn) && /A steady 1 kg a week is the most we would suggest/.test(rn) && /around (early|mid-|late) /.test(rn), 'and says so', rn);
+  ok(C.goalStatus(80, C.addDays(T1, 1), fall, T1).suggestedDate !== null && C.daysBetween(T1, C.goalStatus(80, C.addDays(T1, 1), fall, T1).suggestedDate) >= 28, 'the suggested pace is never above 1 kg a week');
+  eq(C.goalStatus(80, '2026-09-01', fall, T1).datePassed, true, 'a date in the past is noted, not scolded');
+  ok(/Your date has passed/.test(C.goalText(C.goalStatus(80, '2026-09-01', fall, T1), T1).note), 'with a gentle note');
+  // noise
+  const noisy = fall.concat([{ k: C.addDays(T1, -3), kg: 87.5 }]).sort((a, b) => a.k < b.k ? -1 : 1);
+  near(C.weightRate(noisy, T1), -0.5, 'one odd weigh-in barely moves the rate', 0.2);
+  eq(C.weightRate(wt([[-10, 85], [0, 84]]), T1), null, 'two weigh-ins are not enough for a rate');
+  eq(C.weightRate(wt([[-5, 85], [-3, 84.8], [0, 84.5]]), T1), null, 'weigh-ins less than a week apart are not enough');
+  eq(C.weightRate(wt([[-40, 90], [-35, 89], [-30, 88], [0, 84]]), T1), null, 'only the last four weeks are used');
+  const few = C.goalStatus(80, null, wt([[-10, 85], [0, 84]]), T1);
+  ok(few.towardRate === null && /Log a few more weigh-ins/.test(C.goalText(few, T1).note), 'with too little data the note asks for more weigh-ins', C.goalText(few, T1));
+  const flat = C.goalStatus(80, C.addDays(T1, 60), wt([[-27, 84], [-20, 84.1], [-13, 83.9], [-6, 84], [0, 84]]), T1);
+  eq(flat.status, 'steady', 'a flat month is steady');
+  ok(/Progress has paused lately, and that's okay/.test(C.goalText(flat, T1).note) && /steady lately/.test(C.goalText(flat, T1).line), 'and described kindly', C.goalText(flat, T1));
+  eq(flat.eta, null, 'no projected date without a pace towards it');
+  const away = C.goalStatus(80, null, wt([[-27, 83], [-20, 83.5], [-13, 84], [-6, 84.5], [0, 85]]), T1);
+  ok(away.towardRate < 0 && /moving the other way lately/.test(C.goalText(away, T1).line) && away.eta === null, 'drifting away is described without blame', C.goalText(away, T1));
+  // reached and gaining
+  eq(C.goalStatus(84, null, fall, T1).state, 'reached', 'at the goal');
+  eq(C.goalStatus(85, null, fall, T1).state, 'reached', 'past the goal (started above it)');
+  ok(/reached your goal weight of 84 kg/.test(C.goalText(C.goalStatus(84, null, fall, T1), T1).line), 'worded as a win');
+  const gain = C.goalStatus(90, null, wt([[-27, 70], [-20, 71], [-13, 72], [-6, 73], [0, 74]]), T1);
+  eq([gain.state, gain.direction, gain.toGo], ['tracking', 'gain', 16], 'a gain goal');
+  ok(gain.towardRate > 0.9 && gain.eta !== null, 'with its own pace', gain);
+  eq(C.approxDate('2026-12-15', T1), 'mid-December', 'dates are approximate');
+  eq([C.approxDate('2026-12-03', T1), C.approxDate('2026-12-28', T1), C.approxDate('2027-03-05', T1)], ['early December', 'late December', 'early March 2027'], 'early, late, and the year when it is not this one');
+  eq(C.weightSeries({ '2026-10-01': day('2026-10-01', {}, {}, { weight: 80 }), '2026-09-30': day('2026-09-30'), '2026-10-03': day('2026-10-03', {}, {}, { weight: 79 }) }, '2026-10-02'), [{ k: '2026-10-01', kg: 80 }], 'the weight series is the logged weights up to a day');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

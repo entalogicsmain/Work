@@ -8,6 +8,7 @@
 <title>Comeback</title>
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/travel.css">
+<link rel="stylesheet" href="css/review.css">
 </head>
 <body>
 
@@ -55,6 +56,7 @@
     </div>
 
     <div class="today-main">
+    <div id="reviewSlot"></div>
     <div class="edit-bar" id="editBar" hidden role="region" aria-label="Edit Today"><div class="edit-bar-in"><span class="edit-hint">Drag the handles to rearrange. Tap Hide to take a card off Today.</span><button class="btn small" id="editDone">Done</button></div></div>
     <div id="hiddenTray" class="hidden-tray" hidden></div>
     <div id="sections"></div>
@@ -88,6 +90,8 @@
         <div class="stat"><span><svg data-ic="map-pin" class="sm"></svg>Average distance</span><b id="sAvgDist">–</b><small id="sAvgDistSub"></small></div>
       </div>
       <p class="note-line" id="streakNote"></p>
+      <div id="weekTile"></div>
+      <div id="insightsCard" hidden></div>
 
       <h2 class="sec-head">Body</h2>
       <div class="card bmicard" id="bmiCard"></div>
@@ -95,6 +99,7 @@
         <div class="stat"><span><svg data-ic="scale" class="sm"></svg>Weight change</span><b id="sWeight">–</b><small id="sWeightSub"></small></div>
         <div class="stat"><span><svg data-ic="ruler" class="sm"></svg>Waist change</span><b id="sWaist">–</b><small id="sWaistSub"></small></div>
       </div>
+      <div id="goalLine"></div>
 
       <div id="travelCard" hidden></div>
 
@@ -257,6 +262,7 @@
 <script src="js/travel.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/body.js"></script>
+<script src="js/review.js"></script>
 <script src="js/today.js"></script>
 <script src="js/plan.js"></script>
 <script src="js/settings.js"></script>

@@ -335,7 +335,7 @@ const seedDays = (n, scoreAt) => {
   await pg.click('.chip:has-text("Weight")'); await pg.waitForTimeout(500);
   ok((await pg.getAttribute('.chip:has-text("Weight")', 'aria-pressed')) === 'true' && /kg/.test(await pg.textContent('#readout')), 'metric chips switch the chart (readout shows kg)');
   ok(/Weight over the last month: \d+ entries/.test(await pg.textContent('#chartSummary')) && (await pg.getAttribute('#chart', 'aria-hidden')) === 'true', 'chart has a text summary for screen readers (the canvas itself is hidden from them)', await pg.textContent('#chartSummary'));
-  await pg.evaluate(() => window.scrollTo(0, 380)); await pg.waitForTimeout(250);
+  await pg.evaluate(() => document.getElementById('chart').scrollIntoView({ block: 'center' })); await pg.waitForTimeout(250);   // the week tile above the chart moves it, so scroll to it rather than to a fixed offset
   const cb = await (await pg.$('#chart')).boundingBox();
   await pg.mouse.move(cb.x + cb.width * 0.4, cb.y + cb.height / 2); await pg.waitForTimeout(250);
   ok(!/Latest/.test(await pg.textContent('#readout')), 'scrubbing across the chart shows the exact value for that day', await pg.textContent('#readout'));

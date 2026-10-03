@@ -1,0 +1,67 @@
+/* Review: light days, shield days, the weekly review card, the week tile, insights and the goal weight card.
+   Uses only the tokens in app.css, so light, dark, more contrast and forced colours follow the rest of the app. */
+
+/* ---------- calendar: light day (dashed, calm blue) and shield day (dotted, green). Shape differs, so colour is never the only cue. ---------- */
+.hc.l i{background:var(--accent-soft);border:2px dashed var(--accent);color:var(--label)}
+.hc.sh i{background:var(--green-soft);border:2px dotted var(--green);color:var(--label)}
+.legend .l{background:var(--accent-soft);border:2px dashed var(--accent)}
+.legend .sh{background:var(--green-soft);border:2px dotted var(--green)}
+.pill.l{background:var(--accent-soft);color:var(--accent)}
+.rv-daynote{margin-bottom:var(--s3)}
+
+/* ---------- the weekly review card on Today ---------- */
+#reviewSlot:empty{display:none}
+.review{margin:var(--s4) 0 0}
+.rv-top{display:flex;align-items:center;gap:var(--s3);margin:0 0 var(--s2)}
+.rv-ic{width:1.875rem;height:1.875rem;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--accent-soft);color:var(--accent)}
+.rv-ic .ic{width:1.125rem;height:1.125rem}
+.rv-title{flex:1;margin:0;font-size:1.0625rem;font-weight:600}
+.rv-x{margin:calc(var(--s2)*-1) calc(var(--s2)*-1) calc(var(--s2)*-1) 0;color:var(--label2)}
+.rv-text{margin:0 0 var(--s3);font-size:1rem;overflow-wrap:anywhere}
+.rv-note{margin:0 0 var(--s3)}
+.rv-note label{margin-left:0;margin-right:0;text-transform:none;letter-spacing:0}
+.rv-note input{width:100%;min-height:44px;padding:0 var(--s4);background:none;border:0;outline:0}
+.rv-actions{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center}
+.rv-actions .btn{flex:1 1 auto;min-width:0}
+.rv-share{flex:none}
+
+/* ---------- the week tile and insights on Progress ---------- */
+.weekcard{margin-top:var(--s5)}
+.wk-top{margin:0 0 var(--s3)}
+.weekcard .seg{margin-bottom:var(--s3)}
+.wk-big{display:flex;align-items:baseline;gap:var(--s2);flex-wrap:wrap}
+.wk-big b{font-size:1.625rem;font-weight:700;letter-spacing:-.3px;font-variant-numeric:tabular-nums}
+.wk-big span{font-size:.9375rem;color:var(--label2)}
+.wk-cmp{margin:2px 0 0;font-size:.9375rem;color:var(--label2)}
+.wk-list{margin:var(--s3) 0 0;padding:0 0 0 1.1rem;font-size:.9375rem;overflow-wrap:anywhere}
+.wk-list li{margin:2px 0}
+.weekcard .txtbtn{margin:var(--s2) calc(var(--s3)*-1) calc(var(--s2)*-1)}
+#insightsCard .sec-head{margin-top:var(--s6)}
+.ins-list{list-style:none;margin:0;padding:0;display:grid;gap:var(--s4)}
+.ins-item{display:flex;gap:var(--s3);align-items:flex-start}
+.ins-ic{width:1.875rem;height:1.875rem;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--accent-soft);color:var(--accent)}
+.ins-body{flex:1;min-width:0}
+.ins-text{margin:0;font-size:1rem;overflow-wrap:anywhere}
+.ins-move{margin-top:var(--s2);max-width:100%}
+.ins-foot{margin:var(--s4) 0 0}
+
+/* ---------- goal weight on Progress ---------- */
+#goalLine{margin-top:var(--s3)}
+.goalcard{padding:0;overflow:hidden}
+.goal-main{display:flex;flex-direction:column;gap:2px;width:100%;padding:var(--s4);text-align:left}
+.goal-main:active{background:var(--fill)}
+.goal-main:focus-visible{outline-offset:-3px}
+.goal-lab{display:flex;align-items:center;gap:6px;font-size:.8125rem;color:var(--label2)}
+.goal-val{font-size:1.375rem;font-weight:700;letter-spacing:-.2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.goal-line{font-size:.9375rem;overflow-wrap:anywhere}
+.goal-note{font-size:.875rem;color:var(--label2);overflow-wrap:anywhere}
+.goal-set{gap:6px}
+
+@media (forced-colors:active){
+  .hc.l i,.hc.sh i{forced-color-adjust:none;color:CanvasText;background:Canvas}
+  .hc.l i{border:2px dashed Highlight}
+  .hc.sh i{border:2px dotted Highlight}
+}
+
+/* the two buttons at the foot of Today sit side by side and wrap when text is large */
+.today-foot{flex-wrap:wrap;gap:var(--s2) var(--s4)}

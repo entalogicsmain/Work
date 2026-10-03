@@ -42,7 +42,8 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 
 /* ---------- data shape ----------
    { version:2, settings:{v:2,habits:[{id,name,icon,type,unit,target,section,schedule}],sections,body,units,prefs},
-     days:{ "YYYY-MM-DD":{vals,rules,weight,waist,note,date,updatedAt} } }
+     days:{ "YYYY-MM-DD":{vals,rules,weight,waist,note,date,updatedAt,light?} } }
+   A day may carry light:true ("Take it easy today"): it is left out of scoring like a rest day (Core.isLight). settings.body may carry goalKg and goalDate.
    Count, duration and steps habits keep their number in a day's "vals"; Yes/No habits keep a tick in "rules" (so every day
    record from an earlier version stays valid); weight and waist are the day's "weight" and "waist". Version 1 data (backups,
    the phone's saved copy, the cloud) is migrated into this structure whenever it is read. */
@@ -80,6 +81,7 @@ function normalizeDay(k,d){
   const sm=normalizeStepsMeta(d.steps_meta,k);
   if(sm)out.steps_meta=sm;
   const tv=normalizeTravel(d.travel);if(tv)out.travel=tv;
+  if(d.light===true)out.light=true;
   return out;
 }
 /* Throws an Error with a readable message when the object is not a Comeback backup. Restoring from a file is strict: one bad day
@@ -117,6 +119,7 @@ function mergeDayRecords(a,b,now){
   const nw=tb>ta?b:a,od=nw===a?b:a;
   const out={vals:Object.assign({},od.vals,nw.vals),rules:Object.assign({},od.rules,nw.rules),
     weight:nw.weight!=null?nw.weight:od.weight,waist:nw.waist!=null?nw.waist:od.waist,note:nw.note?nw.note:(od.note||''),date:a.date||b.date,updatedAt:Math.max(ta,tb)};
+  if(ta===tb?(a.light===true||b.light===true):nw.light===true)out.light=true;   // a light day follows the newer edit (so turning it off sticks)
   const sa=a.vals&&a.vals.steps,sb=b.vals&&b.vals.steps;
   if(num(sa)&&num(sb))out.vals.steps=Math.max(sa,sb);
   const ma=a.steps_meta,mb=b.steps_meta;
@@ -164,6 +167,7 @@ function mergeData(local,inc){
   inc.settings.habits.forEach(h=>{if(!merged.habits.some(x=>x.id===h.id)){merged.habits.push(clone(h));Core.ensureSection(merged,h.section,((inc.settings.sections||[]).find(x=>x.id===h.section)||{}).name)}});
   (inc.settings.sections||[]).forEach(x=>{if(!merged.sections.some(y=>y.id===x.id))merged.sections.push(clone(x))});
   if(merged.body.heightCm==null&&inc.settings.body&&inc.settings.body.heightCm!=null)merged.body.heightCm=inc.settings.body.heightCm;
+  if(merged.body.goalKg==null&&inc.settings.body&&inc.settings.body.goalKg!=null){merged.body.goalKg=inc.settings.body.goalKg;if(inc.settings.body.goalDate)merged.body.goalDate=inc.settings.body.goalDate}
   return{data:{version:2,settings:merged,days:outDays},added,updated,kept};
 }
 
@@ -356,10 +360,11 @@ function csvCell(v){
 function stepsSourceOf(d){return d.steps_meta?(d.steps_meta.source==='auto'?'counted':'manual'):(d.vals&&d.vals.steps!=null?'manual':'')}
 function buildCsv(){
   const cols=settings.habits.filter(h=>h.type!=='measure');
-  const head=['Date','Score %'].concat(cols.map(h=>h.type==='yesno'?h.name:h.name+' ('+h.unit+')'),TRAVEL_CSV_HEAD,['Steps source','Distance (km)','Filtered steps','Weight (kg)','Waist (cm)','BMI','Note']);
-  const rows=Core.loggedKeys(days).sort().map(k=>{
-    const d=days[k],b=Core.bmi(d.weight,settings.body.heightCm);
-    return [k,scoreOf(d)].concat(
+  const head=['Date','Score %','Light day'].concat(cols.map(h=>h.type==='yesno'?h.name:h.name+' ('+h.unit+')'),TRAVEL_CSV_HEAD,['Steps source','Distance (km)','Filtered steps','Weight (kg)','Waist (cm)','BMI','Note']);
+  const keys=Object.keys(days).filter(k=>Core.hasRecord(days[k])||Core.isLight(days[k])).sort();
+  const rows=keys.map(k=>{
+    const d=days[k],b=Core.bmi(d.weight,settings.body.heightCm),lt=Core.isLight(d);
+    return [k,lt?'':scoreOf(d),lt?'yes':''].concat(
       cols.map(h=>h.type==='yesno'?(d.rules&&d.rules[h.id]?'yes':'no'):(d.vals&&d.vals[h.id]!=null?d.vals[h.id]:'')),
       travelCsvCells(d),[stepsSourceOf(d),d.steps_meta?d.steps_meta.distance_km:'',d.steps_meta?d.steps_meta.filtered:'',d.weight==null?'':d.weight,d.waist==null?'':d.waist,b==null?'':Core.bmiRound(b),d.note||'']);
   });
@@ -509,7 +514,7 @@ const cloudConfigured=()=>!!(CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&Nat
 const signedIn=()=>cloudConfigured()&&sync.signedIn;
 const saveSync=()=>prefSet(SYNC_KEY,JSON.stringify(sync));
 const pendingCount=()=>sync.pendingDays.length+(sync.pendingSettings?1:0);
-const dayData=d=>{const o={vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''};if(d.steps_meta)o.steps_meta=d.steps_meta;if(d.travel)o.travel=d.travel;return o};
+const dayData=d=>{const o={vals:d.vals||{},rules:d.rules||{},weight:d.weight==null?null:d.weight,waist:d.waist==null?null:d.waist,note:d.note||''};if(d.steps_meta)o.steps_meta=d.steps_meta;if(d.travel)o.travel=d.travel;if(d.light===true)o.light=true;return o};
 const isNetErr=e=>!!e&&(e.name==='AuthRetryableFetchError'||e.status===0||/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(String(e.message||e)));
 function syncErrText(e){
   if(isNetErr(e))return 'No internet connection.';
