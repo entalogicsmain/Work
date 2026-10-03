@@ -19,6 +19,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(StepsPlugin.class); // local step-counting plugin (Kotlin)
         registerPlugin(AppLockPlugin.class); // app lock: BiometricPrompt and FLAG_SECURE (Kotlin)
+        registerPlugin(com.entalogics.comeback.widget.WidgetPlugin.class); // home-screen widget snapshot (Kotlin)
         super.onCreate(savedInstanceState);
     }
 

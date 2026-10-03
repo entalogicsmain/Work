@@ -244,6 +244,7 @@ class StepService : Service(), SensorEventListener {
 
     private fun tickOnce() {
         StepTracker.tick()
+        com.entalogics.comeback.widget.WidgetUpdater.refreshFromSteps(this)   // home-screen widget: at most once a minute, off the main thread
         val steps = StepTracker.today().steps
         val text = "Counting steps · ${NumberFormat.getIntegerInstance().format(steps)} today"
         val now = SystemClock.elapsedRealtime()

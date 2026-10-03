@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home-screen widget. Solid, not blurred. Light values here, dark values in values-night. Same palette as the app (app.css). -->
+    <color name="widget_bg">#F7F8FC</color>
+    <color name="widget_stroke">#1F141E3C</color>
+    <color name="widget_text">#0A0F1A</color>
+    <color name="widget_text2">#52525B</color>
+    <color name="widget_accent_text">#0856B2</color>
+    <color name="widget_track">#DDE0EA</color>
+    <!-- The filled part of the ring is painted into a bitmap, so one colour has to read on both the light and the dark card (3:1 or better on both). -->
+    <color name="widget_arc">#1F7BE0</color>
+    <color name="widget_arc_done">#1F9D3F</color>
+</resources>

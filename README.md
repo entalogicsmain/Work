@@ -193,6 +193,17 @@ Comeback counts your steps by itself using the phone's own motion sensors. It do
 
 **What is stored (per day, inside the normal day record):** `vals.steps` plus `steps_meta`: `source` (`auto`, or `manual` on old days), `counted`, `distance_km`, `filtered`, and `hourly` (24 buckets). It is part of the JSON backup, the CSV export (columns *Steps source*, *Distance (km)*, *Filtered steps*) and cloud sync. Step updates reach the cloud at most once every 15 minutes, and never overwrite an old manual day. Device settings (height, detection, speed check, pull-to-refresh history) stay on this phone.
 
+## Home-screen widget
+
+A widget for the phone's home screen shows today at a glance and works without opening the app. Long-press an empty spot on the home screen, choose **Widgets**, find **Comeback today** and drag it out. It starts as 4 x 2; make it smaller (2 x 2) or larger by long-pressing it and dragging the handles.
+
+- **2 x 2:** the score ring with the percent in it, and steps against the target ("5,200 / 8,000").
+- **4 x 2:** the same, plus the streak ("12-day streak", or "Rest day" / "Light day"), the next habit still open ("Next: Water") and a small "Open Comeback".
+- **Tap anywhere** on the widget to open Comeback. It follows light and dark mode, has a solid rounded background (no blur), and is described to screen readers as one sentence ("Comeback. Today 62 percent. 5,200 of 8,000 steps. 12-day streak. Next: Water. Tap to open Comeback."). No clock time is ever shown.
+- **A new day:** until you open the app on a new day the widget says **Open Comeback to start today** and shows only the steps the phone has counted so far (with the last known target). It never shows yesterday's score as if it were today's.
+
+**How it gets its numbers.** Only the page knows your habits and day records, so it sends the phone a small snapshot (`js/widget.js`: date, score, label, steps, steps target, next open habit) about 1.5 seconds after the Today numbers change, and at once when you leave the app. It is kept in the phone's own storage (`comeback_widget` preferences) and is not part of backups or sync. While the app is closed the step service refreshes only the **steps** (at most once a minute, and only when the count changed); the score, streak and next habit update the next time the app is opened and something changes. The widget only draws what is already on the phone: **no network, no location, no periodic polling** (`updatePeriodMillis` is 0). It also redraws at midnight and when the date, time or time zone changes. Nothing is sent in a browser.
+
 ## Pull to refresh (Today)
 
 Pull down on Today (when it is scrolled to the top). A small glass panel opens with one short line, a light tap tells you when you have pulled far enough, and when you let go:
@@ -252,6 +263,7 @@ Read from the code (not measured on a device; there is no phone in the build env
 | Page updates | The service tells the page about new totals at most once every 5 seconds, and only while the app is on screen (the plugin stops sending when the app is stopped). |
 | Watchdog | One WorkManager job every **15 minutes** (Android's minimum). It restarts the service only if it has gone quiet for over 4 minutes. At most 96 very small runs a day. |
 | Midnight | One alarm per day to split the day cleanly. |
+| Home-screen widget | No polling. Redrawn when the page sends a snapshot, when the date changes (and at the midnight alarm), and by the step service at most once a minute and only if the step count changed; the work runs on a background thread and skips entirely when no widget is placed. |
 | Vehicle detection | Google's Activity Recognition pushes transitions to us (no polling). Location is **off** unless you switch on the speed check or trip distance (see Travel record), and trip distance asks for location **only while a vehicle or bike trip is on**. |
 | Wake locks | **None** on phones with the step counter chip. The accelerometer fallback (phones without that chip) holds a partial wake lock with a 60 second timeout that the tick renews, and releases it when the service stops. That mode uses much more battery. |
 | The page (WebView) | Two seconds after the app leaves the screen the WebView is paused (`onPause` + `pauseTimers`): no JavaScript timers, layout or painting. The page also stops its own 1-minute refresh and queued sync timers when it is hidden, and a "network is back" sync only runs while the app is visible. Everything resumes when you come back, and the page reads what was counted meanwhile in one call. |
@@ -288,6 +300,7 @@ The Progress screen has a **Travel** card: for the range you picked (week, month
 - `npm run test:android` runs 35 JVM unit tests with **simulated sensors** (no phone needed): walking with the phone in a pocket and in hand, running pace, batched counter reports, reboot reset, midnight split, missed samples (service down while walking, and while in a car), a smooth car ride, a motorbike on a bumpy road, a bicycle ride, short shuffles of 3 to 5 steps, vehicle-to-walking transitions, the speed check, phone shaking, strictness levels and state saving.
 - `npm run test:steps` runs 100 browser tests of the web side against a fake plugin (existing users, the read-only Steps card and sheet, no manual entry anywhere, old manual days, permission missing, settings, health states, sync throttling, CSV, backup, Progress, and no page work while hidden).
 - `node test/travel-test.mjs` runs the Travel card, trips sheet, vehicle labels, settings rows and `normalizeTravel` edge cases against the fake plugin; the Kotlin tests (`TravelLogTest`, `TimeZoneTest`) cover trips, stops, midnight, process death, distance filtering and time zone changes with simulated transitions and fixes.
+- `node test/widget-test.mjs` (51 checks) runs the widget feed against the fake bridge (snapshots for an empty, partial, full, light and rest day, the 1.5 s debounce, sending when the page is hidden, a new day, nothing sent when nothing changed or in a browser); the Kotlin `WidgetModelTest` covers parsing, the staleness rule, the thousands separators, the texts for every state and the ring arc geometry.
 - `npm run test:permissions` (54 checks) walks the first-launch permission flow with everything allowed, everything denied and partial answers, every brand, "Show intro again" and a plain browser.
 - `npm run test:refresh` (55 checks) sends real touch gestures to pull-to-refresh: the panel and haptic, one plugin read per pull, 1 to 2.5 s timing, the 5-minute sync rule, contextual nudges, the 20-pull no-repeat rule, reduce motion, and the lines file.
 - **Needs a real phone:** the actual sensors, Activity Recognition, background survival on your brand, the notification, and the numbers below.

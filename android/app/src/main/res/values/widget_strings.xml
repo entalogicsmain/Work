@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name">Comeback today</string>
+    <string name="widget_description">Today\'s score, steps and streak at a glance. Tap to open Comeback.</string>
+    <string name="widget_open">Open Comeback</string>
+    <string name="widget_stale">Open Comeback to start today</string>
+    <string name="widget_setup">Open Comeback to set up</string>
+    <string name="widget_fresh_start">A fresh start today</string>
+    <string name="widget_steps_word">steps</string>
+    <!-- %s is the name of the next habit that is still open -->
+    <string name="widget_next">Next: %s</string>
+    <string name="widget_rest">Rest</string>
+    <string name="widget_light">Light</string>
+    <string name="widget_none">–</string>
+    <string name="widget_tap_to_open">Tap to open Comeback.</string>
+    <string name="widget_today">Today</string>
+    <string name="widget_percent_word">percent</string>
+    <string name="widget_of_word">of</string>
+    <!-- Shown only in the widget picker preview -->
+    <string name="widget_preview_percent">62%</string>
+    <string name="widget_preview_streak">12-day streak</string>
+    <string name="widget_preview_steps">5,200 / 8,000 steps</string>
+    <string name="widget_preview_steps_short">5,200 / 8,000</string>
+    <string name="widget_preview_next">Next: Water</string>
+</resources>

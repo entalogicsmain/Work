@@ -123,6 +123,7 @@ export const MOCK = `
 (function(){
   var KEY='__mock';
   var st=JSON.parse(localStorage.getItem(KEY)||'null')||{prefs:{comeback_onboarded:'1'},fs:{},calls:[],perm:'prompt',requestResult:'granted',failWrite:false,shareMode:'ok',exit:0};
+  if(!st.widget)st.widget={snapshots:[]};   // what the page pushed to the home-screen widget plugin, in order
   if(!st.pending)st.pending={};   // notifications that are scheduled right now, by id (schedule adds, cancel removes)
   if(!st.steps)st.steps={activityGranted:true,locationGranted:true,batteryIgnored:false,brand:'xiaomi',health:'working',source:'counter',days:{},filteredToday:0,cfg:{enabled:false}};
   // app lock knobs (test/theme-lock-test.mjs): available/reason = what isAvailable() says; result = what authenticate() answers ('ok','canceled','lockout','unavailable','failed'),
@@ -183,6 +184,7 @@ export const MOCK = `
       },
       setSecure:async function(o){rec('lockSecure',o);st.lock.secure=!!o.enabled;save();return{}}
     },
+    Widget:{setWidgetSnapshot:async function(o){st.widget.snapshots.push(JSON.parse(JSON.stringify(o)));save();return{saved:true}}},
     Haptics:{impact:async function(o){rec('impact',o)},notification:async function(o){rec('notify',o)}},
     ImpactStyle:{Light:'LIGHT',Medium:'MEDIUM'},NotificationType:{Success:'SUCCESS'}
   };
