@@ -123,7 +123,13 @@ function normalizeHabit(h,i){
 
 function normalizeBody(b){
   const o=b&&typeof b==='object'?b:{};
-  return{heightCm:num(o.heightCm)&&o.heightCm>=50&&o.heightCm<=260?o.heightCm:null,scale:o.scale==='asian'?'asian':'standard'};
+  const out={heightCm:num(o.heightCm)&&o.heightCm>=50&&o.heightCm<=260?o.heightCm:null,scale:o.scale==='asian'?'asian':'standard'};
+  // goal weight (kg) and an optional date: only present when set, so plans without a goal look exactly as before
+  if(num(o.goalKg)&&o.goalKg>=30&&o.goalKg<=250){
+    out.goalKg=Math.round(o.goalKg*100)/100;
+    if(typeof o.goalDate==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(o.goalDate)&&ymd(parse(o.goalDate))===o.goalDate)out.goalDate=o.goalDate;
+  }
+  return out;
 }
 function normalizeUnits(u){
   const o=u&&typeof u==='object'?u:{};
@@ -261,8 +267,10 @@ function dayParts(settings,days,k){
   return parts;
 }
 const scoreOfParts=p=>p.length?Math.round(p.reduce((a,b)=>a+b.frac,0)/p.length*100):null;
-/** 0-100, or null when nothing was due (a rest day). */
-function dayScore(settings,days,k){return scoreOfParts(dayParts(settings,days,k))}
+/** A light day ("Take it easy today": illness, travel, a low day) is a day the person marked as one. It is left out of scoring like a rest day. */
+function isLight(d){return!!d&&d.light===true}
+/** 0-100, or null when nothing was due (a rest day) or the day was marked light. */
+function dayScore(settings,days,k){return isLight(days[k])?null:scoreOfParts(dayParts(settings,days,k))}
 /** What Today's ring and chips show: the score (0 on a rest day), targets met, rules kept, and whether everything due is done. */
 function dayMetrics(settings,days,k){
   const parts=dayParts(settings,days,k);
@@ -294,7 +302,7 @@ function daysSig(days){
   let n=0,sum=0;
   for(const k in days){
     const d=days[k];if(!d)continue;
-    n++;sum+=(d.updatedAt||0)+(d.weight||0)*3+(d.waist||0)*7+(d.note?d.note.length*11:0);
+    n++;sum+=(d.updatedAt||0)+(d.weight||0)*3+(d.waist||0)*7+(d.note?d.note.length*11:0)+(d.light===true?17:0);
     if(d.vals)for(const i in d.vals)sum+=(Number(d.vals[i])||0)*5+1;
     if(d.rules)for(const i in d.rules)if(d.rules[i])sum+=13;
   }
@@ -315,33 +323,40 @@ function firstKey(days){
   return cache.first;
 }
 const kept=(settings,days,k)=>{const sc=scoreAt(settings,days,k);return sc!==null&&sc>=50&&hasRecord(days[k])};
-/** Days in a row with a score of 50 or more. Today counts once it is at 50; until then the count runs from yesterday, so the streak
-    never drops during an open day. Rest days (nothing due) are skipped. */
-function currentStreak(settings,days,today){
+/** The streak, one pass over the due days from the first logged day. A kept day adds one. A day that is not kept breaks the chain,
+    unless it is the one free miss the streak shield allows: it must follow 6 due days in a row that were all kept, and it adds
+    nothing to the count. The shield is ready again once 6 more due days in a row are kept (so two misses within 7 due days break
+    the chain). Rest days (nothing due) and light days are skipped, and today, while it is still open, can only add to the count. */
+const SHIELD_NEEDS=6;
+function streakPass(settings,days,today){
   fresh(settings,days);
-  const mk='cur:'+today;if(cache.memo.has(mk))return cache.memo.get(mk);
-  const first=firstKey(days);let n=0;
+  const mk='pass:'+today;if(cache.memo.has(mk))return cache.memo.get(mk);
+  const first=firstKey(days),out={current:0,best:0,shields:[],ready:false,lastDue:null,lastShield:false};
   if(first){
-    let k=kept(settings,days,today)?today:addDays(today,-1);
-    for(let i=0;i<4000&&k>=first;i++,k=addDays(k,-1)){
-      const sc=scoreAt(settings,days,k);
-      if(sc===null)continue;
-      if(kept(settings,days,k))n++;else break;
+    let run=0,best=0,consec=0;
+    for(let k=first;k<=today;k=addDays(k,1)){
+      if(scoreAt(settings,days,k)===null)continue;
+      if(kept(settings,days,k)){run++;consec++;if(run>best)best=run;out.lastShield=false;if(k!==today)out.lastDue=k}
+      else if(k===today)continue;                       // today is still open: it can only add to the streak
+      else if(consec>=SHIELD_NEEDS){out.shields.push(k);consec=0;out.lastDue=k;out.lastShield=true}
+      else{run=0;consec=0;out.lastDue=k;out.lastShield=false}
     }
+    out.current=run;out.best=best;out.ready=consec>=SHIELD_NEEDS;
   }
-  cache.memo.set(mk,n);return n;
+  cache.memo.set(mk,out);return out;
 }
-function bestStreak(settings,days,today){
-  fresh(settings,days);
-  const mk='best:'+today;if(cache.memo.has(mk))return cache.memo.get(mk);
-  const first=firstKey(days);let best=0,run=0;
-  if(first)for(let k=first;k<=today;k=addDays(k,1)){
-    const sc=scoreAt(settings,days,k);
-    if(sc===null)continue;
-    if(kept(settings,days,k)){run++;if(run>best)best=run}
-    else if(k!==today)run=0;          // today is still open: it can only add to a run
-  }
-  cache.memo.set(mk,best);return best;
+/** Days in a row with a score of 50 or more. Today counts once it is at 50; until then the count runs from yesterday, so the streak
+    never drops during an open day. Rest days (nothing due) and light days are skipped; one miss in 7 due days is covered by the shield. */
+function currentStreak(settings,days,today){return streakPass(settings,days,today).current}
+function bestStreak(settings,days,today){return streakPass(settings,days,today).best}
+/** The days the streak shield covered, oldest first. */
+function shieldDays(settings,days,today){return streakPass(settings,days,today).shields.slice()}
+/** Is the shield ready (the last 6 due days were kept, so one miss would be covered)? */
+function shieldReady(settings,days,today){return streakPass(settings,days,today).ready}
+/** "Rest day used. Streak safe at 12." when the last due day before today was covered by the shield and the streak is alive, else ''. */
+function shieldNote(settings,days,today){
+  const p=streakPass(settings,days,today);
+  return p.lastShield&&p.current>0?'Rest day used. Streak safe at '+p.current+'.':'';
 }
 /** "31 of the last 35 days kept": days with a score of 50 or more among the days that were due, from the first logged day on.
     Today counts only once it is kept. */
@@ -368,6 +383,7 @@ function streakStatus(settings,days,today){
 /** The line under the ring on Today. Gentle: it never says "start again" while today is still being worked on. */
 function streakLine(settings,days,today){
   const s=streakStatus(settings,days,today);
+  if(isLight(days[today]))return s.current>0?s.current+'-day streak · light day':'Light day today';
   if(s.current>0)return s.current+'-day streak'+(s.open?' · today still open':'');
   if(s.todayRecord&&s.open)return'Reach 50% today to start a streak';
   if(s.best>0&&s.todayScore!==null)return'Start again today';
@@ -541,13 +557,305 @@ function cmToFtIn(cm){
 }
 const ftInToCm=(ft,inch)=>(Number(ft)*12+Number(inch||0))*2.54;
 
+/* ---------- gentler plans: easing and raising a habit, moving it off a day ---------- */
+const TARGET_TYPES=['count','duration','steps'];
+/** About 20 percent lower, on a round number (60 sec becomes 50). null when there is no sensible lower target. */
+function easeTarget(t){
+  if(!num(t)||t<=0)return null;
+  if(t<=2&&Number.isInteger(t))return null;
+  const step=niceStep(t),lo=t*0.7,hi=t*0.9,ideal=t*0.8;
+  let best=null;
+  for(let c=Math.ceil(lo/step-1e-9)*step;c<=hi+1e-9;c+=step){c=round1(c);if(c>0&&c<t&&(best===null||Math.abs(c-ideal)<Math.abs(best-ideal)-1e-9))best=c}
+  if(best===null){const r=round1(ideal);best=r>0&&r<t?r:null}
+  return best;
+}
+/** A lighter schedule: every day becomes 5 times a week, specific days lose their last day, X a week loses one, every N weeks gains a week. null when it cannot be lighter. */
+function easeSchedule(sch){
+  const s=normalizeSchedule(sch);
+  if(s.kind==='daily')return{kind:'weekly',times:5};
+  if(s.kind==='days'){if(s.days.length<3)return null;const ord=WEEK_ORDER.filter(d=>s.days.includes(d));return normalizeSchedule({kind:'days',days:ord.slice(0,-1)})}
+  if(s.kind==='weekly')return s.times>1?{kind:'weekly',times:s.times-1}:null;
+  return s.weeks<8?{kind:'everyN',weeks:s.weeks+1}:null;
+}
+/** How to ease a habit: its target when it has a number to hit, else its schedule. {kind:'target',from,to} | {kind:'schedule',schedule,label} | null. */
+function easeFor(h){
+  if(!h||h.type==='measure')return null;
+  if(TARGET_TYPES.includes(h.type)){const to=easeTarget(h.target);if(to!=null)return{kind:'target',from:h.target,to}}
+  const sc=easeSchedule(h.schedule);
+  return sc?{kind:'schedule',schedule:sc,label:scheduleLabel(sc)}:null;
+}
+/** The raise the app can offer for a habit: Count and Duration only, the same step as the target suggestion. */
+function raiseFor(h){
+  if(!h||h.hidden||(h.type!=='count'&&h.type!=='duration')||!(h.target>0))return null;
+  const to=suggestTarget(h.target);return to>h.target?{kind:'target',from:h.target,to}:null;
+}
+/** A schedule that leaves out one weekday (0 = Sunday): a daily habit becomes the other six days. null when it is not on that day or would have no day left. */
+function moveOffDay(h,weekday){
+  if(!h||h.type==='measure')return null;
+  const s=normalizeSchedule(h.schedule);
+  if(s.kind==='daily')return{kind:'days',days:[0,1,2,3,4,5,6].filter(d=>d!==weekday)};
+  if(s.kind==='days'&&s.days.includes(weekday)&&s.days.length>1)return normalizeSchedule({kind:'days',days:s.days.filter(d=>d!==weekday)});
+  return null;
+}
+
+/* ---------- the weekly review ---------- */
+const ratio01=(n,d)=>d>0?n/d:0;
+const fmt1=n=>String(Math.round(n*10)/10);
+/** Kept and due days of one stretch of days (from the first logged day on). `open` is a day still in progress: it counts only once kept. */
+function keptDue(settings,days,from,to,open){
+  const first=firstKey(days);let got=0,due=0,scoreSum=0,scored=0,logged=0;
+  if(!first)return{kept:0,due:0,avg:null,logged:0};
+  for(let k=from<first?first:from;k<=to;k=addDays(k,1)){
+    if(hasRecord(days[k]))logged++;
+    const sc=scoreAt(settings,days,k);
+    if(sc===null)continue;
+    const ok=kept(settings,days,k);
+    if(open&&k===open&&!ok)continue;
+    due++;if(ok)got++;
+    if(hasRecord(days[k])){scoreSum+=sc;scored++}
+  }
+  return{kept:got,due,avg:scored?Math.round(scoreSum/scored):null,logged};
+}
+/** How each habit did over a stretch: {h,met,due,ratio} for the habits that were due on at least `minDue` scored days. */
+function habitWeek(settings,days,from,to,open,minDue){
+  const first=firstKey(days),out=[];
+  if(!first)return out;
+  settings.habits.forEach(h=>{
+    if(h.hidden||h.type==='measure')return;
+    let met=0,due=0;
+    for(let k=from<first?first:from;k<=to;k=addDays(k,1)){
+      if(scoreAt(settings,days,k)===null)continue;
+      if(open&&k===open&&!kept(settings,days,k))continue;
+      if(!countsForScore(h,k,days))continue;
+      due++;if(isMet(h,days[k]))met++;
+    }
+    if(due>=minDue)out.push({h,met,due,ratio:met/due});
+  });
+  return out;
+}
+/** weekStartKey is the Monday of the week. `through` (optional) ends the week early, for "this week so far".
+    {daysKept, daysDue, prevDaysKept, prevDaysDue, bestHabit, slippedHabit, weightChange (kg), avgScore, loggedDays, suggestion:{kind,habitId?}} */
+function weekSummary(settings,days,weekStartKey,through){
+  fresh(settings,days);
+  const wk=weekStartKey,end=addDays(wk,6),last=through&&through<end?through:end,open=through&&through<=end?through:null;
+  const cur=keptDue(settings,days,wk,last,open);
+  const prev=keptDue(settings,days,addDays(wk,-7),addDays(wk,-1),null);
+  const minDue=Math.min(3,Math.max(1,cur.due));
+  const hw=habitWeek(settings,days,wk,last,open,minDue);
+  let best=null;
+  hw.forEach(x=>{if(x.met>=1&&x.ratio>=0.6&&(!best||x.ratio>best.ratio+1e-9||(Math.abs(x.ratio-best.ratio)<1e-9&&(x.met>best.met||(x.met===best.met&&x.due>best.due)))))best=x});
+  let slip=null;
+  hw.forEach(x=>{if(x!==best&&x.ratio<0.7&&(!best||x.ratio<best.ratio-1e-9)&&(!slip||x.ratio<slip.ratio-1e-9||(Math.abs(x.ratio-slip.ratio)<1e-9&&x.met<slip.met)))slip=x});
+  const pub=x=>x?{id:x.h.id,name:x.h.name,met:x.met,due:x.due}:null;
+  // weight: the last weigh-in of the week against the one before the week (within 4 weeks), else against the first of the week
+  const wks=Object.keys(days).filter(k=>days[k]&&num(days[k].weight)).sort();
+  const inWk=wks.filter(k=>k>=wk&&k<=last),before=wks.filter(k=>k<wk&&daysBetween(k,wk)<=28).pop();
+  let weightChange=null;
+  if(inWk.length){
+    const endW=days[inWk[inWk.length-1]].weight,startK=before||(inWk.length>1?inWk[0]:null);
+    if(startK)weightChange=round1(endW-days[startK].weight);
+  }
+  // the suggestion
+  let sug={kind:'keep'};
+  const rate=ratio01(cur.kept,cur.due);
+  if(cur.due>=3&&rate>=0.85&&settings.prefs&&settings.prefs.suggestions!==false){
+    const cand=hw.filter(x=>x.ratio>=1-1e-9&&x.due>=3&&raiseFor(x.h)).sort((a,b)=>b.due-a.due)[0];
+    if(cand)sug={kind:'raise',habitId:cand.h.id,to:raiseFor(cand.h).to};
+  }else if(cur.due>=3&&rate<0.6&&slip&&easeFor(slip.h)){
+    sug={kind:'lighten',habitId:slip.h.id};
+  }
+  return{weekStart:wk,weekEnd:end,daysKept:cur.kept,daysDue:cur.due,prevDaysKept:prev.kept,prevDaysDue:prev.due,bestHabit:pub(best),slippedHabit:pub(slip),weightChange,avgScore:cur.avg,loggedDays:cur.logged,suggestion:sug};
+}
+/** The review as words. opts: {label:'Last week', fmtKg:n=>text}. Returns {text, headline, details:[...], question}. */
+function weekText(settings,sum,opts){
+  opts=opts||{};
+  const label=opts.label||'Last week',fmtKg=opts.fmtKg||(n=>fmt1(n)+' kg');
+  const hab=id=>settings.habits.find(x=>x.id===id);
+  let head=label+': '+sum.daysKept+' of '+sum.daysDue+(sum.daysDue===1?' day':' days')+' kept';
+  if(sum.prevDaysDue>0&&opts.compare!==false)head+=sum.daysKept>sum.prevDaysKept?' (up from '+sum.prevDaysKept+')':sum.daysKept<sum.prevDaysKept?' ('+sum.prevDaysKept+' the week before)':' (same as the week before)';
+  head+='.';
+  const details=[];
+  if(sum.bestHabit)details.push(sum.bestHabit.name+' was your steadiest habit.');
+  if(sum.slippedHabit)details.push(sum.slippedHabit.name+' dipped.');
+  if(sum.weightChange!=null){
+    const c=sum.weightChange;
+    details.push(Math.abs(c)<0.05?'Weight held steady.':'Weight went '+(c<0?'down ':'up ')+fmtKg(Math.abs(c))+'.');
+  }
+  let q='';
+  const sg=sum.suggestion,x=sg&&sg.habitId?hab(sg.habitId):null;
+  if(sg&&sg.kind==='raise'&&x&&sg.to)q='Keep the plan, or raise '+x.name.toLowerCase()+' to '+fmt1(sg.to)+' '+x.unit+'?';
+  else if(sg&&sg.kind==='lighten'&&x){
+    const e=easeFor(x);
+    q=e?(e.kind==='target'?'Keep the plan, or ease '+x.name.toLowerCase()+' to '+fmt1(e.to)+' '+x.unit+'?':'Keep the plan, or ease '+x.name.toLowerCase()+' to '+e.label.toLowerCase()+'?'):'';
+  }
+  if(!q)q='Keeping the plan as it is sounds right.';
+  return{headline:head,details,question:q,text:[head].concat(details,[q]).join(' ')};
+}
+
+/* ---------- insights ---------- */
+const DAY_NAMES=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+/** The score of a day without one habit, 0-100 (null when nothing else was due). */
+function scoreWithout(settings,days,k,skipId){
+  const p=dayParts(settings,days,k).filter(x=>x.h.id!==skipId);
+  return p.length?Math.round(mean(p.map(x=>x.frac))*100):null;
+}
+/** Up to 3 patterns in the person's own data, ranked, as {kind,text,rank,habitId?,weekday?}. Nothing until there are 21 logged days.
+    The wording says "tends to": it describes, it never says why. */
+function insightsDetailed(settings,days,today){
+  fresh(settings,days);
+  const logged=loggedKeys(days);
+  if(logged.length<21)return[];
+  const first=logged[0],from0=addDays(today,-83),from=first>from0?first:from0,to=addDays(today,-1);
+  const list=[];   // scored days: {k,sc,dow}
+  for(let k=from;k<=to;k=addDays(k,1)){const sc=scoreAt(settings,days,k);if(sc!==null)list.push({k,sc,dow:dow(k)})}
+  if(list.length<14)return[];
+  const out=[],overall=mean(list.map(x=>x.sc));
+  // best day of the week
+  const byDow=[0,1,2,3,4,5,6].map(d=>{const a=list.filter(x=>x.dow===d);return{d,n:a.length,avg:a.length?mean(a.map(x=>x.sc)):0}}).filter(x=>x.n>=3);
+  if(byDow.length>=5){
+    const srt=byDow.slice().sort((x,y)=>y.avg-x.avg),b=srt[0];
+    if(b.avg-overall>=6&&b.avg-srt[1].avg>=3)out.push({kind:'bestday',rank:3,weekday:b.d,text:DAY_NAMES[b.d]+'s tend to be your strongest day (about '+Math.round(b.avg)+'% on average).'});
+  }
+  // weekdays and weekends
+  const wd=list.filter(x=>x.dow>=1&&x.dow<=5),we=list.filter(x=>x.dow===0||x.dow===6);
+  if(wd.length>=8&&we.length>=4){
+    const a=Math.round(mean(wd.map(x=>x.sc))),b=Math.round(mean(we.map(x=>x.sc)));
+    if(a-b>=10)out.push({kind:'weekend',rank:4,text:'Weekends tend to be lighter than weekdays (about '+b+'% against '+a+'%). That is common. A smaller weekend plan might feel better.'});
+    else if(b-a>=10)out.push({kind:'weekend',rank:4,text:'Weekends tend to be your stronger days (about '+b+'% against '+a+'% on weekdays).'});
+  }
+  // a habit that is often missed on one weekday
+  let skip=null;
+  settings.habits.forEach(h=>{
+    if(h.hidden||h.type==='measure')return;
+    const rows=[];
+    for(let k=from;k<=to;k=addDays(k,1)){
+      if(scoreAt(settings,days,k)===null||!countsForScore(h,k,days))continue;
+      rows.push({d:dow(k),miss:isMet(h,days[k])?0:1});
+    }
+    if(rows.length<14)return;
+    const all=mean(rows.map(r=>r.miss));
+    for(let d=0;d<7;d++){
+      const a=rows.filter(r=>r.d===d);if(a.length<4)continue;
+      const rate=mean(a.map(r=>r.miss)),lift=rate-all;
+      if(rate>=0.6&&lift>=0.25&&moveOffDay(h,d)&&(!skip||lift>skip.lift))skip={h,d,lift,n:a.length,miss:a.reduce((x,r)=>x+r.miss,0)};
+    }
+  });
+  if(skip)out.push({kind:'skip',rank:2,habitId:skip.h.id,weekday:skip.d,text:skip.h.name+' was missed on '+skip.miss+' of the last '+skip.n+' '+DAY_NAMES[skip.d]+'s. Want to move it to other days?'});
+  // a weight plateau: three weeks, a handful of weigh-ins, hardly any movement
+  const wk=Object.keys(days).filter(k=>k>=addDays(today,-21)&&k<=today&&days[k]&&num(days[k].weight)).sort();
+  if(wk.length>=3&&daysBetween(wk[0],today)>=14&&daysBetween(wk[wk.length-1],today)<=7){
+    const ws=wk.map(k=>days[k].weight);
+    if(Math.max(...ws)-Math.min(...ws)<=0.7)out.push({kind:'plateau',rank:1,text:'Your weight has held steady for about 3 weeks. Plateaus are normal and often just a pause, so there is nothing you need to fix.'});
+  }
+  // "tends to" pairs (at least 8 days on each side)
+  const pairs=[];
+  const stepsH=settings.habits.find(x=>x.id==='steps'&&!x.hidden);
+  if(stepsH)pairs.push({id:'steps',split:6000,has:k=>{const v=days[k]&&days[k].vals&&days[k].vals.steps;return num(v)&&v>0?v:null},say:'walk 6,000+ steps'});
+  const sleepH=settings.habits.find(x=>!x.hidden&&(x.id==='sleep'||(/sleep/i.test(x.name)&&/^hours?$/i.test(x.unit||''))));
+  if(sleepH)pairs.push({id:sleepH.id,split:7,has:k=>{const v=days[k]&&days[k].vals&&days[k].vals[sleepH.id];return num(v)&&v>0?v:null},say:'sleep 7+ hours'});
+  let corr=null;
+  pairs.forEach(p=>{
+    const hi=[],lo=[];
+    list.forEach(x=>{const v=p.has(x.k);if(v==null)return;const sc=scoreWithout(settings,days,x.k,p.id);if(sc==null)return;(v>=p.split?hi:lo).push(sc)});
+    if(hi.length>=8&&lo.length>=8){
+      const a=Math.round(mean(hi)),b=Math.round(mean(lo));
+      if(a-b>=10&&(!corr||a-b>corr.gap))corr={gap:a-b,text:'On days you '+p.say+', your other habits tend to go better (about '+a+'% against '+b+'%). It is a pattern in your own days, not a rule.'};
+    }
+  });
+  if(corr)out.push({kind:'pattern',rank:5,text:corr.text});
+  return out.sort((a,b)=>a.rank-b.rank).slice(0,3);
+}
+function insights(settings,days,today){return insightsDetailed(settings,days,today).map(x=>x.text)}
+
+/* ---------- goal weight ---------- */
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+/** "mid-December", "early March 2027" (the year only when it is not the current one). */
+function approxDate(k,today){
+  const d=parse(k),day=d.getDate(),part=day<=10?'early ':day<=20?'mid-':'late ';
+  const y=today&&d.getFullYear()!==parse(today).getFullYear()?' '+d.getFullYear():'';
+  return part+MONTHS[d.getMonth()]+y;
+}
+/** [{k,kg}] for every logged weight, oldest first, up to a day. */
+function weightSeries(days,until){
+  return Object.keys(days).filter(k=>(!until||k<=until)&&days[k]&&num(days[k].weight)).sort().map(k=>({k,kg:days[k].weight}));
+}
+const MAX_SAFE_PACE=1;     // kg a week: the most this app will ever suggest
+function median(a){const s=a.slice().sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2}
+/** kg a week from the weigh-ins of the last 28 days (the median of every pairwise slope, so one odd weigh-in does not move it). null with fewer than 3 weigh-ins or under a week apart. */
+function weightRate(series,today){
+  const ws=series.filter(x=>x.k<=today&&daysBetween(x.k,today)<=27);
+  if(ws.length<3||daysBetween(ws[0].k,ws[ws.length-1].k)<7)return null;
+  const sl=[];
+  for(let i=0;i<ws.length;i++)for(let j=i+1;j<ws.length;j++){const dd=daysBetween(ws[i].k,ws[j].k);if(dd>=1)sl.push((ws[j].kg-ws[i].kg)/dd)}
+  return sl.length?median(sl)*7:null;
+}
+/** Where the person is against a goal weight.
+    {state:'none'|'no-weight'|'reached'|'tracking', latest:{k,kg}, toGo (kg, always positive), direction:'lose'|'gain', rate (kg a week, negative = losing, null when unknown),
+     towardRate (kg a week towards the goal, null when unknown), eta (a date, when the pace points at the goal), paceNeeded (kg a week to make the date),
+     status:'ahead'|'on'|'behind'|'steady'|null, unsafe (the date needs more than 1 kg a week), suggestedDate (at 1 kg a week), datePassed}
+    series is [{k,kg}], oldest first (see weightSeries). */
+function goalStatus(goalKg,goalDate,series,today){
+  if(!num(goalKg)||goalKg<=0)return{state:'none'};
+  const ser=(series||[]).filter(x=>x.k<=today&&num(x.kg)).sort((a,b)=>a.k<b.k?-1:a.k>b.k?1:0);
+  if(!ser.length)return{state:'no-weight',goalKg,goalDate:goalDate||null};
+  const latest=ser[ser.length-1],diff=latest.kg-goalKg;
+  const base=ser.filter(x=>daysBetween(x.k,today)<=180)[0]||ser[0];
+  const startDir=base.kg>goalKg?'lose':base.kg<goalKg?'gain':null;
+  const reached=Math.abs(diff)<=0.2||(startDir==='lose'&&diff<=0.2)||(startDir==='gain'&&diff>=-0.2);
+  if(reached)return{state:'reached',goalKg,goalDate:goalDate||null,latest,toGo:0,direction:startDir||'lose'};
+  const direction=diff>0?'lose':'gain';
+  const rate=weightRate(ser,today),toward=rate==null?null:direction==='lose'?-rate:rate;
+  const out={state:'tracking',goalKg,goalDate:goalDate||null,latest,toGo:Math.round(Math.abs(diff)*10)/10,direction,rate:rate==null?null:Math.round(rate*100)/100,towardRate:toward==null?null:Math.round(toward*100)/100,eta:null,paceNeeded:null,status:null,unsafe:false,suggestedDate:null,datePassed:false};
+  if(toward!=null&&toward>=0.05){
+    const dd=Math.ceil(Math.abs(diff)/(toward/7));
+    if(dd<=730)out.eta=addDays(today,dd);
+  }
+  if(goalDate){
+    const left=daysBetween(today,goalDate);
+    if(left<=0)out.datePassed=true;
+    else{
+      out.paceNeeded=Math.round(Math.abs(diff)/(left/7)*100)/100;
+      if(out.paceNeeded>MAX_SAFE_PACE){out.unsafe=true;out.suggestedDate=addDays(today,Math.ceil(Math.abs(diff)/MAX_SAFE_PACE*7))}
+      if(toward!=null)out.status=toward<0.05?'steady':toward>=out.paceNeeded*1.1?'ahead':toward>=out.paceNeeded*0.8?'on':'behind';
+    }
+  }
+  return out;
+}
+/** The goal in words. {line:'4.2 kg to go · about 0.4 kg a week lately · around mid-December', note:'...'}. fmtKg turns kg into the person's unit. */
+function goalText(st,today,fmtKg){
+  fmtKg=fmtKg||(n=>fmt1(n)+' kg');
+  if(!st||st.state==='none')return{line:'',note:''};
+  if(st.state==='no-weight')return{line:'Log your weight to see how far you are from '+fmtKg(st.goalKg)+'.',note:''};
+  if(st.state==='reached')return{line:"You've reached your goal weight of "+fmtKg(st.goalKg)+'.',note:'Well done. Keeping it steady is a goal of its own.'};
+  const parts=[fmtKg(st.toGo)+' to go'];
+  if(st.towardRate!=null){
+    if(st.towardRate>=0.05)parts.push('about '+fmtKg(st.towardRate)+' a week lately');
+    else if(st.towardRate>-0.1)parts.push('steady lately');
+    else parts.push('moving the other way lately (about '+fmtKg(-st.towardRate)+' a week)');
+  }
+  if(st.eta)parts.push('around '+approxDate(st.eta,today));
+  let note='';
+  const live=st.goalDate&&!st.datePassed;
+  if(st.towardRate==null)note='Log a few more weigh-ins over the next weeks and your pace will show here.';
+  else if(live&&st.status==='ahead')note='A little ahead of your date. Nicely done.';
+  else if(live&&st.status==='on')note='Right on pace for '+approxDate(st.goalDate,today)+'.';
+  else if(live&&st.status==='behind')note="A little behind your date, and that's normal. Weight moves in waves.";
+  else if(live&&st.status==='steady')note="Progress has paused lately, and that's okay. Small steady habits add up.";
+  else if(st.datePassed)note='Your date has passed. You can set a new one whenever you like.';
+  if(st.unsafe)note=(note?note+' ':'')+'To reach '+approxDate(st.goalDate,today)+' you would need about '+fmtKg(st.paceNeeded)+' a week. A steady '+fmtKg(MAX_SAFE_PACE)+' a week is the most we would suggest, which gets you there around '+approxDate(st.suggestedDate,today)+'.';
+  return{line:parts.join(' · '),note};
+}
+
 return{
   pad,ymd,parse,addDays,daysBetween,blankDay,dow,weekStart,daysLeftInWeek,round1,ID_RE,
   TYPES,WEEKDAYS,WEEK_ORDER,ICONS,DEFAULT_SECTIONS,LEGACY_DEFAULT,LIBRARY,LIB_CATEGORIES,STARTER_PLANS,BMI_SCALES,BMI_CATS,BMI_CAT_NAME,
   normalizeSchedule,scheduleLabel,normalizeHabit,migrateSettings,applyIdMap,defaultSettings,stepFor,uniqueId,
   hv,isMet,isLogged,isDue,isShown,weekProgress,countsForScore,dayParts,dayScore,dayMetrics,hasRecord,loggedKeys,invalidate,currentStreak,bestStreak,daysKept,streakStatus,streakLine,
   suggestTarget,metStreak,suggestionFor,libEntry,searchLibrary,libHabitIn,habitFromLibrary,addFromLibrary,applyStarterPlan,ensureSection,
-  bmi,bmiRound,bmiCategory,healthyRange,distanceToRange,whtr,kgToLb,lbToKg,cmToIn,inToCm,cmToFtIn,ftInToCm
+  bmi,bmiRound,bmiCategory,healthyRange,distanceToRange,whtr,kgToLb,lbToKg,cmToIn,inToCm,cmToFtIn,ftInToCm,
+  normalizeBody,isLight,shieldDays,shieldReady,shieldNote,easeTarget,easeSchedule,easeFor,raiseFor,moveOffDay,weekSummary,weekText,insights,insightsDetailed,
+  approxDate,weightSeries,weightRate,goalStatus,goalText,MAX_SAFE_PACE
 };
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Core;

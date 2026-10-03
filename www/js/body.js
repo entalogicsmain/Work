@@ -54,6 +54,7 @@ function sparkSvg(vals,w,hh){
 
 /* ---------- the BMI card (Progress), and the BMI line in Today's Body section ---------- */
 function renderBmiCard(){
+  renderGoalLine();
   const el=$('bmiCard');if(!el)return;
   const st=bodyState(todayStr());
   el.innerHTML='';el.classList.remove('empty-bmi');
@@ -148,6 +149,8 @@ function bmiSheet(){
     row('Healthy range for '+fmtHeight(st.cm),fmt(Math.round(toDispWeight(hr.minKg)))+'–'+fmt(Math.round(toDispWeight(hr.maxKg)))+' '+wUnit(),scaleName()+': BMI '+c[0]+' to '+(c[1]-0.1).toFixed(1),'bmiRange');
     row('Distance',dist.dir==='within'?'In the healthy range':fmt(r1(toDispWeight(dist.kg)))+' '+wUnit()+' to the healthy range',dist.dir==='within'?null:null,'bmiDist');
     row('Latest weight',fmtWeight(st.kg),nice(st.k),'bmiWeight');
+    const gs=goalSummary();
+    if(gs){const gb=heightCm()!=null?Core.bmi(settings.body.goalKg,heightCm()):null;row('Goal weight',fmtWeight(settings.body.goalKg),[gs.text.line,gs.text.note,gb!=null?'BMI at your goal: '+Core.bmiRound(gb).toFixed(1)+'.':''].filter(Boolean).join(' '),'bmiGoal')}
     const wl=latestBody('waist',todayStr()),wr=wl?Core.whtr(wl.v,st.cm):null;
     if(wr)row('Waist-to-height ratio',wr.ratio.toFixed(2)+' · '+(wr.level==='healthy'?'Healthy':'Elevated'),'Under 0.5 is healthy, 0.5 and above is elevated. Waist '+fmtWaist(wl.v)+' on '+nice(wl.k),'bmiWhtr');
     root.appendChild(g);
@@ -214,4 +217,65 @@ function drawBmiChart(root){
     options:{responsive:true,maintainAspectRatio:false,animation:reduced()?false:{duration:350},interaction:{mode:'nearest',axis:'x',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'BMI '+c.parsed.y.toFixed(1)}}},
       onHover(e,els){if(els&&els.length){const k=keys[els[0].index],s=ser.findIndex(x=>x.k===k);if(s>=0)setRead(s)}},
       scales:{x:{grid:{display:false},border:{display:false},ticks:{color:muted,maxTicksLimit:5,maxRotation:0,font:fnt}},y:{grid:{color:sep},border:{display:false},ticks:{color:muted,maxTicksLimit:4,font:fnt},grace:'10%'}}}});
+}
+
+/* ---------- goal weight (settings.body.goalKg in kg, optional settings.body.goalDate) ---------- */
+function goalSummary(){
+  const g=settings.body.goalKg;if(g==null)return null;
+  const t=todayStr(),st=Core.goalStatus(g,settings.body.goalDate||null,Core.weightSeries(days,t),t);
+  return{st,text:Core.goalText(st,t,fmtWeight)};
+}
+/** The goal under the body stats on Progress: the line "4 kg to go · about 0.4 kg a week lately · around mid-December", or a way to set one. */
+function renderGoalLine(){
+  const el=$('goalLine');if(!el)return;
+  el.innerHTML='';
+  const gs=goalSummary();
+  if(!gs){
+    if(latestBody('weight',todayStr())){
+      const b=h('<button class="txtbtn goal-set" id="goalSet"><svg data-ic="target" class="sm"></svg><span>Set a goal weight</span></button>');
+      b.addEventListener('click',()=>goalSheet());el.appendChild(b);
+    }
+    return;
+  }
+  const g=settings.body.goalKg,d=settings.body.goalDate;
+  const c=h('<div class="card goalcard"><button class="goal-main" id="goalCard"><span class="goal-lab"><svg data-ic="target" class="sm"></svg><span>Goal weight</span></span><b class="goal-val num"></b><span class="goal-line"></span><span class="goal-note"></span></button></div>');
+  c.querySelector('.goal-val').textContent=fmtWeight(g)+(d?' · '+Core.approxDate(d,todayStr()):'');
+  c.querySelector('.goal-line').textContent=gs.text.line;
+  const gn=c.querySelector('.goal-note');if(gs.text.note)gn.textContent=gs.text.note;else gn.remove();
+  c.querySelector('button').setAttribute('aria-label','Goal weight '+fmtWeight(g)+(d?', '+Core.approxDate(d,todayStr()):'')+'. '+gs.text.line+' '+gs.text.note+' Tap to change.');
+  c.querySelector('button').addEventListener('click',()=>goalSheet());
+  el.appendChild(c);
+}
+function goalDateSheet(cur,cb){
+  const root=h('<div><div class="field"><label for="goalDateIn">Date</label><div class="box"><input type="date" id="goalDateIn" data-focus></div></div><div class="err" id="goalDateErr" role="alert"></div><button class="btn secondary" id="goalDateNone">No date</button></div>');
+  const inp=root.querySelector('#goalDateIn');inp.min=Core.addDays(todayStr(),1);inp.value=cur||'';
+  const sh=openSheet({title:'Target date',content:root,onDone:()=>{
+    const v=inp.value;
+    if(v&&v<=todayStr()){root.querySelector('#goalDateErr').textContent='Pick a day after today, or choose No date';return false}
+    cb(v||null);
+  }});
+  root.querySelector('#goalDateNone').addEventListener('click',()=>{cb(null);sh.close('cancel')});
+}
+/** Asks for a goal weight in the unit chosen in Settings, with an optional date. Clearing the number removes the goal. */
+function goalSheet(){
+  const cur=settings.body.goalKg,unit=wUnit();
+  let date=settings.body.goalDate||null;
+  const label=()=>date?'Target date: '+Core.approxDate(date,todayStr()):'Add a target date (optional)';
+  const sh=numberSheet({title:'Goal weight',value:cur!=null?r1(toDispWeight(cur)):'',unitLine:unit+(cur!=null?' · clear the number to remove your goal':' · optional'),step:unit==='lb'?1:0.5,min:0,
+    validate:v=>{if(v==null)return '';const kg=fromDispWeight(v);return kg<30||kg>250?'Check the goal weight':''},
+    extras:[{label:label(),onClick:()=>goalDateSheet(date,d=>{date=d;const b=dateBtn();if(b)b.textContent=label()})}],
+    onDone:async v=>{
+      if(v==null){
+        if(cur==null&&!date)return;
+        delete settings.body.goalKg;delete settings.body.goalDate;
+        await saveSettingsQuiet();refreshAll();toast('Goal removed',{icon:'target'});return;
+      }
+      const kg=fromDispWeight(v);
+      settings.body.goalKg=kg;if(date)settings.body.goalDate=date;else delete settings.body.goalDate;
+      await saveSettingsQuiet();refreshAll();
+      const bm=heightCm()!=null?Core.bmi(kg,heightCm()):null;
+      toast(bm!=null&&bm<18.5?'Goal saved. That is under the healthy range for your height, so it may be worth checking with a doctor.':'Goal saved',{icon:'target'});
+    }});
+  const dateBtn=()=>[...sh.body.querySelectorAll('button')].find(b=>/target date/i.test(b.textContent));
+  return sh;
 }

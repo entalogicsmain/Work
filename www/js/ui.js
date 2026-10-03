@@ -264,7 +264,7 @@ const rangeKeys=n=>{const out=[],t=todayStr();for(let i=n-1;i>=0;i--)out.push(ad
 const RANGE_NAME={7:'week',30:'month',90:'3 months'};
 function metricInfo(m){
   if(m==='score')return{name:'Daily score',unit:'%',get:d=>scoreOf(d)};
-  if(m==='weight')return{name:'Weight',unit:wUnit(),get:d=>d.weight==null?null:r1(toDispWeight(d.weight))};
+  if(m==='weight'){const g=settings.body.goalKg;return{name:'Weight',unit:wUnit(),get:d=>d.weight==null?null:r1(toDispWeight(d.weight)),target:g==null?undefined:r1(toDispWeight(g)),targetLabel:'Goal'}}
   if(m==='waist')return{name:'Waist',unit:lUnit(),get:d=>d.waist==null?null:r1(toDispWaist(d.waist))};
   const x=settings.habits.find(q=>'h:'+q.id===m&&(q.type==='count'||q.type==='duration'||q.type==='steps'));
   if(x)return{name:x.name,unit:x.unit,get:d=>d.vals&&d.vals[x.id]!=null?d.vals[x.id]:null,target:x.target,note:x.type==='steps'?k=>{const l=stepsLabelFor(k);return l==='counted'?'Counted by phone':l==='manual'?MANUAL_OLD:''}:null};
@@ -311,6 +311,7 @@ function renderProgress(){
   }
   ch.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.metric===metric)));
   drawChart();drawHoursChart();renderBmiCard();
+  if(window.Review)Review.progressHook();      // week tile, insights, calendar legend
 
   // calendar heat map: soft rounded squares, one per day
   const cells=period===7?7:period===30?35:91;
@@ -324,6 +325,7 @@ function renderProgress(){
     c.querySelector('i').textContent=parse(k).getDate();
     if(sc!=null)c.classList.add(scoreClass(sc));if(k===t)c.classList.add('today');
     c.setAttribute('aria-label',nice(k)+': '+(sc==null?'not logged':sc+' percent'+(sc>=80?', goal met':'')));
+    if(window.Review)Review.markHeatCell(c,k);      // light days and shield days look different
     c.addEventListener('click',()=>{haptic('light');daySheet(k)});
     c.tabIndex=-1;
     heat.appendChild(c);
@@ -344,6 +346,7 @@ function renderProgress(){
     row.querySelector('.row-sub').textContent=bits.join(', ')+(d.note?(bits.length?' · ':'')+d.note:'');
     if(!row.querySelector('.row-sub').textContent)row.querySelector('.row-sub').remove();else row.querySelector('.row-sub').classList.add('clamp');
     const pill=row.querySelector('.pill');pill.textContent=sc+'%';pill.classList.add(scoreClass(sc));
+    if(window.Review)Review.markLogRow(pill,k);
     row.addEventListener('click',()=>daySheet(k));
     ll.appendChild(row);
   });
@@ -380,10 +383,10 @@ function drawChart(){
   const ds=[{data:vals,borderColor:accent,borderWidth:2.5,tension:0,cubicInterpolationMode:'monotone',spanGaps:true,pointRadius:have.length<=20?3:0,pointHoverRadius:0,pointBackgroundColor:accent,pointBorderColor:accent,fill:false}];
   if(mi.target!=null)ds.push({data:keys.map(()=>mi.target),borderColor:muted,borderDash:[4,4],borderWidth:1,pointRadius:0,pointHoverRadius:0,fill:false,order:2});
   const lg=$('chartLegend');lg.hidden=mi.target==null;
-  if(mi.target!=null)lg.querySelector('span').textContent='Target '+fmt(mi.target)+(mi.unit?' '+mi.unit:'');
+  if(mi.target!=null)lg.querySelector('span').textContent=(mi.targetLabel||'Target')+' '+fmt(mi.target)+(mi.unit?' '+mi.unit:'');
   // accessible summary (the canvas itself is hidden from assistive tech)
   const summ=have.length<1?mi.name+': no entries in the last '+RANGE_NAME[period]+'.':mi.name+' over the last '+RANGE_NAME[period]+': '+have.length+(have.length===1?' entry':' entries')+
-    (have.length>1?', from '+fmt(have[0])+' to '+fmt(have[have.length-1])+' '+mi.unit:', '+fmt(have[0])+' '+mi.unit)+'; lowest '+fmt(Math.min(...have))+', highest '+fmt(Math.max(...have))+'.'+(mi.target!=null?' Target '+fmt(mi.target)+' '+mi.unit+'.':'');
+    (have.length>1?', from '+fmt(have[0])+' to '+fmt(have[have.length-1])+' '+mi.unit:', '+fmt(have[0])+' '+mi.unit)+'; lowest '+fmt(Math.min(...have))+', highest '+fmt(Math.max(...have))+'.'+(mi.target!=null?' '+(mi.targetLabel||'Target')+' '+fmt(mi.target)+' '+mi.unit+'.':'');
   $('chartSummary').textContent=summ;
   // announce only when the metric or the range changed (not while scrubbing, not on every save)
   const key=metric+'|'+period;
@@ -448,6 +451,7 @@ function daySheet(k){
     if(bits.length){const g3=h('<div class="group" style="margin-bottom:12px"></div>');bits.forEach(b=>{const r=h('<div class="row"><span class="row-body"><span class="row-label"></span></span><span class="row-val"></span></div>');r.querySelector('.row-label').textContent=b[0];r.querySelector('.row-val').textContent=b[1];g3.appendChild(r)});root.appendChild(g3)}
     if(d.note){const c=h('<div class="card" style="margin-bottom:12px"><span class="t-foot muted">Note</span><p style="margin:4px 0 0;overflow-wrap:anywhere"></p></div>');c.querySelector('p').textContent=d.note;root.appendChild(c)}
   }
+  if(window.Review)Review.daySheetHook(root,k);
   const go=h('<button class="btn"></button>');go.textContent=d?'Edit this day':'Log this day';
   root.appendChild(go);
   const sh=openSheet({title:nice(k),left:null,right:'Done',content:root});

@@ -116,6 +116,8 @@ function renderUnits(){
 function renderBodyGroup(){
   const g=$('bodyGroup');g.innerHTML='';
   g.appendChild(stepRow({id:'stHeight',icon:'user',label:'Height',val:heightCm()!=null?fmtHeight(heightCm()):'Not set',chev:true,sub:'Used for BMI and to estimate distance walked',onTap:heightSheet}));
+  const gd=settings.body.goalDate;
+  g.appendChild(stepRow({id:'stGoal',icon:'target',label:'Goal weight',val:settings.body.goalKg!=null?fmtWeight(settings.body.goalKg):'Not set',chev:true,sub:settings.body.goalKg!=null?(gd?'By '+Core.approxDate(gd,todayStr())+'. Shown on your weight chart':'Shown on your weight chart'):'Optional. A gentle line on your weight chart',onTap:goalSheet}));
   g.appendChild(segRow({id:'bmiScaleRow',icon:'activity',label:'BMI scale',value:bmiScale(),options:[{value:'standard',label:'Standard',id:'scStd'},{value:'asian',label:'Asian',id:'scAsia'}],onPick:async v=>{
     settings.body=Object.assign({},settings.body,{scale:v});await saveSettingsQuiet();refreshAll();toast('BMI scale: '+Core.BMI_SCALES[v].name,{icon:'activity'});
   }}));

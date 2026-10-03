@@ -72,6 +72,7 @@ function renderToday(inPlace){
   const restDay=Core.dayParts(settings,days,current).length===0&&settings.habits.some(x=>!x.hidden&&x.type!=='measure');
   $('todayHint').textContent=!logged?(isToday?(restDay?'Nothing is due today. Enjoy the rest.':st===0&&best>0?GENTLE_RESTART:'Nothing logged yet. Tap a target to start.'):'This day was not logged. You can fill it in now.'):(m.full?'Strong day. Your comeback is on track.':'');
   $('todayHint').hidden=!$('todayHint').textContent;
+  if(window.Review)Review.todayHook(current);      // light day / shield / welcome-back hints and the weekly review card
 
   renderSuggestion();
   renderSections();
@@ -358,6 +359,7 @@ function renderSections(){
     ab.addEventListener('click',()=>addSection());foot.appendChild(ab);
   }
   hydrate(root);hydrate(foot);
+  if(!editing&&window.Review)Review.footHook(foot,current);      // the light-day button next to Edit Today
   renderHiddenTray();
   if(fk){const t=root.querySelector('.titem[data-id="'+fk.id+'"] .'+fk.cls);if(t&&!t.disabled)try{t.focus({preventScroll:true})}catch(e){}}
 }
